@@ -2,6 +2,38 @@
 import bpy
 
 SPANISH = {
+    "Tapered cylinder": "Cilíndrico cónico",
+    "A round pin that narrows toward its tip": "Un pin redondo que se estrecha hacia la punta",
+    "Square": "Cuadrado",
+    "A square pin with four flat sides": "Un pin cuadrado de cuatro lados planos",
+    "Rectangular": "Rectangular",
+    "A keyed pin with independent width and height": "Un pin con orientación definida y ancho y alto independientes",
+    "Triangular": "Triangular",
+    "An equilateral triangular pin": "Un pin de sección triangular equilátera",
+    "Octagonal": "Octagonal",
+    "A regular eight-sided pin": "Un pin regular de ocho lados",
+    "Oval": "Ovalado",
+    "An elliptical pin with independent width and height": "Un pin elíptico con ancho y alto independientes",
+    "D-shaped": "Forma de D",
+    "A round pin with one flat side": "Un pin redondo con un lado plano",
+    "Star": "Estrella",
+    "A five-pointed star with recessed corners": "Una estrella de cinco puntas con esquinas entrantes",
+    "Cross": "Cruz",
+    "A pin with four square arms": "Un pin con cuatro brazos cuadrados",
+    "Tongue and Groove": "Lengüeta y ranura",
+    "A wide tongue with chamfered corners and a matching groove":
+        "Una lengüeta ancha con esquinas biseladas y su ranura",
+    "Outer diameter (mm)": "Diámetro exterior (mm)",
+    "Side (mm)": "Lado (mm)",
+    "Width (mm)": "Ancho (mm)",
+    "Height (mm)": "Alto (mm)",
+    "Profile rotation": "Giro del perfil",
+    "Tip reduction (%)": "Reducción (%)",
+    "Percent by which the pin tip is narrower than its base": "Porcentaje de reducción en la punta respecto a la base",
+    "Reduce the clearance or wall size to preserve the connector profile.":
+        "Reduce la holgura o el grosor de pared para conservar el perfil del conector.",
+    "The connector profile has a corner too sharp for its size.":
+        "El perfil tiene una esquina demasiado aguda para sus dimensiones.",
     "Dovetail": "Cola de milano",
     "Add an integrated sliding rail and an open-ended groove": "Añade un riel deslizante y una ranura abierta al borde",
     "Neck (mm)": "Cuello (mm)",

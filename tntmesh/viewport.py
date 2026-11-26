@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from math import cos, sin, tau
+from math import cos, sin
 
 import bpy
 from bpy.app.handlers import persistent
 from mathutils import Matrix, Vector
 
+from .geometry.connector_profiles import PROFILE_OVERLAYS
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
 from .geometry.polygon import extended_path
@@ -192,7 +193,7 @@ def draw_plane() -> None:
                     coordinates = [*coordinates, coordinates[0]]
                 shader.uniform_float("color", (*color, 0.9))
                 batch_for_shader(shader, "LINE_STRIP", {"pos": coordinates}).draw(shader)
-        if (settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET", "DOVETAIL"}
+        if (settings.cut_kind == "PLANAR" and settings.connector in PROFILE_OVERLAYS
                 and settings.connector_points):
             from .draw_cut import model_pivot
 
@@ -205,9 +206,10 @@ def draw_plane() -> None:
                 outline = settings.dovetail_config(1).footprint()
             else:
                 profile = settings.standard_connector(settings.connector, 1)
-                radius = profile.socket_radius
-                outline = [(radius * cos(tau * i / profile.sides), radius * sin(tau * i / profile.sides))
-                           for i in range(profile.sides)]
+                try:
+                    outline = profile.profile(profile.lateral)
+                except MeshError:
+                    return
             gpu.state.depth_test_set("NONE")
             shader.bind()
             shader.uniform_float("color", (.78, .55, 1.0, 1.0))

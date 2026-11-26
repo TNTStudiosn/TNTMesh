@@ -9,6 +9,7 @@ from mathutils import Matrix, Vector
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean, half_box
 from .connector import Connector, add_connector
+from .connector_profiles import DIAMETER_SHAPES
 from .mesh import bounds, inspect, primitive
 from .polygon import closed_outline, signed_turn
 from .region import edge_map
@@ -40,7 +41,8 @@ class BaseCut:
             if (Vector(override.center) - contact.center).length <= .025:
                 connector = self.connector if override.connector else None
                 if connector is not None and override.diameter:
-                    connector = replace(connector, diameter=override.diameter)
+                    size = "diameter" if connector.shape in DIAMETER_SHAPES else "width"
+                    connector = replace(connector, **{size: override.diameter})
                 return replace(self, adjustment=self.adjustment + override.shift, connector=connector)
         return self
 

@@ -67,8 +67,8 @@ def magnet_centers(
     outer = config.profile(config.wall)
     depth = config.depth + config.wall
     return safe_centers(
-        engine, minus, plus, frame, (low, high), (depth, depth), config.envelope, len(outer),
-        epsilon, pin_gap, config.count, requested=requested, probe_profile=outer,
+        engine, minus, plus, frame, (low, high), (depth, depth), outer,
+        epsilon, pin_gap, config.count, requested=requested,
     )
 
 

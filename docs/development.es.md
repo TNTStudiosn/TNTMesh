@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.12.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.13.zip
 ```
 
 ## Geometría y borradores

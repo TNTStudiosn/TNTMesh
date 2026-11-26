@@ -650,6 +650,40 @@ def reset_dovetail_preview():
     bpy.context.scene.tntmesh_settings.show_cut_handle = True
 
 
+def setup_shaped_connector():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        settings.connector = "RECTANGLE"
+        settings.connector_width, settings.connector_height = 9, 3
+        settings.connector_angle, settings.connector_count = .31, 2
+        settings.show_cut_handle = False
+        bpy.context.preferences.view.language = "es"
+        bpy.context.preferences.view.use_translate_interface = True
+        assert bpy.ops.tntmesh.suggest_connectors() == {"FINISHED"}
+        assert len(settings.connector_points) == 2
+        assert settings.connector == "RECTANGLE"
+    area.tag_redraw()
+
+
+def capture_shaped_connector():
+    screenshot("29-keyed-profile.png")
+
+
+def open_taper_calibration():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        settings.connector = "TAPER"
+        settings.connector_taper = 35
+        assert bpy.ops.tntmesh.calibrate_connectors("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
+
+
+def capture_taper_calibration():
+    screenshot("30-taper-calibration.png")
+    cancel_line()
+
+
 def prepare_resin():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -782,6 +816,12 @@ dovetail_steps = (
      click_connector_position, verify_connector_placement, reset_dovetail_preview)
     if line_steps and os.environ.get("TNTMESH_TEST_DOVETAIL") == "1" else ()
 )
+shaped_connector_steps = (
+    (setup_shaped_connector, lambda: toggle_smoke_panel(597, 30), scroll_magnet_details,
+     capture_shaped_connector, lambda: scroll_magnet_details(up=True), lambda: toggle_smoke_panel(597, 30),
+     open_taper_calibration, capture_taper_calibration, reset_dovetail_preview)
+    if line_steps and os.environ.get("TNTMESH_TEST_PROFILES") == "1" else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -833,7 +873,7 @@ resin_steps = (
 )
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps,
-    *magnet_steps, *dovetail_steps, *phase3_steps,
+    *magnet_steps, *dovetail_steps, *shaped_connector_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *estimate_steps, *resin_steps,

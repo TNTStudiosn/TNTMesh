@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from math import cos, sin, tau
+from math import hypot
 
 import bpy
 from mathutils import Matrix, Vector
@@ -7,8 +7,10 @@ from mathutils.bvhtree import BVHTree
 
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
-from .connector import Connector, prism
+from .connector import Connector, profile_loft, profile_prism
+from .connector_profiles import translated_overlap
 from .mesh import BOOLEAN_VOLUME_NOISE, VOLUME_EPSILON, absolute_volume, inspect
+from .polygon import Point2
 from .region import RegionTool
 
 SEARCH_LIMIT = 16
@@ -29,13 +31,11 @@ def seam_candidates(tool: RegionTool) -> tuple[Vector, list[Vector]]:
 
 
 def seam_range(
-    tree: BVHTree, frame: Matrix, center: Vector, depth: float, travel: float, radius: float, sides: int,
+    tree: BVHTree, frame: Matrix, center: Vector, depth: float, travel: float, guard: tuple[Point2, ...],
 ) -> tuple[float, float] | None:
     normal = frame.col[2]
     hits = []
-    angles = [(0., 0.), *((radius * cos(i * tau / sides), radius * sin(i * tau / sides))
-                          for i in range(sides))]
-    for x, y in angles:
+    for x, y in ((0., 0.), *guard):
         origin = frame @ Vector((center.x + x, center.y + y, depth - travel))
         point, facing, _, _ = tree.ray_cast(origin, normal, 2 * travel)
         if point is None or -facing.dot(normal) < .75:
@@ -46,19 +46,18 @@ def seam_range(
 
 def try_connector(
     engine: ExactBoolean, minus: bpy.types.Mesh, plus: bpy.types.Mesh, config: Connector,
-    frame: Matrix, center: Vector, limits: tuple[float, float], envelope: float,
+    frame: Matrix, center: Vector, limits: tuple[float, float], guard: tuple[Point2, ...],
 ) -> tuple[bpy.types.Mesh, ...] | None:
     old_minus, old_plus = inspect(minus), inspect(plus)
     low, high = limits
-    anchor = config.insertion if config.loose else min(config.insertion / 2, config.diameter / 2)
+    anchor = config.insertion if config.loose else config.anchor
     start = low - anchor
     end = high + config.insertion
     socket_start = start - (config.axial if config.loose else 0)
     socket_end = end + config.axial
     with GeometryTransaction() as temporary:
         boolean = ExactBoolean(engine.context, temporary)
-        corridor = prism(temporary, frame, center, socket_start - config.wall, socket_end + config.wall,
-                         envelope, config.sides)
+        corridor = profile_prism(temporary, frame, center, socket_start - config.wall, socket_end + config.wall, guard)
         gap = boolean.run(boolean.run(corridor, minus, "DIFFERENCE"), plus, "DIFFERENCE")
         if absolute_volume(gap) > BOOLEAN_VOLUME_NOISE:
             return None
@@ -67,12 +66,13 @@ def try_connector(
             (minus, socket_start - config.wall, low - trim),
             (plus, high + trim, socket_end + config.wall),
         ):
-            wall = prism(temporary, frame, center, bottom, top, envelope, config.sides)
+            wall = profile_prism(temporary, frame, center, bottom, top, guard)
             if boolean.run(wall, body, "DIFFERENCE").polygons:
                 return None
 
-        pin = prism(temporary, frame, center, start, end, config.diameter / 2, config.sides)
-        socket = prism(temporary, frame, center, socket_start, socket_end, config.socket_radius, config.sides)
+        pin = profile_loft(temporary, frame, center, config.sections(start, end, low, high))
+        socket = profile_loft(temporary, frame, center,
+                              config.sections(socket_start, socket_end, low, high, config.lateral))
         pin_volume = inspect(pin).volume_mm3
         expected_plus = absolute_volume(boolean.run(plus, socket, "INTERSECT"))
         if config.loose:
@@ -104,7 +104,7 @@ def try_connector(
 
 def connect_curved(
     engine: ExactBoolean, remainder: bpy.types.Mesh, insert: bpy.types.Mesh, tool: RegionTool,
-    config: Connector, envelope: float,
+    config: Connector, guard: tuple[Point2, ...],
 ) -> tuple[bpy.types.Mesh, ...] | None:
     normal, candidates = seam_candidates(tool)
     if not candidates:
@@ -116,6 +116,7 @@ def connect_curved(
         [tuple(face.vertices) for face in mesh.loop_triangles if face.polygon_index in tool.inner_faces],
         all_triangles=True,
     )
+    envelope = max(hypot(*point) for point in guard)
     frame = normal.to_track_quat("Z", "Y").to_matrix()
     inverse = frame.transposed()
     accepted = []
@@ -126,13 +127,15 @@ def connect_curved(
         center = inverse @ location
         depth = center.z
         center.z = 0
-        if any((center - other).length < 2 * envelope for other in accepted):
+        if any((center - other).length < 2 * envelope and (
+            not config.uses_footprint or translated_overlap(guard, center.x - other.x, center.y - other.y, 1e-5)
+        ) for other in accepted):
             continue
-        limits = seam_range(tree, frame, center, depth, max(config.insertion, envelope), envelope, config.sides)
+        limits = seam_range(tree, frame, center, depth, max(config.insertion, envelope), guard)
         if limits is None:
             continue
         selected += 1
-        result = try_connector(engine, minus, plus, config, frame, center, limits, envelope)
+        result = try_connector(engine, minus, plus, config, frame, center, limits, guard)
         if result is not None:
             if accepted:
                 engine.transaction.remove_mesh(minus)

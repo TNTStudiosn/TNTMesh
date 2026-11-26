@@ -6,6 +6,7 @@ from bpy.app.handlers import persistent
 from mathutils import Vector
 
 from .geometry.base import BaseAnalysis, analyze_base, contact_outline
+from .geometry.connector_profiles import DIAMETER_SHAPES
 from .geometry.mesh import bounds, evaluated_mm, inspect
 from .localization import tr
 from .model import GeometryTransaction, MeshError, millimeters_per_unit
@@ -106,7 +107,8 @@ def draw_contacts(layout: bpy.types.UILayout, settings) -> None:
         if settings.base_pins:
             layout.prop(contact, "connector")
             if contact.connector:
-                layout.prop(contact, "diameter")
+                label = "Diameter (mm)" if settings.base_shape in DIAMETER_SHAPES else "Width (mm)"
+                layout.prop(contact, "diameter", text=label)
 
 
 def draw() -> None:

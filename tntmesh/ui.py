@@ -3,8 +3,9 @@ import bpy
 
 from . import draft
 from .base_ui import draw_contacts
-from .connector_ui import positions
+from .connector_ui import positions, profile_dimensions
 from .diagnostics_ui import controls as diagnostics_controls
+from .geometry.connector_profiles import PROFILE_OVERLAYS, STANDARD_SHAPES
 from .localization import tr
 from .magnet_ui import magnet_details
 from .operators import active_mesh, managed_parts
@@ -62,7 +63,7 @@ def cut_properties(
             layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
-        if settings.cut_kind == "PLANAR" and settings.connector in {"NONE", "ROUND", "HEX", "DOVETAIL"}:
+        if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {"NONE", "DOVETAIL"}:
             tools = layout.row(align=True)
             if settings.connector == "DOVETAIL":
                 tools.operator("tntmesh.suggest_connectors", text="Find Rail Positions", icon="CONSTRAINT")
@@ -89,8 +90,7 @@ def cut_details(
         for prop in ("base_area", "base_margin", "base_adjustment"):
             layout.prop(settings, prop)
         if settings.base_pins:
-            for prop in ("diameter", "insertion", "lateral", "axial", "wall", "loose_pins"):
-                layout.prop(settings, prop)
+            connector_details(layout, settings, settings.base_shape, show_count=False)
         if settings.base_contact_source == source:
             draw_contacts(layout, settings)
         return
@@ -102,7 +102,7 @@ def cut_details(
         elif settings.region_method == "VERTEX_GROUP":
             layout.prop(settings, "region_weight")
         if settings.region_connector != "NONE":
-            connector_details(layout, settings)
+            connector_details(layout, settings, settings.region_connector)
         return
     if settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_samples")
@@ -139,15 +139,19 @@ def cut_details(
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
     elif settings.connector != "NONE":
-        connector_details(layout, settings)
+        connector_details(layout, settings, settings.connector)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
 
 
-def connector_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
-    if settings.cut_kind != "PLANAR" or not settings.connector_points:
+def connector_details(
+    layout: bpy.types.UILayout, settings: TNTMESH_PG_settings, shape: str, *, show_count: bool = True,
+) -> None:
+    if show_count and (settings.cut_kind != "PLANAR" or not settings.connector_points):
         layout.prop(settings, "connector_count")
-    for prop in ("loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
+    layout.prop(settings, "loose_pins")
+    profile_dimensions(layout, settings, shape)
+    for prop in ("insertion", "lateral", "axial", "wall"):
         layout.prop(settings, prop)
 
 
@@ -304,7 +308,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
                     body.prop(settings, "show_cut_handle")
                 cut_details(body, settings, obj)
-                if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET", "DOVETAIL"}:
+                if settings.cut_kind == "PLANAR" and settings.connector in PROFILE_OVERLAYS:
                     body.operator(
                         "tntmesh.draw_plane", text="Pick Connector Position", icon="PIVOT_CURSOR",
                     ).place_connector = True

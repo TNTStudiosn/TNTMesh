@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass, field
-from math import cos, sin, tau
 
 import bpy
 from mathutils import Vector
@@ -8,6 +7,7 @@ from mathutils import Vector
 from ..model import MeshError
 from .boolean import ExactBoolean
 from .connector import Connector, ConnectorPlacementError, add_connector
+from .connector_profiles import area
 from .curved_connector import connect_curved
 from .region import RegionTool
 
@@ -49,8 +49,8 @@ def connect_region(
     connector: Connector,
 ) -> tuple[bpy.types.Mesh, ...]:
     connector.validate()
-    envelope = connector.socket_radius + connector.wall / cos(tau / (2 * connector.sides))
-    footprint = connector.sides * envelope**2 * sin(tau / connector.sides) / 2
+    guard = connector.profile(connector.lateral + connector.wall)
+    footprint = area(guard)
     for surface in inner_surfaces(tool, footprint * connector.count):
         frame = surface.normal.to_track_quat("Z", "Y").to_matrix()
         center = frame.transposed() @ (surface.weighted_center / surface.area)
@@ -61,7 +61,7 @@ def connect_region(
             ).meshes
         except ConnectorPlacementError:
             continue
-    curved = connect_curved(engine, remainder, insert, tool, connector, envelope)
+    curved = connect_curved(engine, remainder, insert, tool, connector, guard)
     if curved is not None:
         return curved
     raise MeshError("No region seam can fit the requested connectors.")

@@ -8,6 +8,7 @@ from mathutils import Matrix, Vector
 from ..model import MeshError, millimeters_per_unit
 from .boolean import ExactBoolean, half_box
 from .connector import safe_centers
+from .connector_profiles import regular_profile
 from .mesh import bounds, inspect
 
 
@@ -90,8 +91,8 @@ def add_custom_connector(
     wall = config.wall
     center, = safe_centers(
         engine, minus, plus, frame, (position, position),
-        (-pin_lower.z + wall, socket_upper.z + wall), (radius + wall) / cos(tau / 128),
-        64, epsilon, min(epsilon, -pin_lower.z / 10, wall / 10), 1,
+        (-pin_lower.z + wall, socket_upper.z + wall), regular_profile((radius + wall) / cos(tau / 128), 64),
+        epsilon, min(epsilon, -pin_lower.z / 10, wall / 10), 1,
         requested=(requested,) if requested is not None else None,
         requested_error="The mirrored connector does not fit at its reflected position.",
     )

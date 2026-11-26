@@ -5,8 +5,10 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from mathutils import Matrix
 
+from .connector_ui import profile_dimensions
 from .geometry import calibration
 from .geometry.connector import Connector
+from .geometry.connector_profiles import PROFILE_ITEMS, STANDARD_SHAPES
 from .localization import tr
 from .model import (
     ROLE,
@@ -31,9 +33,13 @@ class TNTMESH_OT_calibrate_connectors(bpy.types.Operator):
     bl_options = {"UNDO"}
 
     shape: EnumProperty(name="Connector", items=[
-        ("ROUND", "Cylindrical", ""), ("HEX", "Hexagonal", ""),
+        ("ROUND", "Cylindrical", ""), ("HEX", "Hexagonal", ""), *PROFILE_ITEMS,
     ])
     diameter: FloatProperty(name="Diameter (mm)", default=5, min=0.01, max=100, precision=3)
+    connector_width: FloatProperty(name="Width (mm)", default=6, min=.01, max=100, precision=3)
+    connector_height: FloatProperty(name="Height (mm)", default=4, min=.01, max=100, precision=3)
+    connector_angle: FloatProperty(name="Profile rotation", subtype="ANGLE", unit="ROTATION")
+    connector_taper: FloatProperty(name="Tip reduction (%)", subtype="PERCENTAGE", default=25, min=0, max=80)
     insertion: FloatProperty(name="Insertion (mm)", default=4, min=0.01, max=100, precision=3)
     axial: FloatProperty(name="Axial (mm)", default=0.2, min=0, max=10, precision=3)
     wall: FloatProperty(name="Min. wall (mm)", default=1.2, min=0.1, max=20, precision=2)
@@ -54,8 +60,12 @@ class TNTMESH_OT_calibrate_connectors(bpy.types.Operator):
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         profile = selected_printer(context.scene)
         settings = context.scene.tntmesh_settings
-        self.shape = "HEX" if settings.connector == "HEX" else "ROUND"
+        self.shape = settings.connector if settings.connector in STANDARD_SHAPES else "ROUND"
         self.diameter = min(100, settings.diameter)
+        self.connector_width = min(100, settings.connector_width)
+        self.connector_height = min(100, settings.connector_height)
+        self.connector_angle = settings.connector_angle
+        self.connector_taper = settings.connector_taper
         self.insertion = min(100, settings.insertion)
         self.axial = min(10, profile.axial_mm if profile else settings.axial)
         self.wall = min(20, profile.min_wall_mm if profile else self.wall)
@@ -71,7 +81,9 @@ class TNTMESH_OT_calibrate_connectors(bpy.types.Operator):
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
         layout.use_property_split = True
-        for name in ("shape", "diameter", "insertion", "axial", "wall", "material"):
+        layout.prop(self, "shape")
+        profile_dimensions(layout, self, self.shape)
+        for name in ("insertion", "axial", "wall", "material"):
             layout.prop(self, name)
         layout.separator()
         layout.prop(self, "sampling")
@@ -91,7 +103,9 @@ class TNTMESH_OT_calibrate_connectors(bpy.types.Operator):
     def execute(self, context: bpy.types.Context) -> set[str]:
         scene = context.scene
         unit = millimeters_per_unit(scene)
-        settings = Connector(self.shape, self.diameter, self.insertion, axial=self.axial, wall=self.wall)
+        settings = Connector(self.shape, self.diameter, self.insertion, axial=self.axial, wall=self.wall,
+                             width=self.connector_width, height=self.connector_height,
+                             angle=self.connector_angle, taper=self.connector_taper / 100)
         wm = context.window_manager
         wm.progress_begin(0, 2)
         try:

@@ -146,6 +146,130 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(self.directory)), {"FINISHED"})
         self.assertEqual(len(list(self.directory.glob("*.stl"))), 2)
 
+    def test_connector_profiles_build_closed_integrated_and_loose_parts(self):
+        shapes = importlib.import_module(f"{self.addon.__name__}.geometry.connector_profiles")
+        context = bpy.context
+        assembly = self.addon.assembly
+        for index, (shape, _, _) in enumerate(shapes.PROFILE_ITEMS):
+            with self.subTest(shape=shape):
+                source = self.cube(30)
+                source.location.x = index * 40
+                settings = self.settings
+                settings.connector = shape
+                settings.connector_angle = .29
+                settings.loose_pins = index % 2 == 0
+                settings.kerf = .2
+                settings.connector_points.clear()
+                settings.connector_points.add().position = (2, 3)
+                context.view_layer.update()
+                self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+                result = list(context.selected_objects)
+                self.assertEqual(len(result), 3 if settings.loose_pins else 2)
+                for obj in result:
+                    self.checked(obj)
+                self.assertEqual(assembly.overlaps(context, result), [])
+                self.assertEqual(len(source.data.polygons), 6)
+
+    def test_tapered_pin_has_the_configured_normal_clearance(self):
+        from mathutils.bvhtree import BVHTree
+
+        self.cube(30)
+        settings = self.settings
+        settings.connector = "TAPER"
+        settings.diameter = 6
+        settings.insertion = 4
+        settings.lateral = .2
+        settings.axial = .3
+        settings.connector_taper = 50
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        male, socket = self.parts()
+        theta = pi / 64
+        side_direction = Vector((cos(theta), sin(theta), 0))
+        hits = []
+        for piece in (male, socket):
+            tree = BVHTree.FromPolygons([v.co for v in piece.data.vertices], [p.vertices[:] for p in piece.data.polygons])
+            _, _, _, distance = tree.ray_cast(Vector((0, 0, 2)), side_direction)
+            hits.append(distance)
+        self.assertAlmostEqual(hits[0], 2.25 * cos(theta), places=4)
+        self.assertAlmostEqual((hits[1] - hits[0]) / sqrt(1 + (1.5 / 4 * cos(theta))**2), .2, places=4)
+        self.assertAlmostEqual(max(v.co.x for v in male.data.vertices if abs(v.co.z - 4) < 1e-5), 1.5, places=4)
+
+    def test_elongated_profile_uses_its_actual_footprint_for_clearance_and_spacing(self):
+        from mathutils.bvhtree import BVHTree
+
+        self.cube(26)
+        settings = self.settings
+        settings.connector = "RECTANGLE"
+        settings.connector_width, settings.connector_height = 10, 2
+        settings.lateral, settings.wall = .2, .5
+        for y in (-2.1, 2.1):
+            settings.connector_points.add().position = (0, y)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        male, female = self.parts()
+        self.assertAlmostEqual(self.checked(male), 26**3 / 2 + 160, places=3)
+        tree = BVHTree.FromPolygons([v.co for v in female.data.vertices], [p.vertices[:] for p in female.data.polygons])
+        start = Vector((0, -2.1, 2))
+        for axis, expected in (((1, 0, 0), 5.2), ((0, 1, 0), 1.2)):
+            self.assertAlmostEqual(tree.ray_cast(start, Vector(axis))[3], expected, places=5)
+        invalid = self.cube(26)
+        settings.connector_points[0].position = (0, 0)
+        settings.connector_points[1].position = (0, 2)
+        data = tuple(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(bpy.context.active_object, invalid)
+        self.assertEqual(tuple(bpy.data.meshes.keys()), data)
+
+    def test_keyed_profile_keeps_orientation_on_the_positive_pin_side_and_in_clipboard(self):
+        self.cube(28)
+        settings = self.settings
+        settings.connector = "D"
+        settings.connector_angle = .37
+        settings.pin_positive = True
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        position, = (tuple(p.position) for p in settings.connector_points)
+        ui = self.addon.connector_ui
+        design = settings.standard_connector("D", 1)
+        self.assertEqual(ui.decode(ui.encode(design, (position,), True)), (design, (position,), True))
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        female, male = self.parts()
+        tip = [v.co for v in male.data.vertices if abs(v.co.z + design.insertion) < 1e-5]
+        self.assertTrue(tip)
+        for x, y in design.profile():
+            expected = Vector((x + position[0], y + position[1], -design.insertion))
+            self.assertLess(min((p - expected).length for p in tip), 1e-5)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [male, female]))
+
+    def test_symmetric_cut_reflects_a_rotated_keyed_profile(self):
+        self.cube(40)
+        settings = self.settings
+        settings.cut_kind = "SYMMETRY"
+        settings.symmetry_axis = settings.axis = "X"
+        settings.offset = -8
+        settings.connector = "D"
+        settings.insertion = 3
+        settings.connector_angle = .37
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        left, center, right = self.parts()
+        left_tip = [v.co for v in left.data.vertices if abs(v.co.x + 5) < 1e-5]
+        right_tip = [v.co for v in right.data.vertices if abs(v.co.x - 5) < 1e-5]
+        self.assertEqual(len(left_tip), len(right_tip))
+        self.assertGreater(len(left_tip), 12)
+        for point in left_tip:
+            mirror = Vector((-point.x, point.y, point.z))
+            self.assertLess(min((other - mirror).length for other in right_tip), 1e-5)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [left, center, right]))
+
+    def test_taper_calibration_has_a_full_width_entry_and_a_narrower_floor(self):
+        self.assertEqual(bpy.ops.tntmesh.calibrate_connectors(
+            shape="TAPER", diameter=6, connector_taper=40, start=.25, end=.25, engraved=False,
+        ), {"FINISHED"})
+        state = self.addon.calibration_ui
+        socket, = [obj for obj in self.parts() if obj.get(state.CALIBRATION) == "SOCKET"]
+        self.checked(socket)
+        floor = [v.co.x for v in socket.data.vertices if abs(v.co.z - 1.4) < 1e-5]
+        mouth = [v.co.x for v in socket.data.vertices if abs(v.co.z - 5.6) < 1e-5 and abs(v.co.x) < 3.4]
+        self.assertAlmostEqual(max(mouth) - min(mouth) - (max(floor) - min(floor)), 2.4, places=4)
+
     def test_dovetail_suggestion_clipboard_and_positive_side_keep_the_exit_direction(self):
         self.cube(34)
         settings = self.settings
@@ -1298,6 +1422,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(self.addon.assembly.overlaps(bpy.context, [remainder, patch]))
         self.assertEqual(source.data, original)
         self.assertEqual(len(original.vertices), 14)
+        source.hide_set(False)
+        self.addon.operators.select_results(bpy.context, [source])
+        self.settings.region_connector = "TONGUE"
+        self.settings.connector_width, self.settings.connector_height = 7, 4
+        self.settings.connector_angle = .23
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        shaped = list(bpy.context.selected_objects)
+        self.assertEqual(len(shaped), 2)
+        for part in shaped:
+            self.checked(part)
+        self.assertEqual(self.addon.assembly.overlaps(bpy.context, shaped), [])
 
     def test_diagnostics_report_open_edges_without_changing_the_mesh(self):
         bpy.ops.mesh.primitive_plane_add(size=20)
@@ -1713,6 +1848,23 @@ class WorkflowTests(unittest.TestCase):
         self.checked(figure)
         self.checked(pin)
         self.assertTrue(source.hide_get())
+
+    def test_base_contact_uses_profile_width_and_keeps_the_oval_height(self):
+        stepped_base_fixture(self.addon)
+        self.settings.cut_kind = "BASE"
+        self.settings.base_band = 7
+        self.settings.base_pins = self.settings.loose_pins = True
+        self.settings.base_shape = "OVAL"
+        self.settings.connector_width, self.settings.connector_height = 2, 1.5
+        self.settings.insertion, self.settings.wall = 1.2, .5
+        self.assertEqual(bpy.ops.tntmesh.find_base_contacts(), {"FINISHED"})
+        self.settings.base_contacts[0].connector = False
+        self.settings.base_contacts[1].diameter = 3
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        base, figure, pin = self.parts()
+        self.assertAlmostEqual(pin.dimensions.x, 3, places=5)
+        self.assertAlmostEqual(pin.dimensions.y, 1.5, places=5)
+        self.assertEqual(self.addon.assembly.overlaps(bpy.context, [base, figure, pin]), [])
 
     def test_symmetric_draft_exposes_the_third_piece_and_can_shift_the_second_cut(self):
         self.cube(48)

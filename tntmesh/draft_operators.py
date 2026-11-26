@@ -11,6 +11,7 @@ from .operators import MeshOperator, active_mesh, report_failure, select_results
 from .settings import TNTMESH_PG_settings
 
 GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diameter", "insertion",
+                       "connector_width", "connector_height", "connector_angle", "connector_taper",
                        "lateral", "axial", "wall", "connector_count", "loose_pins", "pin_positive",
                        "pin_template", "socket_template",
                        "magnet_shape", "magnet_width", "magnet_length", "magnet_thickness",

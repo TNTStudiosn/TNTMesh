@@ -73,13 +73,24 @@ def validate_positions(
     if isinstance(design, Dovetail):
         dovetail_positions(engine, cut, frame, kerf, design, positions, flip)
         return
+    standard_positions(engine, cut, frame, kerf, design, positions, flip)
+
+
+def standard_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector,
+    positions: tuple[Point2, ...], flip: bool,
+) -> tuple[Point2, ...]:
     design.validate()
     cut, frame, requested = connector_frame(cut, frame, positions, flip)
-    safe_centers(
+    if flip:
+        design = design.reflected("Y")
+    points = safe_centers(
         engine, cut.minus, cut.plus, frame, (cut.position - kerf / 2, cut.position + kerf / 2),
-        design.depths, design.envelope, design.sides, cut.epsilon,
+        design.depths, design.profile(design.lateral + design.wall), cut.epsilon,
         min(cut.epsilon, design.anchor / 10, design.wall / 10), design.count, requested=requested,
+        footprint_spacing=design.uses_footprint,
     )
+    return tuple((point.x, -point.y if flip else point.y) for point in points)
 
 
 def axis_frame(
@@ -160,6 +171,8 @@ def split(
             result = add_dovetails(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
                                    design, cut.epsilon, requested)
         else:
+            if config.pin_positive:
+                design = design.reflected("Y")
             result = add_connector(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
                                    design, cut.epsilon, requested=requested)
         first, second, *pins = result.meshes

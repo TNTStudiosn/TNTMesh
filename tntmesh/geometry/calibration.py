@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass, replace
-from math import ceil, isfinite, sin, sqrt, tau
+from math import ceil, isfinite, sqrt
 
 import bpy
 from mathutils import Matrix, Vector
 
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
-from .connector import Connector, prism
+from .connector import Connector, profile_loft, section_volume
 from .mesh import inspect, primitive
 from .volume import extruded_volume, outline
 
@@ -106,8 +106,6 @@ def generate(
     socket_y = length / 2 - wall - largest if engraved else 0.0
     footprint = outline("RECTANGLE", width, length)
     engine = ExactBoolean(context, transaction)
-    polygon_factor = connector.sides * sin(tau / connector.sides) / 2
-
     columns = ceil(sqrt(len(clearances) + 1))
     coupons = []
     for index, clearance in enumerate([None, *clearances]):
@@ -115,18 +113,20 @@ def generate(
         top = floor if pin else floor + depth
         block = extruded_volume(transaction, frame, Vector((0, 0, top / 2)), footprint, top)
         config = connector if pin else replace(connector, lateral=clearance / 1000)
-        radius = connector.diameter / 2 if pin else config.socket_radius
         # Both mating faces point upward in the build layout. Turn the pin over to test it.
-        feature = prism(
-            transaction, frame, Vector((0, socket_y, 0)), max(top / 2, top - 0.25) if pin else floor,
-            top + (connector.insertion if pin else 0.25), radius, connector.sides,
-        )
+        if pin:
+            sections = config.sections(max(top / 2, top - .25), top + config.insertion, top, top)
+            change = section_volume(config.sections(0, config.insertion, 0, 0))
+        else:
+            config = config.reflected("Y")
+            negative = config.sections(-.25, depth, 0, 0, config.lateral)
+            sections = tuple((top - z, ring) for z, ring in reversed(negative))
+            change = -section_volume(config.sections(0, depth, 0, 0, config.lateral))
+        feature = profile_loft(transaction, frame, Vector((0, socket_y, 0)), sections)
         mesh = engine.run(block, feature, "UNION" if pin else "DIFFERENCE")
         for tool in (block, feature):
             transaction.remove_mesh(tool)
-        expected = width * length * top + polygon_factor * radius**2 * (
-            connector.insertion if pin else -depth
-        )
+        expected = width * length * top + change
         checked_volume(mesh, expected)
         if engraved and not pin:
             tool, volume = engraving_tool(transaction, f"{config.lateral:.3f}", label_y, top)

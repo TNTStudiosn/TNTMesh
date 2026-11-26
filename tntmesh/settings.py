@@ -13,6 +13,7 @@ from bpy.props import (
 
 from .geometry.base import BaseCut, ContactOverride
 from .geometry.connector import Connector
+from .geometry.connector_profiles import PROFILE_ITEMS
 from .geometry.custom_connector import CustomConnector
 from .geometry.dovetail import Dovetail
 from .geometry.magnet import Magnet
@@ -112,6 +113,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("CUSTOM", "Custom Mesh", "Use a shaped pin mesh and a matching socket cutter"),
             ("MAGNET", "Magnets", "Cut pockets on both sides for purchased magnets"),
             ("DOVETAIL", "Dovetail", "Add an integrated sliding rail and an open-ended groove"),
+            *PROFILE_ITEMS,
         ],
         default="ROUND",
     )
@@ -119,6 +121,11 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Diameter (mm)", description="Pin diameter measured across opposite vertices",
         default=5.0, min=0.01, precision=2,
     )
+    connector_width: FloatProperty(name="Width (mm)", default=6, min=.01, precision=2)
+    connector_height: FloatProperty(name="Height (mm)", default=4, min=.01, precision=2)
+    connector_angle: FloatProperty(name="Profile rotation", subtype="ANGLE", unit="ROTATION")
+    connector_taper: FloatProperty(name="Tip reduction (%)", subtype="PERCENTAGE", default=25, min=0, max=80,
+                                   description="Percent by which the pin tip is narrower than its base")
     insertion: FloatProperty(
         name="Insertion (mm)", description="Length of the pin inside the matching piece",
         default=4.0, min=0.01, precision=2,
@@ -238,6 +245,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("NONE", "None", "Extract the region without a connector"),
             ("ROUND", "Cylindrical", "Find a matching pin position inside the region seam"),
             ("HEX", "Hexagonal", "Find a matching hexagonal pin position inside the region seam"),
+            *PROFILE_ITEMS,
         ],
         default="NONE",
     )
@@ -265,7 +273,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     base_adjustment: FloatProperty(name="Contact shift (mm)", precision=3)
     base_pins: BoolProperty(name="Connect the contacts")
     base_shape: EnumProperty(name="Connector", items=[
-        ("ROUND", "Cylindrical", ""), ("HEX", "Hexagonal", ""),
+        ("ROUND", "Cylindrical", ""), ("HEX", "Hexagonal", ""), *PROFILE_ITEMS,
     ])
     base_contacts: CollectionProperty(type=TNTMESH_PG_base_contact)
     base_contact_index: IntProperty(min=0)
@@ -283,7 +291,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
 
     def standard_connector(self, shape: str, count: int) -> Connector:
         return Connector(shape, self.diameter, self.insertion, self.lateral, self.axial,
-                         self.wall, count, self.loose_pins)
+                         self.wall, count, self.loose_pins, self.connector_width, self.connector_height,
+                         self.connector_angle, self.connector_taper / 100)
 
     def magnet_config(self, count: int) -> Magnet:
         return Magnet(

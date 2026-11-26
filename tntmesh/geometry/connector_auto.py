@@ -135,10 +135,11 @@ def fit_suggestion(
                       if reserve >= -actual.epsilon)
     if not requested:
         return None
+    local = design.reflected("Y") if flip else design
     centers = safe_centers(
         engine, actual.minus, actual.plus, basis,
         (actual.position - kerf / 2, actual.position + kerf / 2),
-        depths, design.envelope, design.sides, actual.epsilon,
+        depths, local.profile(design.lateral + design.wall), actual.epsilon,
         min(actual.epsilon, design.anchor / 10, design.wall / 10), design.count,
         requested=requested, allow_partial=True,
     )

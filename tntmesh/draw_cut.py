@@ -7,6 +7,7 @@ from mathutils import Euler, Vector
 from . import draft
 from .connector_ui import set_valid_positions
 from .draw_snapping import CursorPoint, SurfacePicker
+from .geometry.connector_profiles import PROFILE_OVERLAYS
 from .geometry.planar import axis_frame
 from .geometry.polygon import Point2, closed_outline, path_outline
 from .localization import tr
@@ -130,7 +131,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         settings = context.scene.tntmesh_settings
         self._shape = settings.cut_kind
         if self.place_connector and (
-            self._shape != "PLANAR" or settings.connector not in {"ROUND", "HEX", "MAGNET", "DOVETAIL"}
+            self._shape != "PLANAR" or settings.connector not in PROFILE_OVERLAYS
         ):
             return {"CANCELLED"}
         if self.align_face and self._shape not in {"PLANAR", "SYMMETRY"}:

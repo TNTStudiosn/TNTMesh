@@ -13,6 +13,7 @@ from .geometry.connector import Connector
 from .geometry.connector_auto import suggest
 from .geometry.connector_clipboard import decode, encode
 from .geometry.connector_pattern import contour_points, pattern_points
+from .geometry.connector_profiles import DIAMETER_SHAPES, STANDARD_SHAPES, TWO_DIMENSION_SHAPES
 from .geometry.dovetail import Dovetail
 from .geometry.magnet import Magnet
 from .geometry.mesh import evaluated_mm
@@ -21,6 +22,7 @@ from .geometry.planar import (
     axis_frame,
     dovetail_positions,
     split_plane,
+    standard_positions,
     validate_positions,
 )
 from .geometry.polygon import Point2
@@ -30,6 +32,25 @@ from .operators import active_mesh, report_failure
 from .settings import TNTMESH_PG_settings
 
 MAX_EDITABLE_POINTS = 64
+
+
+def profile_dimensions(
+    layout: bpy.types.UILayout, settings: bpy.types.PropertyGroup | bpy.types.Operator, shape: str,
+) -> None:
+    if shape in {"D", "STAR"}:
+        layout.prop(settings, "diameter", text="Outer diameter (mm)")
+    elif shape in DIAMETER_SHAPES:
+        layout.prop(settings, "diameter")
+    elif shape in {"SQUARE", "TRIANGLE"}:
+        layout.prop(settings, "connector_width", text="Side (mm)")
+    else:
+        layout.prop(settings, "connector_width")
+    if shape in TWO_DIMENSION_SHAPES:
+        layout.prop(settings, "connector_height")
+    if shape == "TAPER":
+        layout.prop(settings, "connector_taper")
+    elif shape != "ROUND":
+        layout.prop(settings, "connector_angle")
 
 
 def linear_settings(context: bpy.types.Context) -> TNTMESH_PG_settings | None:
@@ -131,6 +152,10 @@ class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
                     design = settings.dovetail_config(settings.connector_count)
                     positive = settings.pin_positive
                     positions = dovetail_positions(engine, plane, frame, settings.kerf, design, (), positive)
+                elif settings.connector in STANDARD_SHAPES - {"ROUND", "HEX"}:
+                    design = settings.standard_connector(settings.connector, settings.connector_count)
+                    positive = settings.pin_positive and not design.loose
+                    positions = standard_positions(engine, plane, frame, settings.kerf, design, (), positive)
                 else:
                     baseline = settings.standard_connector("ROUND", 1)
                     baseline.validate()
@@ -213,6 +238,9 @@ def apply_setup(
     else:
         settings.connector = design.shape
         settings.diameter, settings.insertion, settings.loose_pins = design.diameter, design.insertion, design.loose
+        settings.connector_width, settings.connector_height = design.width, design.height
+        settings.connector_angle = design.angle
+        settings.connector_taper = design.taper * 100
     for name in ("wall", "lateral", "axial"):
         setattr(settings, name, getattr(design, name))
     settings.connector_count = design.count
@@ -244,7 +272,7 @@ class TNTMESH_OT_connector_transfer(bpy.types.Operator):
         settings = linear_settings(context)
         current = tuple(tuple(point.position) for point in settings.connector_points)
         if self.action == "COPY":
-            if settings.connector not in {"ROUND", "HEX", "DOVETAIL"}:
+            if settings.connector not in STANDARD_SHAPES | {"DOVETAIL"}:
                 return {"CANCELLED"}
             design = connector_design(settings, len(current) or settings.connector_count)
             context.window_manager.clipboard = encode(design, current, settings.pin_positive)
