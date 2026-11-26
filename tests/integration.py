@@ -4,7 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
-from math import sin, tau
+from math import cos, sin, tau
 from pathlib import Path
 from xml.etree import ElementTree
 from zipfile import ZipFile
@@ -433,6 +433,85 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
         self.assertEqual(len(self.parts()), 2)
         self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
+    def test_magnet_pockets_match_disc_dimensions_and_export_components(self):
+        source = self.cube()
+        self.settings.connector = "MAGNET"
+        self.assertEqual(bpy.ops.tntmesh.magnet_library(action="PRESET", preset="DISC_6"), {"FINISHED"})
+        self.settings.magnet_inset = .2
+        self.settings.magnet_adhesive = .3
+        self.settings.lateral = .1
+        self.settings.kerf = .4
+        for x in (-6, 6):
+            self.settings.connector_points.add().position = (x, 0)
+        expected_depth = 3.5
+        path = self.directory / "magnets.txt"
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.export_magnet_report(filepath=str(path)), {"FINISHED"})
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("Magnets required · 4", text)
+        self.assertIn("Pocket depth · 3.50 mm", text)
+        self.assertIn("Gap between installed faces · 0.80 mm", text)
+        self.assertEqual(bpy.ops.tntmesh.export_magnet_report(filepath=str(path)), {"CANCELLED"})
+        self.assertEqual(path.read_text(encoding="utf-8"), text)
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        self.assertFalse(source.hide_get())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 2)
+        polygon_radius = 3.1 / cos(tau / 128)
+        cavity_volume = 64 * sin(tau / 64) * polygon_radius**2 * expected_depth / 2
+        for piece in self.parts():
+            self.assertAlmostEqual(self.checked(piece), 24**2 * 11.8 - 2 * cavity_volume, delta=.003)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
+    def test_magnet_library_edits_sizes_and_symmetric_cut_mirrors_block_pockets(self):
+        source = self.cube(40)
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.connector = "MAGNET"
+        self.settings.axis = "X"
+        self.settings.offset = 9
+        self.assertEqual(bpy.ops.tntmesh.magnet_library(action="PRESET", preset="BLOCK_8"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.magnet_library(action="SAVE"), {"FINISHED"})
+        library = bpy.context.scene.tntmesh_magnet_library
+        library[0].name = "Edited rectangular magnet"
+        library[0].thickness = 2
+        library[0].width = 7
+        self.assertEqual(bpy.ops.tntmesh.magnet_library(action="USE"), {"FINISHED"})
+        self.assertEqual(self.settings.magnet_shape, "BLOCK")
+        self.assertEqual(self.settings.magnet_width, 7)
+        self.assertEqual(self.settings.magnet_thickness, 2)
+        self.settings.magnet_angle = .31
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.settings.mode = "DRAFT"
+        path = self.directory / "symmetric magnets.txt"
+        self.assertEqual(bpy.ops.tntmesh.export_magnet_report(filepath=str(path)), {"FINISHED"})
+        self.assertIn("Magnets required · 4", path.read_text(encoding="utf-8"))
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        upper, middle, lower = self.parts()
+        self.assertAlmostEqual(self.checked(upper), self.checked(lower), delta=.002)
+        right = [vertex.co for vertex in middle.data.vertices if 5 < vertex.co.x < 8.9]
+        left = [vertex.co for vertex in middle.data.vertices if -8.9 < vertex.co.x < -5]
+        self.assertEqual(len(right), 4)
+        self.assertEqual(sorted((round(-p.x, 4), round(p.y, 4), round(p.z, 4)) for p in right),
+                         sorted(tuple(round(c, 4) for c in p) for p in left))
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+        self.assertTrue(source.hide_get())
+
+    def test_magnet_rejects_through_holes_without_exporting_or_publishing(self):
+        source = self.cube(20)
+        self.settings.connector = "MAGNET"
+        self.settings.offset = 7.5
+        self.settings.magnet_thickness = 3
+        path = self.directory / "invalid magnets.txt"
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.export_magnet_report(filepath=str(path)), {"CANCELLED"})
+        self.assertFalse(path.exists())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(self.parts(), [])
+        self.assertFalse(source.hide_get())
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
 
     def test_multiple_fixed_connectors(self):
         self.cube(40)

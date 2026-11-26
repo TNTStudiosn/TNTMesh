@@ -13,6 +13,8 @@ from .settings import TNTMESH_PG_settings
 GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diameter", "insertion",
                        "lateral", "axial", "wall", "connector_count", "loose_pins", "pin_positive",
                        "pin_template", "socket_template",
+                       "magnet_shape", "magnet_width", "magnet_length", "magnet_thickness",
+                       "magnet_inset", "magnet_adhesive", "magnet_angle",
                        "cut_kind", "cutter", "profile_size",
                        "profile_shift", "curve_controls", "curve_samples", "contour_depth", "path_smoothing",
                        "region_method", "region_depth", "region_slot", "region_attribute",

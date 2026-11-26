@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.9
 
 - Added per-piece and assembly material, weight and cost estimates for FDM and resin.
+- Added paired disc and block magnet pockets for straight and symmetric cuts, editable sizes and component lists.
 
 ## 0.3.0-alpha.8
 

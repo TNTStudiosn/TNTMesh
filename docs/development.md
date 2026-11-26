@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.8.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.9.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -39,6 +39,8 @@ Use **Connector Pattern** to lay out a line, circle or grid. Spacing is measured
 The **Contour** pattern spaces positions by arc length along the largest outer seam and moves them into the solid by the specified edge setback. Adjust the pattern rotation to move the starting point around the contour if a position falls too close to a corner.
 
 **Mirror X** and **Mirror Y** add reflected positions across the center of the cut frame. The copy and paste icons next to **Suggest Connectors** transfer the shape, dimensions, tolerances, pin side and positions between straight cuts. Paste checks the destination cut before applying the setup.
+
+Choose **Magnets** on a straight or symmetric cut to make a pocket on each side for each magnet pair. **Stock Sizes** fills in a disc or block size. Save custom sizes to the scene library to edit and reuse them. The pocket depth is the magnet thickness plus the face inset and adhesive gap. Block magnets can be rotated within the seam. On straight cuts you can also use the connector patterns or pick a location in the viewport. **Export Magnet List** checks the current cut and writes a text file with the number of purchased magnets, their dimensions and installation distances.
 
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 

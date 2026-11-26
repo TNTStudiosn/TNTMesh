@@ -14,11 +14,17 @@ from bpy.props import (
 from .geometry.base import BaseCut, ContactOverride
 from .geometry.connector import Connector
 from .geometry.custom_connector import CustomConnector
+from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.region import RegionCut
 from .geometry.symmetry import SymmetricCut
 from .geometry.volume import Cut, VolumeCut
 from .model import millimeters_per_unit
+
+MAGNET_SHAPES = (
+    ("DISC", "Disc", "Create a circular magnet pocket"),
+    ("BLOCK", "Block", "Create a rectangular magnet pocket"),
+)
 
 
 def is_mesh(self, obj: bpy.types.Object) -> bool:
@@ -103,6 +109,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("ROUND", "Cylindrical", "Add a round pin and matching socket"),
             ("HEX", "Hexagonal", "Add a hexagonal pin and matching socket"),
             ("CUSTOM", "Custom Mesh", "Use a shaped pin mesh and a matching socket cutter"),
+            ("MAGNET", "Magnets", "Cut pockets on both sides for purchased magnets"),
         ],
         default="ROUND",
     )
@@ -132,6 +139,18 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     pin_positive: BoolProperty(
         name="Pin on positive side", description="Use the positive side of the cut normal for the integrated pin",
     )
+    magnet_shape: EnumProperty(name="Shape", items=MAGNET_SHAPES)
+    magnet_width: FloatProperty(name="Magnet width (mm)", default=6, min=.01, precision=2)
+    magnet_length: FloatProperty(name="Magnet length (mm)", default=4, min=.01, precision=2)
+    magnet_thickness: FloatProperty(name="Magnet thickness (mm)", default=3, min=.01, precision=2)
+    magnet_inset: FloatProperty(
+        name="Face inset (mm)", description="Recess the magnet face below the cut surface", min=0, precision=2,
+    )
+    magnet_adhesive: FloatProperty(
+        name="Adhesive gap (mm)", description="Reserve room beneath each magnet for adhesive",
+        default=.15, min=0, precision=2,
+    )
+    magnet_angle: FloatProperty(name="Magnet rotation", subtype="ANGLE", unit="ROTATION")
     loose_pins: BoolProperty(
         name="Separate pins", description="Cut two sockets and generate removable pins",
     )
@@ -258,6 +277,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         return Connector(shape, self.diameter, self.insertion, self.lateral, self.axial,
                          self.wall, count, self.loose_pins)
 
+    def magnet_config(self, count: int) -> Magnet:
+        return Magnet(
+            self.magnet_shape, self.magnet_width, self.magnet_length, self.magnet_thickness,
+            self.lateral, self.magnet_inset, self.magnet_adhesive, self.wall, self.magnet_angle, count,
+        )
+
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
         connector = None
         if self.base_pins:
@@ -287,6 +312,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         positions = tuple(tuple(point.position) for point in self.connector_points) if self.cut_kind == "PLANAR" else ()
         if self.connector == "CUSTOM":
             connector = CustomConnector(self.pin_template, self.socket_template, self.wall)
+        elif self.connector == "MAGNET":
+            connector = self.magnet_config(len(positions) or self.connector_count)
         elif self.connector != "NONE":
             connector = self.standard_connector(self.connector, len(positions) or self.connector_count)
         cut = PlanarCut(

@@ -15,6 +15,7 @@ from . import (
     draw_cut,
     estimate_ui,
     localization,
+    magnet_ui,
     operators,
     printer_ui,
     ui,
@@ -33,7 +34,7 @@ _CLASSES = (
     viewport.TNTMESH_GGT_cut_offset,
     *ui.CLASSES, *printer_ui.CLASSES, *calibration_ui.CLASSES, *connector_ui.CLASSES,
     *assembly_ui.CLASSES, *base_ui.CLASSES, *diagnostics_ui.CLASSES,
-    *estimate_ui.CLASSES,
+    *estimate_ui.CLASSES, *magnet_ui.CLASSES,
 )
 _registered: list[type] = []
 
@@ -53,6 +54,8 @@ def register() -> None:
         bpy.types.Scene.tntmesh_printer_index = IntProperty(min=0)
         bpy.types.Scene.tntmesh_assembly = PointerProperty(type=assembly.TNTMESH_PG_assembly)
         bpy.types.Scene.tntmesh_estimate = PointerProperty(type=estimate_ui.TNTMESH_PG_estimate)
+        bpy.types.Scene.tntmesh_magnet_library = CollectionProperty(type=magnet_ui.TNTMESH_PG_magnet_size)
+        bpy.types.Scene.tntmesh_magnet_index = IntProperty(min=0)
         viewport.register()
         assembly_view.register()
         base_ui.register()
@@ -70,8 +73,8 @@ def unregister() -> None:
     base_ui.unregister()
     assembly_view.unregister()
     viewport.unregister()
-    for name in ("tntmesh_estimate", "tntmesh_assembly", "tntmesh_printer_index", "tntmesh_printers", "tntmesh_draft_index",
-                 "tntmesh_drafts", "tntmesh_settings"):
+    for name in ("tntmesh_magnet_index", "tntmesh_magnet_library", "tntmesh_estimate", "tntmesh_assembly",
+                 "tntmesh_printer_index", "tntmesh_printers", "tntmesh_draft_index", "tntmesh_drafts", "tntmesh_settings"):
         if hasattr(bpy.types.Scene, name):
             delattr(bpy.types.Scene, name)
     while _registered:

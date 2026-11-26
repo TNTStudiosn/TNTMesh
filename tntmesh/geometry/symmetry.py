@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 
 import bpy
@@ -9,6 +9,7 @@ from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
 from .connector import add_connector
 from .custom_connector import CustomConnector, add_custom_connector
+from .magnet import Magnet, add_magnet_pockets
 from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
 
@@ -106,6 +107,15 @@ def split_symmetric(
         return Vector((point.x, point.y, 0))
 
     sides = (outer, middle) if middle_index else (middle, outer)
+    if isinstance(connector, Magnet):
+        first_magnets = add_magnet_pockets(engine, *sides, frame, position, primary.kerf, connector, epsilon)
+        middle, outer = first_magnets.meshes[middle_index], first_magnets.meshes[outer_index]
+        sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
+        second_magnets = add_magnet_pockets(
+            engine, *sides, reflected, mirrored_position, primary.kerf, replace(connector, angle=-connector.angle),
+            secondary.epsilon, requested=tuple(map(reflect_center, first_magnets.centers)),
+        )
+        return outer, second_magnets.meshes[middle_index], second_magnets.meshes[outer_index]
     if isinstance(connector, CustomConnector):
         first_custom = add_custom_connector(
             engine, *sides, frame, position, primary.kerf, connector, epsilon,

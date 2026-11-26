@@ -12,6 +12,7 @@ from .geometry.connector import Connector
 from .geometry.connector_auto import suggest
 from .geometry.connector_clipboard import decode, encode
 from .geometry.connector_pattern import contour_points, pattern_points
+from .geometry.magnet import Magnet
 from .geometry.mesh import evaluated_mm
 from .geometry.planar import PlaneSplit, axis_frame, split_plane, validate_positions
 from .geometry.polygon import Point2
@@ -32,6 +33,21 @@ def linear_settings(context: bpy.types.Context) -> TNTMESH_PG_settings | None:
             return None
         settings = cut.settings
     return settings if settings.cut_kind == "PLANAR" and settings.connector != "CUSTOM" else None
+
+
+def plane_available(context: bpy.types.Context, settings: TNTMESH_PG_settings | None) -> bool:
+    if context.mode != "OBJECT" or settings is None:
+        return False
+    if context.scene.tntmesh_settings.mode == "DRAFT":
+        plan = draft.active_plan(context.scene)
+        return plan is not None and plan.source is not None
+    return active_mesh(context) is not None
+
+
+def connector_design(settings: TNTMESH_PG_settings, count: int) -> Connector | Magnet:
+    if settings.connector == "MAGNET":
+        return settings.magnet_config(count)
+    return settings.standard_connector(settings.connector, count)
 
 
 @contextmanager
@@ -69,17 +85,18 @@ def set_valid_positions(
 ) -> None:
     if len(positions) > MAX_EDITABLE_POINTS:
         raise MeshError("Use at most 64 explicit connector positions.")
-    design = settings.standard_connector(settings.connector, len(positions))
+    design = connector_design(settings, len(positions))
     check_positions(context, settings, design, positions, settings.pin_positive)
     set_positions(settings, positions)
 
 
 def check_positions(
-    context: bpy.types.Context, settings: TNTMESH_PG_settings, design: Connector,
+    context: bpy.types.Context, settings: TNTMESH_PG_settings, design: Connector | Magnet,
     positions: tuple[Point2, ...], positive: bool,
 ) -> None:
     with preview_split(context, settings) as (engine, cut, frame):
-        validate_positions(engine, cut, frame, settings.kerf, design, positions, positive and not design.loose)
+        flip = positive and isinstance(design, Connector) and not design.loose
+        validate_positions(engine, cut, frame, settings.kerf, design, positions, flip)
 
 
 class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
@@ -90,12 +107,8 @@ class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        if context.mode != "OBJECT" or linear_settings(context) is None:
-            return False
-        if context.scene.tntmesh_settings.mode == "DRAFT":
-            plan = draft.active_plan(context.scene)
-            return plan is not None and plan.source is not None
-        return active_mesh(context) is not None
+        settings = linear_settings(context)
+        return plane_available(context, settings) and settings.connector != "MAGNET"
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         settings = linear_settings(context)
@@ -148,7 +161,7 @@ class TNTMESH_OT_connector_point(bpy.types.Operator):
             selected = min(settings.connector_point_index, len(points) - 1)
             x, y = points[selected].position if points else (0, 0)
             if points:
-                x += settings.diameter + 2 * (settings.wall + settings.lateral) + 1
+                x += 2 * connector_design(settings, 1).envelope + 1
             points.add().position = (x, y)
             settings.connector_point_index = len(points) - 1
         elif self.action == "REMOVE":
@@ -194,7 +207,7 @@ class TNTMESH_OT_connector_transfer(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        return TNTMESH_OT_suggest_connectors.poll(context)
+        return plane_available(context, linear_settings(context))
 
     @classmethod
     def description(cls, context: bpy.types.Context, properties: bpy.types.OperatorProperties) -> str:
@@ -204,7 +217,7 @@ class TNTMESH_OT_connector_transfer(bpy.types.Operator):
         settings = linear_settings(context)
         current = tuple(tuple(point.position) for point in settings.connector_points)
         if self.action == "COPY":
-            if settings.connector == "NONE":
+            if settings.connector not in {"ROUND", "HEX"}:
                 return {"CANCELLED"}
             design = settings.standard_connector(settings.connector, len(current) or settings.connector_count)
             context.window_manager.clipboard = encode(design, current, settings.pin_positive)
@@ -212,6 +225,8 @@ class TNTMESH_OT_connector_transfer(bpy.types.Operator):
             return {"FINISHED"}
         try:
             if self.action == "PASTE":
+                if settings.connector == "MAGNET":
+                    return {"CANCELLED"}
                 design, positions, positive = decode(context.window_manager.clipboard)
                 check_positions(context, settings, design, positions, positive)
                 apply_setup(settings, design, positions, positive)
@@ -246,12 +261,13 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
-        return TNTMESH_OT_suggest_connectors.poll(context) and linear_settings(context).connector != "NONE"
+        settings = linear_settings(context)
+        return plane_available(context, settings) and settings.connector != "NONE"
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         settings = linear_settings(context)
         self.count = max(3, len(settings.connector_points) or settings.connector_count)
-        self.spacing = 2 * settings.standard_connector(settings.connector, 1).envelope * 1.25
+        self.spacing = 2 * connector_design(settings, 1).envelope * 1.25
         self.setback = self.spacing / 2
         return context.window_manager.invoke_props_dialog(self, width=320)
 
@@ -267,12 +283,12 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
                   sum(point.position[1] for point in old) / len(old)) if old else (0, 0)
         try:
             if self.pattern == "CONTOUR":
-                design = settings.standard_connector(settings.connector, self.count)
+                design = connector_design(settings, self.count)
                 with preview_split(context, settings) as (engine, cut, frame):
                     positions = contour_points(cut, frame, settings.kerf, self.count, self.setback, self.angle)
                     validate_positions(
                         engine, cut, frame, settings.kerf, design, positions,
-                        settings.pin_positive and not design.loose,
+                        settings.pin_positive and isinstance(design, Connector) and not design.loose,
                     )
                 set_positions(settings, positions)
             else:
@@ -286,7 +302,7 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
 
 def positions(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
     points = settings.connector_points
-    if not settings.loose_pins:
+    if settings.connector != "MAGNET" and not settings.loose_pins:
         layout.prop(settings, "pin_positive")
     layout.operator("tntmesh.connector_pattern", icon="MOD_ARRAY")
     if not points:

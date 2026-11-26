@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.8.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.9.zip
 ```
 
 ## Geometría y borradores
@@ -33,6 +33,8 @@ Usa **Patrón de conectores** para distribuir posiciones en línea, círculo o c
 El patrón **Contorno** reparte las posiciones por longitud de arco sobre el contorno exterior de mayor área y las desplaza hacia dentro según el retiro del borde. Ajusta la rotación del patrón para desplazar el punto de partida si alguna posición queda muy cerca de una esquina.
 
 **Reflejar X** y **Reflejar Y** añaden posiciones simétricas respecto al centro del plano de corte. Los iconos de copiar y pegar junto a **Sugerir conectores** transfieren la forma, dimensiones, tolerancias, lado del pin y posiciones entre cortes rectos. Al pegar, TNTMesh valida el corte de destino antes de aplicar los ajustes.
+
+Elige **Imanes** en un corte directo o simétrico para crear una cavidad a cada lado de cada par. **Medidas comerciales** carga las dimensiones de un disco o bloque. Puedes guardar medidas propias en la biblioteca de la escena para editarlas y reutilizarlas. La profundidad de cavidad suma el grosor del imán, el retiro de la cara y el espacio para adhesivo. Los imanes de bloque pueden girarse dentro del plano de corte. En un corte directo también puedes usar los patrones o colocar un imán con clic. **Exportar lista de imanes** valida el corte y guarda un archivo de texto con la cantidad, dimensiones y distancias de instalación.
 
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 

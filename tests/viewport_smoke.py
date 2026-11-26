@@ -560,6 +560,39 @@ def capture_material_estimate():
     screenshot("22-material-estimate.png")
 
 
+def setup_magnet_preview():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        settings.connector = "MAGNET"
+        settings.axis = "Z"
+        settings.show_plane = True
+        assert bpy.ops.tntmesh.magnet_library(action="PRESET", preset="BLOCK_8") == {"FINISHED"}
+        settings.magnet_angle = .31
+        settings.connector_points.add().position = (4, 2)
+        bpy.context.preferences.view.language = "es"
+        bpy.context.preferences.view.use_translate_interface = True
+    area.tag_redraw()
+
+
+def capture_magnet_preview():
+    screenshot("23-magnet-pockets.png")
+
+
+def reset_magnet_preview():
+    settings = bpy.context.scene.tntmesh_settings
+    settings.connector = "ROUND"
+    settings.connector_points.clear()
+
+
+def scroll_magnet_details(up=False):
+    window, area, _ = viewport()
+    sidebar = next(region for region in area.regions if region.type == "UI")
+    for _ in range(10 if up else 6):
+        window.event_simulate(type="WHEELUPMOUSE" if up else "WHEELDOWNMOUSE", value="PRESS",
+                              x=sidebar.x + 110, y=window.height - 570)
+
+
 def open_export_browser():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -622,6 +655,11 @@ connector_steps = (
      click_connector_position, verify_connector_placement)
     if os.environ.get("TNTMESH_TEST_CONNECTORS") == "1" else ()
 )
+magnet_steps = (
+    (setup_magnet_preview, lambda: toggle_smoke_panel(570), scroll_magnet_details, capture_magnet_preview,
+     lambda: scroll_magnet_details(up=True), lambda: toggle_smoke_panel(570), reset_magnet_preview)
+    if os.environ.get("TNTMESH_TEST_MAGNET") == "1" else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -664,7 +702,8 @@ estimate_steps = (
     if os.environ.get("TNTMESH_TEST_ESTIMATE") == "1" else ()
 )
 steps = iter((
-    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps, *phase3_steps,
+    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps,
+    *magnet_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *estimate_steps,

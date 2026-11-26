@@ -6,6 +6,7 @@ from .base_ui import draw_contacts
 from .connector_ui import positions
 from .diagnostics_ui import controls as diagnostics_controls
 from .localization import tr
+from .magnet_ui import magnet_details
 from .operators import active_mesh, managed_parts
 from .settings import TNTMESH_PG_settings
 
@@ -61,7 +62,7 @@ def cut_properties(
             layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
-        if settings.cut_kind == "PLANAR" and settings.connector != "CUSTOM":
+        if settings.cut_kind == "PLANAR" and settings.connector in {"NONE", "ROUND", "HEX"}:
             tools = layout.row(align=True)
             tools.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
             if settings.connector != "NONE":
@@ -120,6 +121,10 @@ def cut_details(
     layout.prop(settings, "kerf")
     if settings.connector == "CUSTOM":
         layout.prop(settings, "wall")
+    elif settings.connector == "MAGNET":
+        magnet_details(layout, settings, settings.id_data)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
     elif settings.connector != "NONE":
         connector_details(layout, settings)
         if settings.cut_kind == "PLANAR":
@@ -286,7 +291,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
                     body.prop(settings, "show_cut_handle")
                 cut_details(body, settings, obj)
-                if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX"}:
+                if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET"}:
                     body.operator(
                         "tntmesh.draw_plane", text="Pick Connector Position", icon="PIVOT_CURSOR",
                     ).place_connector = True

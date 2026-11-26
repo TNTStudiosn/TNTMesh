@@ -9,6 +9,7 @@ from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean, half_box
 from .connector import Connector, add_connector, safe_centers
 from .custom_connector import CustomConnector, add_custom_connector
+from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
 from .polygon import Point2
 
@@ -18,7 +19,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | None = None
+    connector: Connector | CustomConnector | Magnet | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -47,9 +48,13 @@ def connector_frame(
 
 
 def validate_positions(
-    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector,
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector | Magnet,
     positions: tuple[Point2, ...], flip: bool,
 ) -> None:
+    if isinstance(design, Magnet):
+        _, _, requested = connector_frame(cut, frame, positions, False)
+        magnet_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
+        return
     design.validate()
     cut, frame, requested = connector_frame(cut, frame, positions, flip)
     safe_centers(
@@ -122,6 +127,11 @@ def split(
     if isinstance(config.connector, CustomConnector):
         return add_custom_connector(
             engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon
+        ).meshes
+    if isinstance(config.connector, Magnet):
+        _, _, requested = connector_frame(cut, frame, config.connector_positions, False)
+        return add_magnet_pockets(
+            engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon, requested,
         ).meshes
     if config.connector is not None:
         cut, frame, requested = connector_frame(cut, frame, config.connector_positions, config.pin_positive)

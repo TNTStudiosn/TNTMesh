@@ -10,6 +10,7 @@ from mathutils import Matrix, Vector
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
 from .mesh import VOLUME_EPSILON, bounds, inspect, primitive
+from .polygon import Point2
 
 
 class ConnectorPlacementError(MeshError):
@@ -73,12 +74,20 @@ def prism(
     sides: int,
 ) -> bpy.types.Mesh:
     # Cardinal vertices must be exact so coincident seam edges do not create slivers.
-    profile = [
+    profile = tuple(
         (round(cos(angle), 15), round(sin(angle), 15))
         for angle in (tau * index / sides for index in range(sides))
-    ]
+    )
+    return profile_prism(transaction, frame, center, start, end, tuple((x * radius, y * radius) for x, y in profile))
+
+
+def profile_prism(
+    transaction: GeometryTransaction, frame: Matrix, center: Vector,
+    start: float, end: float, profile: tuple[Point2, ...],
+) -> bpy.types.Mesh:
+    sides = len(profile)
     vertices = [
-        frame @ Vector((center.x + radius * x, center.y + radius * y, z))
+        frame @ Vector((center.x + x, center.y + y, z))
         for z in (start, end)
         for x, y in profile
     ]
@@ -122,6 +131,7 @@ def safe_centers(
     requested_error: str = "The requested connector positions do not fit.",
     preferred: tuple[Vector, ...] = (),
     allow_partial: bool = False,
+    probe_profile: tuple[Point2, ...] = (),
 ) -> list[Vector]:
     low, high = planes
     probes = ((minus, low - depths[0], low - inset), (plus, high + inset, high + depths[1]))
@@ -137,7 +147,8 @@ def safe_centers(
         with GeometryTransaction() as temporary:
             test_engine = ExactBoolean(engine.context, temporary)
             for mesh, start, end in probes:
-                probe = prism(temporary, frame, center, start, end, envelope, sides)
+                probe = (profile_prism(temporary, frame, center, start, end, probe_profile) if probe_profile
+                         else prism(temporary, frame, center, start, end, envelope, sides))
                 sample = test_engine.run(probe, mesh, "DIFFERENCE")
                 if sample.polygons:
                     break
