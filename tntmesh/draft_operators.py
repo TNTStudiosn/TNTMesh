@@ -17,7 +17,9 @@ GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diame
                        "profile_shift", "curve_controls", "curve_samples", "contour_depth",
                        "region_method", "region_depth", "region_slot", "region_attribute",
                        "region_color", "region_tolerance", "region_weight", "region_grow",
-                       "symmetry_axis", "symmetry_center", "symmetry_secondary")
+                       "symmetry_axis", "symmetry_center", "symmetry_secondary",
+                       "base_band", "base_area", "base_margin", "base_adjustment",
+                       "base_pins", "base_shape", "base_contact_source")
 
 
 def copy_settings(source: TNTMESH_PG_settings, destination: TNTMESH_PG_settings) -> None:
@@ -26,6 +28,11 @@ def copy_settings(source: TNTMESH_PG_settings, destination: TNTMESH_PG_settings)
     destination.contour.clear()
     for point in source.contour:
         destination.contour.add().position = point.position
+    destination.base_contacts.clear()
+    for item in source.base_contacts:
+        contact = destination.base_contacts.add()
+        for name in ("center", "height", "shift", "connector", "diameter"):
+            setattr(contact, name, getattr(item, name))
 
 
 class TNTMESH_OT_draft_create(bpy.types.Operator, MeshOperator):

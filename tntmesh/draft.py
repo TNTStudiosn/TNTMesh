@@ -170,7 +170,7 @@ def rebuild(
             for index, operation in enumerate(operations, 1):
                 target = leaves.pop(operation.target)
                 inherited = directions.pop(operation.target)
-                config = operation.settings.config()
+                config = operation.settings.config(source)
                 try:
                     pieces = apply_cut(
                         context, transaction, target, config, origin, unit, source,

@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.2.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.3.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -34,6 +34,8 @@ Printer profiles are saved with the scene and can be moved between projects as s
 
 **Symmetric Cuts** reflects a straight plane around the chosen world axis and center. Move the first cut away from that center to create a middle piece and two outer pieces. The secondary offset can move the reflected plane along its normal. Round and hexagonal connector positions are reflected and must fit both cuts before results are published. Draft mode exposes the three bodies as separate targets for subsequent cuts.
 
+**Separate Base** looks for closed support loops below the search height in world Z. Set the model upright and try **Find Base Contacts** to review the suggested outlines. A height of zero searches the lowest 22% of the model. The detected loops drive local cutters at their own heights and slopes, so a stepped base can separate at different heights under different feet. Contact settings can shift an individual cut and set whether to add a pin and its diameter. Increase the search height only enough to include the base and inspect the resulting separation, especially if feet broaden between the contact and the search ceiling. Draft copies keep the detected contact overrides for their source mesh.
+
 The **Assembly** panel groups generated pieces by their persistent project ID. It shows dimensions and provides measurement, selection, framing, project visibility and duplication controls. The explosion slider draws offset geometry in the viewport. It keeps model and export transforms at the assembled positions. Straight-cut pieces use their cut direction, and other pieces use their position relative to the project center. Dense pieces use bounding-box previews. **Check Assembly** tests for volume overlap in the current assembled pose. Insertion-path simulation remains on the roadmap.
 
 The 3MF writer uses Core 3MF with millimeter units and independent build items. It retains assembly positions and writes geometry without slicer profiles, supports, materials or toolpaths. [3MF Core Specification](https://github.com/3MFConsortium/spec_core)
@@ -53,6 +55,8 @@ The core integration suite ran on Windows x64 and Linux x64 with Blender 4.5.17 
 The graphical smoke test uses a separate Blender profile and runs `tests/viewport_smoke.py` with `TNTMESH_SMOKE_OUTPUT` set to a writable destination. It captures the viewport and checks the Spanish catalog and the undo stack. Set `TNTMESH_TEST_EVENTS=1` and launch with Blender's `--enable-event-simulate` to test viewport actions and export dialog cancellation. Set `TNTMESH_TEST_CONTOUR=1` to include the freehand drawing test, and `TNTMESH_TEST_PRINTER=1` to capture the printer panel and volume preview.
 
 Set `TNTMESH_TEST_PHASE3=1` to capture the calibration dialog, region highlight, symmetric planes and assembly preview in the 1024 × 745 graphical test window.
+
+Set `TNTMESH_TEST_BASE=1` to capture the detected supports on the two-height base fixture.
 
 GitHub Actions validates the source and installed ZIP on Linux, and the installed ZIP on macOS arm64. Release tags must match the manifest version. Release automation adds a SHA-256 checksum and flags alpha, beta and release candidates as prereleases.
 

@@ -11,6 +11,7 @@ from bpy.props import (
     StringProperty,
 )
 
+from .geometry.base import BaseCut, ContactOverride
 from .geometry.connector import Connector
 from .geometry.custom_connector import CustomConnector
 from .geometry.planar import PlanarCut
@@ -25,6 +26,17 @@ def is_mesh(self, obj: bpy.types.Object) -> bool:
 
 class TNTMESH_PG_contour_point(bpy.types.PropertyGroup):
     position: FloatVectorProperty(name="Position (mm)", size=2, precision=2, subtype="XYZ")
+
+class TNTMESH_PG_base_contact(bpy.types.PropertyGroup):
+    center: FloatVectorProperty(size=3)
+    height: FloatProperty()
+    shift: FloatProperty(name="Contact shift (mm)", precision=3)
+    connector: BoolProperty(name="Add connector", default=True)
+    diameter: FloatProperty(
+        name="Pin diameter (mm)", description="Enter zero to keep the common diameter",
+        min=0, precision=3,
+    )
+
 
 
 class TNTMESH_PG_settings(bpy.types.PropertyGroup):
@@ -45,6 +57,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("OBJECT", "Cutter Object", "Extract the region inside a closed mesh"),
             ("REGION", "Surface Region", "Extract a solid piece from matching faces"),
             ("SYMMETRY", "Symmetric Cuts", "Reflect a straight cut across a symmetry plane"),
+            ("BASE", "Separate Base", "Find rising contacts and cut the figure from its base"),
         ],
         default="PLANAR",
     )
@@ -161,6 +174,20 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Second cut shift (mm)", description="Shift the reflected cut along its own normal",
         precision=3,
     )
+    base_band: FloatProperty(
+        name="Search height (mm)", description="Height above the model bottom to search, or zero for automatic",
+        min=0, default=0, precision=2,
+    )
+    base_area: FloatProperty(name="Min. contact (mm²)", min=.01, default=.5, precision=2)
+    base_margin: FloatProperty(name="Contact margin (mm)", min=0, default=.05, precision=3)
+    base_adjustment: FloatProperty(name="Contact shift (mm)", precision=3)
+    base_pins: BoolProperty(name="Connect the contacts")
+    base_shape: EnumProperty(name="Connector", items=[
+        ("ROUND", "Cylindrical", ""), ("HEX", "Hexagonal", ""),
+    ])
+    base_contacts: CollectionProperty(type=TNTMESH_PG_base_contact)
+    base_contact_index: IntProperty(min=0)
+    base_contact_source: PointerProperty(type=bpy.types.Object, poll=is_mesh)
 
     def region_config(self) -> RegionCut:
         return RegionCut(
@@ -168,7 +195,24 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             tuple(self.region_color), self.region_tolerance, self.region_weight, self.region_grow,
         )
 
-    def config(self) -> Cut:
+    def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
+        connector = None
+        if self.base_pins:
+            connector = Connector(
+                self.base_shape, self.diameter, self.insertion, self.lateral,
+                self.axial, self.wall, loose=self.loose_pins,
+            )
+        items = self.base_contacts if source is None or self.base_contact_source == source else ()
+        overrides = tuple(
+            ContactOverride(tuple(item.center), item.shift, item.connector, item.diameter)
+            for item in items
+        )
+        return BaseCut(self.base_band, self.base_area, self.base_margin, self.base_adjustment,
+                       connector, overrides)
+
+    def config(self, source: bpy.types.Object | None = None) -> Cut:
+        if self.cut_kind == "BASE":
+            return self.base_config(source)
         if self.cut_kind == "REGION":
             return self.region_config()
         if self.cut_kind not in {"PLANAR", "SYMMETRY"}:

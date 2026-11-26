@@ -37,6 +37,36 @@ def disable(addon):
         addon.unregister()
 
 
+def stepped_base_fixture(model, *, single=False):
+    context = bpy.context
+    factory = model.operators.GeometryTransaction
+    volume = importlib.import_module(f"{model.__name__}.geometry.volume")
+    boolean = importlib.import_module(f"{model.__name__}.geometry.boolean")
+    matrix = model.operators.Matrix.Identity(3)
+    if single:
+        boxes = ((0, 0, 0, 3, 40, 24), (0, 0, 2.5, 21, 6, 6))
+    else:
+        boxes = (
+            (0, 0, 0, 3, 40, 24), (10, 0, 2.5, 5, 10, 10),
+            (-9, 0, 2.5, 18, 6, 6), (10, 0, 4.5, 18, 6, 6),
+            (0, 0, 15, 21, 34, 9),
+        )
+    with factory() as transaction:
+        engine = boolean.ExactBoolean(context, transaction)
+        slab = None
+        for x, y, low, high, width, length in boxes:
+            outline = volume.outline("RECTANGLE", width, length)
+            box = volume.extruded_volume(
+                transaction, matrix, Vector((x, y, (low + high) / 2)), outline, high - low,
+            )
+            slab = box if slab is None else engine.run(slab, box, "UNION")
+        source = transaction.object(context.scene.collection, "Stepped base fixture", slab)
+        transaction.publish(source)
+    context.view_layer.update()
+    model.operators.select_results(context, [source])
+    return source
+
+
 class RegistrationTests(unittest.TestCase):
     def test_register_unregister_register(self):
         addon = load_addon()
@@ -614,6 +644,83 @@ class WorkflowTests(unittest.TestCase):
             self.assertAlmostEqual(primary.z, mirrored.z, places=5)
         self.assertTrue(source.hide_get())
         self.assertEqual(len(source.data.polygons), 6)
+
+    def test_base_analysis_and_cut_keep_two_different_contact_elevations(self):
+        source = stepped_base_fixture(self.addon)
+        self.settings.cut_kind = "BASE"
+        self.settings.base_band = 7
+        base_geometry = importlib.import_module(f"{self.addon.__name__}.geometry.base")
+        analysis = base_geometry.analyze_base(source.data, self.settings.base_config())
+        self.assertEqual(len(analysis.contacts), 2)
+        self.assertEqual([round(item.center.z, 5) for item in analysis.contacts], [3, 5])
+        self.assertEqual([round(item.area, 5) for item in analysis.contacts], [36, 36])
+        before = self.checked(source)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        base, figure = self.parts()
+        self.assertAlmostEqual(self.checked(base), 40 * 24 * 3 + 10 * 10 * 2, places=2)
+        self.assertAlmostEqual(self.checked(base) + self.checked(figure), before, places=2)
+
+    def test_base_without_contacts_has_no_published_results(self):
+        source = self.cube()
+        self.settings.cut_kind = "BASE"
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertFalse(source.hide_get())
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        self.assertEqual(self.parts(), [])
+
+    def test_base_with_one_contact_uses_the_automatic_search_height(self):
+        stepped_base_fixture(self.addon, single=True)
+        self.settings.cut_kind = "BASE"
+        self.assertEqual(bpy.ops.tntmesh.find_base_contacts(), {"FINISHED"})
+        self.assertEqual(len(self.settings.base_contacts), 1)
+        self.assertAlmostEqual(self.settings.base_contacts[0].height, 3)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        base, figure = self.parts()
+        self.assertAlmostEqual(self.checked(base), 40 * 24 * 3)
+        self.assertAlmostEqual(self.checked(figure), 6 * 6 * 18)
+
+    def test_base_contact_cut_follows_inclined_support_surfaces(self):
+        source = stepped_base_fixture(self.addon)
+        deform = self.addon.operators.Matrix.Identity(4)
+        deform[2][0] = .05
+        source.data.transform(deform)
+        source.data.update()
+        self.settings.cut_kind = "BASE"
+        self.settings.base_band = 8
+        self.assertEqual(bpy.ops.tntmesh.find_base_contacts(), {"FINISHED"})
+        self.assertEqual(len(self.settings.base_contacts), 2)
+        before = self.checked(source)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        base, figure = self.parts()
+        self.assertAlmostEqual(self.checked(base), 40 * 24 * 3 + 10 * 10 * 2, places=2)
+        self.assertAlmostEqual(self.checked(base) + self.checked(figure), before, places=2)
+
+    def test_base_contact_connector_overrides_are_used_in_a_draft(self):
+        source = stepped_base_fixture(self.addon)
+        self.settings.cut_kind = "BASE"
+        self.settings.base_band = 7
+        self.settings.base_pins = True
+        self.settings.loose_pins = True
+        self.settings.base_shape = "HEX"
+        self.settings.insertion = 1.2
+        self.settings.diameter = 2
+        self.settings.wall = .5
+        self.assertEqual(bpy.ops.tntmesh.find_base_contacts(), {"FINISHED"})
+        self.assertEqual(len(self.settings.base_contacts), 2)
+        self.settings.base_contacts[0].connector = False
+        self.settings.base_contacts[1].diameter = 3
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        base, figure, pin = self.parts()
+        self.assertAlmostEqual(pin.dimensions.x, 3, places=5)
+        self.assertAlmostEqual(pin.location.x + sum(v.co.x for v in pin.data.vertices) /
+                               len(pin.data.vertices), 10, places=5)
+        self.checked(base)
+        self.checked(figure)
+        self.checked(pin)
+        self.assertTrue(source.hide_get())
 
     def test_symmetric_draft_exposes_the_third_piece_and_can_shift_the_second_cut(self):
         self.cube(48)

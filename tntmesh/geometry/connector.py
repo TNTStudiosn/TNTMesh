@@ -100,6 +100,7 @@ def safe_centers(
     inset: float,
     count: int,
     requested: tuple[Vector, ...] | None = None,
+    requested_error: str = "The requested connector positions do not fit.",
 ) -> list[Vector]:
     low, high = planes
     probes = ((minus, low - depths[0], low - inset), (plus, high + inset, high + depths[1]))
@@ -119,13 +120,11 @@ def safe_centers(
                 centers.append(center)
                 if len(centers) == count:
                     break
-    if not centers:
-        if requested is not None:
-            raise MeshError("The mirrored connector does not fit at its reflected position.")
-        raise MeshError("No safe connector position. Reduce its size or move the cut.")
     if len(centers) < count:
         if requested is not None:
-            raise MeshError("The mirrored connector does not fit at its reflected position.")
+            raise MeshError(requested_error)
+        if not centers:
+            raise MeshError("No safe connector position. Reduce its size or move the cut.")
         raise MeshError("Not enough safe positions. Reduce the connector count or size.")
     return centers
 
@@ -140,6 +139,7 @@ def add_connector(
     config: Connector,
     epsilon: float,
     requested: tuple[Vector, ...] | None = None,
+    requested_error: str = "The requested connector positions do not fit.",
 ) -> ConnectorResult:
     config.validate()
     low = position - kerf / 2
@@ -152,7 +152,7 @@ def add_connector(
     centers = safe_centers(
         engine, minus, plus, frame, (low, high),
         (minus_depth + config.wall, config.insertion + config.axial + config.wall),
-        envelope, config.sides, epsilon, inset, config.count, requested,
+        envelope, config.sides, epsilon, inset, config.count, requested, requested_error,
     )
 
     polygon_factor = config.sides * sin(tau / config.sides) / 2

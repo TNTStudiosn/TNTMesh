@@ -88,7 +88,7 @@ def draw_plane() -> None:
     obj = active_mesh(context)
     if context.mode != "OBJECT" or settings.mode != "EASY" or not settings.show_plane or obj is None:
         return
-    if settings.cut_kind == "OBJECT":
+    if settings.cut_kind in {"OBJECT", "BASE"}:
         return
     if settings.cut_kind == "REGION":
         draw_region(context, obj, settings.region_config())

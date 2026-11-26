@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0-alpha.3
+
+- Added base-contact detection and solid base separation for models with one or more supports at distinct heights.
+- Added contact previews and per-contact height, connector and pin diameter overrides.
+
 ## 0.3.0-alpha.2
 
 - Added connector calibration kits with an engraved clearance sweep and a reusable pin. A selected socket can set a printer profile's per-side clearance.

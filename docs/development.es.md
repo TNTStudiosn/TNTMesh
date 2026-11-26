@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.2.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.3.zip
 ```
 
 ## Geometría y borradores
@@ -32,6 +32,8 @@ Los perfiles de impresora se guardan en la escena y se pueden transferir entre p
 
 **Cortes simétricos** refleja un plano recto respecto al eje y centro elegidos. Separa el primer plano del centro para obtener dos piezas exteriores y una central. Puedes desplazar el segundo plano sobre su normal. Los conectores cilíndricos o hexagonales conservan sus posiciones reflejadas y ambas uniones deben pasar la comprobación de espacio. En Borrador puedes usar cada una de las tres piezas como entrada de cortes posteriores.
 
+**Separar base** busca contornos cerrados de apoyo cerca de la parte inferior del modelo sobre el eje Z global. Pon la figura de pie y usa **Detectar apoyos** para revisar los contornos. Una altura de búsqueda de cero analiza el 22% inferior. Cada apoyo conserva su altura e inclinación, incluso si los pies están sobre niveles distintos. En los ajustes puedes mover cada apoyo, activar su conector y cambiar el diámetro. Usa una altura suficiente para incluir la base y revisa el resultado si los pies se ensanchan por encima del contacto. Borrador copia los ajustes de los apoyos de la malla de origen.
+
 **Ensamblaje** agrupa las piezas por proyecto y permite seleccionarlas, encuadrarlas, ocultarlas, duplicarlas y medirlas. El deslizador separa la geometría solo en la vista previa. Las posiciones de exportación se conservan. Las piezas densas se muestran con su caja envolvente. **Revisar ensamblaje** busca traslapes de volumen en la posición actual. La simulación de inserción queda pendiente.
 
 La exportación 3MF guarda mallas en milímetros como objetos independientes en posición de ensamblaje. Incluye geometría y deja los ajustes de impresión, soportes y materiales al slicer. [Especificación 3MF Core](https://github.com/3MFConsortium/spec_core)
@@ -43,6 +45,8 @@ En Windows se exportó un cubo de 24 mm dividido en dos mitades dentro de un sol
 Las pruebas de integración se ejecutan en Blender e incluyen exportación y reimportación, dimensiones de conectores, mallas huecas, cambios de escala, restauración de borradores y limpieza ante fallos. Para comprobar la interfaz, ejecuta `tests/viewport_smoke.py` en una instancia gráfica con un perfil aislado y define `TNTMESH_SMOKE_OUTPUT` como carpeta de salida. Para probar el dibujo y la cancelación, define `TNTMESH_TEST_EVENTS=1` y utiliza `--enable-event-simulate`. Define `TNTMESH_TEST_CONTOUR=1` para probar el contorno a mano alzada y `TNTMESH_TEST_PRINTER=1` para capturar el panel de impresora y el volumen útil.
 
 Define `TNTMESH_TEST_PHASE3=1` para capturar la calibración, el resaltado de regiones, los planos simétricos y la vista de ensamblaje en la ventana de prueba de 1024 × 745.
+
+Define `TNTMESH_TEST_BASE=1` para capturar los apoyos detectados en la base de dos alturas.
 
 GitHub Actions compara el tag con el manifiesto, prueba el ZIP instalado y genera la suma SHA-256 antes de publicar. Las versiones alfa, beta y candidatas se marcan como experimentales.
 

@@ -202,7 +202,7 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
             with GeometryTransaction() as transaction:
                 mesh, origin = evaluated_mm(context, source, transaction, unit)
                 wm.progress_update(1)
-                config = settings.config()
+                config = settings.config(source)
                 meshes = apply_cut(context, transaction, mesh, config, origin, unit, source)
                 wm.progress_update(2)
                 parts = publish_parts(

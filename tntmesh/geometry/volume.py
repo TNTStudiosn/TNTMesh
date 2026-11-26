@@ -7,6 +7,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 from ..model import GeometryTransaction, MeshError
+from .base import BaseCut, split_base
 from .boolean import ExactBoolean
 from .custom_connector import CustomConnector
 from .mesh import bounds, evaluated_mm, inspect, primitive
@@ -30,7 +31,7 @@ class VolumeCut:
     points: tuple[Point2, ...]
 
 
-Cut = PlanarCut | RegionCut | SymmetricCut | VolumeCut
+Cut = BaseCut | PlanarCut | RegionCut | SymmetricCut | VolumeCut
 
 
 def structural_parts(kind: str) -> int:
@@ -138,6 +139,8 @@ def apply_cut(
 ) -> tuple[bpy.types.Mesh, ...]:
     if isinstance(config, SymmetricCut):
         return split_symmetric(context, transaction, mesh, config)
+    if isinstance(config, BaseCut):
+        return split_base(context, transaction, mesh, config)
     if isinstance(config, PlanarCut):
         if isinstance(config.connector, CustomConnector) and source in (
             config.connector.pin, config.connector.socket

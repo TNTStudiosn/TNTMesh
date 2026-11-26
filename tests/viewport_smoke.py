@@ -192,6 +192,30 @@ def capture_assembly():
     assert bpy.ops.tntmesh.assembly_action(action="RESET") == {"FINISHED"}
 
 
+def start_base_preview():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "tntmesh_integration_fixture", Path(__file__).with_name("integration.py"),
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        module.stepped_base_fixture(module.load_addon())
+        settings = bpy.context.scene.tntmesh_settings
+        settings.cut_kind = "BASE"
+        settings.base_band = 7
+        assert bpy.ops.tntmesh.find_base_contacts() == {"FINISHED"}
+        assert len(settings.base_contacts) == 2
+        area.spaces.active.region_3d.view_location.z = 9
+    area.tag_redraw()
+
+
+def capture_base():
+    screenshot("11-base-contacts.png")
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -319,10 +343,11 @@ assembly_steps = (
      capture_assembly, lambda: toggle_smoke_panel(146), lambda: toggle_smoke_panel(93))
     if phase3_steps else ()
 )
+base_steps = (start_base_preview, capture_base) if os.environ.get("TNTMESH_TEST_BASE") == "1" else ()
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
-    *export_steps, *printer_steps, *assembly_steps, draft_panel, finish,
+    *export_steps, *printer_steps, *assembly_steps, *base_steps, draft_panel, finish,
 ))
 
 

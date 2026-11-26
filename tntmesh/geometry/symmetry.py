@@ -96,6 +96,7 @@ def split_symmetric(
     second_set = add_connector(
         engine, *sides, reflected, mirrored_position, primary.kerf, connector,
         secondary.epsilon, requested=tuple(requested),
+        requested_error="The mirrored connector does not fit at its reflected position.",
     )
     middle, mirrored_outer = second_set.meshes[middle_index], second_set.meshes[outer_index]
     return outer, middle, mirrored_outer, *first_set.meshes[2:], *second_set.meshes[2:]

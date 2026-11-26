@@ -118,6 +118,35 @@ SPANISH = {
         "Los dos cortes se cruzan dentro del modelo. Ajusta el ángulo o el desplazamiento.",
     "The mirrored connector does not fit at its reflected position.":
         "El conector reflejado no cabe en su posición.",
+    "The requested connector positions do not fit.": "Los conectores no caben en las posiciones elegidas.",
+    "Separate Base": "Separar base",
+    "Find rising contacts and cut the figure from its base": "Detecta apoyos y separa la figura de su base",
+    "Search height (mm)": "Altura de búsqueda (mm)",
+    "Height above the model bottom to search, or zero for automatic":
+        "Altura desde la parte inferior del modelo, o cero para detección automática",
+    "Min. contact (mm²)": "Contacto mín. (mm²)",
+    "Contact margin (mm)": "Margen del contacto (mm)",
+    "Contact shift (mm)": "Ajuste vertical (mm)",
+    "Connect the contacts": "Añadir conectores",
+    "Add connector": "Añadir conector",
+    "Pin diameter (mm)": "Diámetro del pin (mm)",
+    "Enter zero to keep the common diameter": "Usa cero para conservar el diámetro general",
+    "Find Base Contacts": "Detectar apoyos",
+    "Detect and highlight where the figure rises out of its base": "Detecta y resalta los apoyos de la figura",
+    "Highlight contacts": "Resaltar apoyos",
+    "Contact at {height:.2f} mm": "Apoyo a {height:.2f} mm",
+    "Found {count} base contact(s).": "Se detectaron {count} apoyos.",
+    "Check the base scan height, minimum contact area and margin.":
+        "Revisa la altura de búsqueda, el área mínima y el margen.",
+    "Set the base search height below the top of the model.":
+        "Define una altura de búsqueda por debajo de la parte superior del modelo.",
+    "No closed base contacts were found. Adjust the search height.":
+        "No se detectaron apoyos cerrados. Ajusta la altura de búsqueda.",
+    "A contact is above the base search height after adjustment.":
+        "Tras el ajuste, un apoyo quedó por encima de la altura de búsqueda.",
+    "A contact is too irregular for a straight pin. Disable connectors.":
+        "Un apoyo es demasiado irregular para un pin recto. Desactiva su conector.",
+    "A base contact does not have room for a connector.": "Un apoyo no tiene espacio para un conector.",
     "Assembly": "Ensamblaje",
     "Use Selected Project": "Usar proyecto de la pieza",
     "Show the project that owns the selected generated piece":

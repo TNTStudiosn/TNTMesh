@@ -2,6 +2,7 @@
 import bpy
 
 from . import draft
+from .base_ui import draw_contacts
 from .operators import active_mesh, managed_parts
 from .settings import TNTMESH_PG_settings
 
@@ -13,6 +14,12 @@ def cut_properties(
     layout.prop(settings, "cut_kind", text="")
     if settings.cut_kind == "OBJECT":
         layout.prop(settings, "cutter")
+        return
+    if settings.cut_kind == "BASE":
+        layout.prop(settings, "base_band")
+        layout.prop(settings, "base_pins")
+        if settings.base_pins:
+            layout.prop(settings, "base_shape")
         return
     if settings.cut_kind == "REGION":
         layout.prop(settings, "region_method", text="")
@@ -59,7 +66,18 @@ def cut_properties(
         layout.prop(settings, "profile_size")
 
 
-def cut_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+def cut_details(
+    layout: bpy.types.UILayout, settings: TNTMESH_PG_settings, source: bpy.types.Object | None,
+) -> None:
+    if settings.cut_kind == "BASE":
+        for prop in ("base_area", "base_margin", "base_adjustment"):
+            layout.prop(settings, prop)
+        if settings.base_pins:
+            for prop in ("diameter", "insertion", "lateral", "axial", "wall", "loose_pins"):
+                layout.prop(settings, prop)
+        if settings.base_contact_source == source:
+            draw_contacts(layout, settings)
+        return
     if settings.cut_kind == "REGION":
         layout.prop(settings, "region_grow")
         if settings.region_method == "COLOR":
@@ -165,7 +183,7 @@ def draw_draft(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
             header, body = layout.panel("tntmesh_draft_cut_settings", default_closed=True)
             header.label(text="Cut settings")
             if body:
-                cut_details(body, operation.settings)
+                cut_details(body, operation.settings, plan.source)
     action = layout.row()
     action.scale_y = 1.45
     action.operator("tntmesh.draft_build", icon="CHECKMARK")
@@ -215,6 +233,8 @@ class TNTMESH_PT_main(bpy.types.Panel):
             cut = layout.box()
             cut.label(text="Split", icon="MOD_BOOLEAN")
             cut_properties(cut, settings, obj)
+            if settings.cut_kind == "BASE":
+                cut.operator("tntmesh.find_base_contacts", icon="VIEWZOOM")
             if settings.cut_kind in {"PLANAR", "POLYGON", "SYMMETRY"}:
                 cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=(
                     "Draw Contour" if settings.cut_kind == "POLYGON" else "Draw Cut Line"
@@ -222,6 +242,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
             if settings.cut_kind != "OBJECT":
                 preview_label = {
                     "PLANAR": "Show plane", "REGION": "Highlight region", "SYMMETRY": "Show both planes",
+                    "BASE": "Highlight contacts",
                 }.get(settings.cut_kind, "Show cutter")
                 cut.prop(settings, "show_plane", text=preview_label)
 
@@ -229,12 +250,12 @@ class TNTMESH_PT_main(bpy.types.Panel):
             header.label(text="Cut settings")
             if body:
                 body.prop(settings, "hide_source")
-                cut_details(body, settings)
+                cut_details(body, settings, obj)
 
             action = layout.row()
             action.scale_y = 1.45
-            action.operator("tntmesh.split", icon="CHECKMARK",
-                            text="Extract Region" if settings.cut_kind == "REGION" else "Split Model")
+            label = {"REGION": "Extract Region", "BASE": "Separate Base"}.get(settings.cut_kind, "Split Model")
+            action.operator("tntmesh.split", icon="CHECKMARK", text=label)
             layout.operator("tntmesh.validate", icon="VIEWZOOM")
 
         if managed_parts(context, "ALL"):
