@@ -2,9 +2,10 @@
 from dataclasses import dataclass
 
 import bpy
+import numpy as np
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, FloatProperty
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from .geometry.diagnostics import Diagnostics, Marker, scan
 from .geometry.mesh import bounds, evaluated_mm
@@ -30,6 +31,40 @@ FINDINGS = [("ALL", "All Findings", "")] + [
 
 
 @dataclass
+class WallOverlay:
+    vertices: np.ndarray
+    colors: np.ndarray
+    limits: tuple[float, float] | None
+    batch: object = None
+
+
+def wall_overlay(mesh: bpy.types.Mesh, report: Diagnostics, origin: Vector, unit: float) -> WallOverlay | None:
+    if report.wall_map_mm is None:
+        return None
+    values = np.frombuffer(report.wall_map_mm, dtype=np.float32)
+    known = values >= 0
+    measured = values[known]
+    limits = (float(measured.min()), float(measured.max())) if measured.size else None
+    low = report.wall_limit_mm or (limits[0] if limits else 0)
+    high = low * 2 if report.wall_limit_mm else (limits[1] if limits else 0)
+    palette = ((.77, .08, .25), (1.0, .28, .23), (1.0, .68, .17), (.08, .77, .88))
+    colors = np.tile(np.asarray((.38, .42, .48, 1), dtype=np.float32), (len(values), 1))
+    if measured.size:
+        mid = low if report.wall_limit_mm else (low + high) / 2
+        ramp = (0, mid * .8, mid, max(high, mid + .00001))
+        for channel, color_stops in enumerate(zip(*palette, strict=True)):
+            colors[known, channel] = np.interp(measured, ramp, color_stops)
+    coordinates = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
+    mesh.vertices.foreach_get("co", coordinates)
+    coordinates = coordinates.reshape((-1, 3))
+    coordinates /= unit
+    coordinates += tuple(origin)
+    triangle_indices = np.empty(len(values) * 3, dtype=np.int32)
+    mesh.loop_triangles.foreach_get("vertices", triangle_indices)
+    return WallOverlay(coordinates[triangle_indices], np.repeat(colors, 3, axis=0), limits)
+
+
+@dataclass
 class Preview:
     scene: int
     object: int
@@ -38,6 +73,8 @@ class Preview:
     unit: float
     result: Diagnostics
     marks: dict[str, list[Marker]]
+    overlay: WallOverlay | None = None
+    show_wall_map: bool = False
     kind: str = "ALL"
 
 
@@ -95,13 +132,14 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
         name="Minimum wall (mm)", min=0, default=0, precision=3,
         description="Flag walls thinner than this limit. Zero skips the thickness check",
     )
+    wall_map: BoolProperty(name="Wall Thickness Map", description="Color the surface by sampled wall thickness")
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         return context.window_manager.invoke_props_dialog(self, width=330)
 
     def draw(self, context: bpy.types.Context) -> None:
         self.layout.use_property_split = True
-        for name in ("weld_mm", "fragment_mm3", "wall_mm", "intersections"):
+        for name in ("weld_mm", "fragment_mm3", "wall_mm", "wall_map", "intersections"):
             self.layout.prop(self, name)
 
     def execute(self, context: bpy.types.Context) -> set[str]:
@@ -118,13 +156,15 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
                 wm.progress_update(1)
                 report = scan(
                     mesh, self.weld_mm, self.fragment_mm3, intersections=self.intersections, wall_mm=self.wall_mm,
+                    wall_map=self.wall_map,
                 )
                 markers = {item.kind: [(origin + a / unit, origin + b / unit) for a, b in item.marks]
                            for item in report.findings if item.marks}
+                overlay = wall_overlay(mesh, report, origin, unit)
             context.view_layer.update()
             _preview = Preview(
                 scene.as_pointer(), obj.as_pointer(), obj.data.as_pointer(), obj.matrix_world.copy(),
-                unit, report, markers,
+                unit, report, markers, overlay, overlay is not None,
             )
             wm.progress_update(2)
         except (MeshError, RuntimeError, ValueError) as error:
@@ -148,7 +188,7 @@ class TNTMESH_OT_diagnostic_view(bpy.types.Operator):
     bl_idname = "tntmesh.diagnostic_view"
     bl_label = "View Mesh Finding"
 
-    kind: EnumProperty(items=[*FINDINGS, ("CLEAR", "Clear Findings", "")])
+    kind: EnumProperty(items=[*FINDINGS, ("MAP", "Wall Thickness Map", ""), ("CLEAR", "Clear Findings", "")])
     focus: BoolProperty()
 
     @classmethod
@@ -159,6 +199,8 @@ class TNTMESH_OT_diagnostic_view(bpy.types.Operator):
         preview = current(context)
         if self.kind == "CLEAR":
             clear()
+        elif self.kind == "MAP" and preview.overlay is not None:
+            preview.show_wall_map = not preview.show_wall_map
         elif self.kind == "ALL":
             preview.kind = "ALL"
         elif self.kind in preview.marks:
@@ -198,6 +240,18 @@ def controls(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
             row.label(text=text, translate=False)
     if not preview.result.checked_intersections:
         box.label(text="Intersection check skipped", icon="INFO")
+    if preview.overlay is not None:
+        box.operator("tntmesh.diagnostic_view", text="Wall Thickness Map", icon="SHADING_RENDERED",
+                     depress=preview.show_wall_map).kind = "MAP"
+        if preview.show_wall_map:
+            if preview.overlay.limits is None:
+                box.label(text="No reliable wall samples.", icon="INFO")
+            else:
+                thin, thick = preview.overlay.limits
+                legend = tr("Samples · {thin:.2f}–{thick:.2f} mm").format(thin=thin, thick=thick)
+                box.label(text=legend, translate=False)
+                box.label(text="Thin in red · thick in cyan")
+                box.label(text="Unmeasured in gray")
     if preview.result.wall_limit_mm:
         if not preview.result.checked_walls:
             box.label(text="Wall check needs a closed solid.", icon="INFO")
@@ -219,7 +273,27 @@ def draw() -> None:
     from gpu_extras.batch import batch_for_shader
 
     preview = current(bpy.context)
-    if preview is None or not preview.marks or bpy.context.mode != "OBJECT":
+    if preview is None or bpy.context.mode != "OBJECT":
+        return
+    overlay = preview.overlay
+    if preview.show_wall_map and overlay is not None:
+        shader = gpu.shader.from_builtin("SMOOTH_COLOR")
+        if overlay.batch is None:
+            overlay.batch = batch_for_shader(shader, "TRIS", {"pos": overlay.vertices, "color": overlay.colors})
+        depth = gpu.state.depth_test_get()
+        try:
+            gpu.state.depth_test_set("LESS_EQUAL")
+            # Bias the overlay in clip space so coplanar faces keep their color at any zoom.
+            with gpu.matrix.push_pop_projection():
+                projection = gpu.matrix.get_projection_matrix()
+                projection[2] = projection[2] - projection[3] * .00001
+                gpu.matrix.load_projection_matrix(projection)
+                overlay.batch.draw(shader)
+        finally:
+            gpu.state.depth_test_set(depth)
+        if preview.kind == "ALL":
+            return
+    if not preview.marks:
         return
     marker_sets = preview.marks.values() if preview.kind == "ALL" else (preview.marks[preview.kind],)
     markers = [marker for group in marker_sets for marker in group]

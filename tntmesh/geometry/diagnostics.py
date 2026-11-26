@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from array import array
 from collections import defaultdict, deque
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from mathutils.kdtree import KDTree
 from ..model import MeshError
 from .coplanar import coplanar_faces
 from .mesh import VOLUME_EPSILON, bounds
-from .wall import thin_wall_samples
+from .wall import wall_samples
 
 MAX_MARKS = 256
 Marker = tuple[Vector, Vector]
@@ -35,6 +36,7 @@ class Diagnostics:
     wall_limit_mm: float = 0
     checked_walls: bool = False
     thinnest_wall_mm: float | None = None
+    wall_map_mm: array | None = None
 
 
 @dataclass(frozen=True)
@@ -152,6 +154,7 @@ def closed_shell(faces: list[bmesh.types.BMFace], volume: float) -> ClosedShell:
 
 def scan(
     mesh: bpy.types.Mesh, weld_mm: float, fragment_mm3: float, *, intersections: bool, wall_mm: float = 0,
+    wall_map: bool = False,
 ) -> Diagnostics:
     if not all(isfinite(number) and number >= 0 for number in (weld_mm, fragment_mm3, wall_mm)):
         raise MeshError("Choose nonnegative mesh tolerances.")
@@ -256,17 +259,24 @@ def scan(
     wall_geometry_ok = topology_ok and not any(counts.get(kind) for kind in (
         "VOLUME", "DEGENERATE", "DUP_FACE", "INTERSECTION", "COPLANAR", "INVERTED", "INTERNAL",
     ))
-    checked_walls = wall_mm > 0 and wall_geometry_ok
+    checked_walls = (wall_mm > 0 or wall_map) and wall_geometry_ok
     thinnest = None
+    measures = None
     if checked_walls:
+        if wall_map:
+            measures = array("f", (-1.0,)) * len(mesh.loop_triangles)
         thin_faces = set()
-        for face, start, end in thin_wall_samples(mesh, coordinates, wall_mm):
-            thickness = (end - start).length
+        for sample in wall_samples(mesh, coordinates, wall_mm, detailed=wall_map):
+            thickness = sample.thickness
+            if measures is not None:
+                measures[sample.triangle] = thickness
+            if thickness >= wall_mm:
+                continue
             if thinnest is None or thickness < thinnest:
                 thinnest = thickness
-            if face not in thin_faces:
-                thin_faces.add(face)
-                mark("THIN_WALL", start, end)
+            if sample.face not in thin_faces:
+                thin_faces.add(sample.face)
+                mark("THIN_WALL", sample.start, sample.end)
 
     findings = tuple(Finding(kind, count, tuple(markers[kind])) for kind, count in counts.items())
-    return Diagnostics(findings, shell_count, volume, intersections, wall_mm, checked_walls, thinnest)
+    return Diagnostics(findings, shell_count, volume, intersections, wall_mm, checked_walls, thinnest, measures)

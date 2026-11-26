@@ -289,6 +289,25 @@ def capture_wall_check():
     assert bpy.ops.tntmesh.diagnostic_view(kind="CLEAR") == {"FINISHED"}
 
 
+def start_wall_map():
+    addon = importlib.import_module(PACKAGE)
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.diagnose(wall_mm=1, wall_map=True) == {"FINISHED"}
+        preview = addon.diagnostics_ui.current(bpy.context)
+        assert preview.show_wall_map and preview.overlay.limits is not None
+        assert abs(preview.overlay.limits[0] - .6) < 1e-4
+        area.spaces.active.region_3d.view_distance = 36
+    area.tag_redraw()
+
+
+def capture_wall_map():
+    addon = importlib.import_module(PACKAGE)
+    assert addon.diagnostics_ui.current(bpy.context).overlay.batch is not None
+    screenshot("25-wall-map.png")
+    assert bpy.ops.tntmesh.diagnostic_view(kind="CLEAR") == {"FINISHED"}
+
+
 def show_repair_panel():
     settings = bpy.context.scene.tntmesh_settings
     settings.mode = "EASY"
@@ -728,7 +747,7 @@ insertion_steps = (
     if os.environ.get("TNTMESH_TEST_INSERTION") == "1" else ()
 )
 diagnostics_steps = (
-    (start_diagnostics, capture_diagnostics, start_wall_check, capture_wall_check)
+    (start_diagnostics, capture_diagnostics, start_wall_check, capture_wall_check, start_wall_map, capture_wall_map)
     if os.environ.get("TNTMESH_TEST_DIAGNOSTICS") == "1" else ()
 )
 repair_steps = (

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added a viewport thickness map and thin-wall markers for areas around sockets and other printed features.
+
 ## 0.3.0-alpha.10
 
 - Added resin hollowing on a copy, with adjustable wall thickness, voxel size and reinforced regions.

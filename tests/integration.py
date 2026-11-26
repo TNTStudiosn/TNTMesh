@@ -1174,6 +1174,55 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(report.thinnest_wall_mm)
         self.assertNotIn("THIN_WALL", {finding.kind for finding in report.findings})
 
+    def test_wall_map_distinguishes_wall_thickness_and_clears_when_the_model_changes(self):
+        outer = self.cube(10)
+        inner = self.cube(8)
+        inner.location.x = .6
+        inner.data.flip_normals()
+        outer.select_set(True)
+        bpy.context.view_layer.objects.active = outer
+        bpy.ops.object.join()
+        data = outer.data
+        ui = self.addon.diagnostics_ui
+        self.assertEqual(bpy.ops.tntmesh.diagnose(wall_mm=1, wall_map=True), {"FINISHED"})
+        preview = ui.current(bpy.context)
+        self.assertEqual(len(preview.result.wall_map_mm), len(data.loop_triangles))
+        self.assertAlmostEqual(preview.overlay.limits[0], .4, places=5)
+        self.assertAlmostEqual(preview.overlay.limits[1], 1.6, places=5)
+        values = preview.result.wall_map_mm
+        palette = preview.overlay.colors[::3]
+        self.assertTrue(all(palette[index, 0] > palette[index, 2] for index, mm in enumerate(values) if 0 < mm < .5))
+        self.assertTrue(all(palette[index, 0] < palette[index, 2] for index, mm in enumerate(values) if mm > 1.5))
+        self.assertEqual(bpy.ops.tntmesh.diagnostic_view(kind="MAP"), {"FINISHED"})
+        self.assertFalse(preview.show_wall_map)
+        self.assertEqual(bpy.ops.tntmesh.diagnostic_view(kind="MAP"), {"FINISHED"})
+        self.assertTrue(preview.show_wall_map)
+        self.assertEqual(outer.data, data)
+        outer.location.y += 1
+        bpy.context.view_layer.update()
+        self.assertIsNone(ui.current(bpy.context))
+
+    def test_wall_map_detects_the_thin_strip_between_socket_and_exterior(self):
+        from mathutils import Matrix
+
+        addon, context = self.addon, bpy.context
+        boolean = importlib.import_module(f"{addon.__name__}.geometry.boolean")
+        connector = importlib.import_module(f"{addon.__name__}.geometry.connector")
+        source = self.cube()
+        with addon.operators.GeometryTransaction() as transaction:
+            cutter = connector.prism(transaction, Matrix.Identity(3), Vector((9.5, 0)), 5, 13, 2, 32)
+            mesh = boolean.ExactBoolean(context, transaction).run(source.data, cutter, "DIFFERENCE")
+            socket = transaction.object(context.scene.collection, "Thin socket wall", mesh)
+            transaction.publish(socket)
+        context.view_layer.update()
+        addon.operators.select_results(context, [socket])
+        self.assertEqual(bpy.ops.tntmesh.diagnose(wall_mm=.75, wall_map=True), {"FINISHED"})
+        preview = addon.diagnostics_ui.current(context)
+        self.assertTrue(preview.result.checked_walls)
+        self.assertAlmostEqual(preview.overlay.limits[0], .5, delta=.1)
+        self.assertTrue(any(11.2 < start.x < 11.6 and abs(end.x - 12) < 1e-4
+                            for start, end in preview.marks["THIN_WALL"]))
+
     def test_diagnostics_finds_coplanar_pairs_across_spatial_tree_branches(self):
         vertices = []
         faces = []

@@ -2,6 +2,12 @@
 import bpy
 
 SPANISH = {
+    "Wall Thickness Map": "Mapa de grosor",
+    "Color the surface by sampled wall thickness": "Colorea la superficie según las muestras de grosor",
+    "No reliable wall samples.": "No se obtuvieron muestras de grosor confiables.",
+    "Samples · {thin:.2f}–{thick:.2f} mm": "Muestras · {thin:.2f}–{thick:.2f} mm",
+    "Thin in red · thick in cyan": "Delgado en rojo · grueso en cian",
+    "Unmeasured in gray": "Sin medición en gris",
     "Resin Preparation": "Preparación para resina",
     "Hollow": "Ahuecado",
     "Voxel size (mm)": "Vóxel (mm)",
