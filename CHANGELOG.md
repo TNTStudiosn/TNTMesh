@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added closed-cavity and shell-orientation classification for disjoint closed surfaces.
+- Added positive-area coplanar overlap checks alongside crossing-surface checks.
+
 ## 0.3.0-alpha.4
 
 - Added one-operation separation of multiple material slots into closed pieces with a retained body.

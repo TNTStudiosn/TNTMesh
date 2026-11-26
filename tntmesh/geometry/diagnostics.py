@@ -11,7 +11,8 @@ from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
 from ..model import MeshError
-from .mesh import VOLUME_EPSILON
+from .coplanar import coplanar_faces
+from .mesh import VOLUME_EPSILON, bounds
 
 MAX_MARKS = 256
 Marker = tuple[Vector, Vector]
@@ -30,6 +31,74 @@ class Diagnostics:
     shells: int
     volume_mm3: float | None
     checked_intersections: bool
+
+
+@dataclass(frozen=True)
+class ClosedShell:
+    faces: tuple[int, ...]
+    point: Vector
+    lower: Vector
+    upper: Vector
+    volume: float
+
+
+RAY_DIRECTIONS = tuple(
+    Vector(direction).normalized()
+    for direction in ((1, .317, .197), (.237, 1, .459), (.387, .167, 1))
+)
+
+
+def ray_parity(tree: BVHTree, origin: Vector, direction: Vector, epsilon: float) -> bool | None:
+    hits = 0
+    start = origin
+    for _ in range(512):
+        point, _, _, _ = tree.ray_cast(start, direction)
+        if point is None:
+            return bool(hits % 2)
+        start = point + direction * epsilon
+        if start == point:
+            return None
+        hits += 1
+    return None
+
+
+def enclosing_shells(
+    mesh: bpy.types.Mesh, coordinates: list[Vector], shells: list[ClosedShell],
+    intersecting_faces: set[int],
+) -> Iterator[tuple[ClosedShell, int, bool]]:
+    face_shell = {face: index for index, shell in enumerate(shells) for face in shell.faces}
+    blocked = {face_shell[face] for face in intersecting_faces}
+    triangle_groups = [[] for _ in shells]
+    for triangle in mesh.loop_triangles:
+        triangle_groups[face_shell[triangle.polygon_index]].append(tuple(triangle.vertices))
+    # Construct one tree at a time. Nested cases reuse it across all candidate children.
+    nesting = [0] * len(shells)
+    uncertain = blocked.copy()
+    for parent_id, parent in enumerate(shells):
+        candidates = []
+        for index, child in enumerate(shells):
+            if (index != parent_id and all(
+                parent.lower[axis] < child.lower[axis] and child.upper[axis] < parent.upper[axis]
+                for axis in range(3)
+            )):
+                candidates.append(index)
+        if not candidates:
+            continue
+        if parent_id in blocked:
+            uncertain.update(candidates)
+            continue
+        tree = BVHTree.FromPolygons(coordinates, triangle_groups[parent_id], all_triangles=True)
+        epsilon = max(.000001, (parent.upper - parent.lower).length * 2e-7)
+        for child_id in candidates:
+            if child_id in blocked:
+                continue
+            parity = {ray_parity(tree, shells[child_id].point, ray, epsilon) for ray in RAY_DIRECTIONS}
+            if parity == {True}:
+                nesting[child_id] += 1
+            elif parity != {False}:
+                uncertain.add(child_id)
+    for index, shell in enumerate(shells):
+        yield shell, nesting[index], index not in uncertain
 
 
 def nonadjacent_overlaps(mesh: bpy.types.Mesh) -> Iterator[tuple[int, int]]:
@@ -90,7 +159,8 @@ def scan(
             markers[kind].append((point.copy(), point.copy() if end is None else end.copy()))
 
     bm = bmesh.new()
-    shells = []
+    shell_count = 0
+    closed_shells = []
     try:
         bm.from_mesh(mesh)
         for edge in bm.edges:
@@ -110,15 +180,25 @@ def scan(
                 mark("NON_MANIFOLD", vertex.co)
         topology_ok = not any(counts.get(kind) for kind in ("OPEN", "NON_MANIFOLD", "WINDING"))
         shells = list(face_shells(bm))
-        volume = sum(map(shell_volume, shells)) if topology_ok else None
+        shell_count = len(shells)
+        volumes = [shell_volume(shell) for shell in shells] if topology_ok else []
+        volume = sum(volumes) if topology_ok else None
         if volume is not None and volume <= VOLUME_EPSILON:
             mark("VOLUME", next(iter(bm.faces)).calc_center_median())
-        if len(shells) > 1:
-            for shell in shells:
+        if shell_count == 1 and volume is not None and volume < -VOLUME_EPSILON:
+            mark("INVERTED", next(iter(bm.faces)).calc_center_median())
+        if shell_count > 1:
+            bm.faces.index_update()
+            for index, shell in enumerate(shells):
                 center = shell[0].calc_center_median()
                 mark("SHELLS", center)
-                if topology_ok and 0 < shell_volume(shell) < fragment_mm3:
+                if topology_ok and 0 < volumes[index] < fragment_mm3:
                     mark("FRAGMENT", center)
+                if topology_ok and intersections:
+                    points = (vertex.co for face in shell for vertex in face.verts)
+                    lower, upper = bounds(points)
+                    closed_shells.append(ClosedShell(tuple(face.index for face in shell),
+                                                      center, lower, upper, volumes[index]))
     finally:
         bm.free()
 
@@ -151,6 +231,20 @@ def scan(
             affected.add(mesh.loop_triangles[second].polygon_index)
         for index in sorted(affected):
             mark("INTERSECTION", mesh.polygons[index].center)
+        overlapping = coplanar_faces(mesh, coordinates)
+        for index in sorted(overlapping):
+            mark("COPLANAR", mesh.polygons[index].center)
+        if closed_shells:
+            for shell, depth, certain in enclosing_shells(mesh, coordinates, closed_shells,
+                                                         affected | overlapping):
+                if not certain:
+                    continue
+                if depth % 2 and shell.volume < -VOLUME_EPSILON:
+                    mark("CAVITY", shell.point)
+                elif depth % 2 and shell.volume > VOLUME_EPSILON:
+                    mark("INTERNAL", shell.point)
+                elif shell.volume < -VOLUME_EPSILON:
+                    mark("INVERTED", shell.point)
 
     findings = tuple(Finding(kind, count, tuple(markers[kind])) for kind, count in counts.items())
-    return Diagnostics(findings, len(shells), volume, intersections)
+    return Diagnostics(findings, shell_count, volume, intersections)

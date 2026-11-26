@@ -19,7 +19,11 @@ LABELS = {
     "DUP_VERT": "Near-duplicate vertices", "DUP_FACE": "Duplicate faces",
     "VOLUME": "Nonpositive enclosed volume", "SHELLS": "Disconnected surface shells",
     "FRAGMENT": "Small closed shells", "INTERSECTION": "Faces with intersections",
+    "CAVITY": "Closed cavities", "INTERNAL": "Miswound internal shells",
+    "INVERTED": "Inverted shells",
+    "COPLANAR": "Overlapping coplanar faces",
 }
+INFORMATIONAL = {"SHELLS", "CAVITY"}
 FINDINGS = [("ALL", "All Findings", "")] + [
     (key, label, "") for key, label in LABELS.items()
 ]
@@ -122,10 +126,12 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
         finally:
             wm.progress_end()
             redraw(wm)
-        if report.findings:
+        if any(item.kind not in INFORMATIONAL for item in report.findings):
             self.report({"WARNING"}, tr("Mesh scan found {count} issue categories.").format(
                 count=len(report.findings),
             ))
+        elif report.findings:
+            self.report({"INFO"}, tr("Review the shells and cavities in Mesh Diagnostics."))
         else:
             self.report({"INFO"}, tr("No issues found in the enabled checks."))
         return {"FINISHED"}

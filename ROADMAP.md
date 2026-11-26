@@ -11,7 +11,7 @@
 
 Straight cuts support axis selection, numeric offset, free rotation and drawing a line in the viewport. Gizmos, face alignment, snapping, the first-run assistant and manual language selection are pending.
 
-Freehand drawing currently produces closed extraction contours. Open surface paths, vertex and edge snapping, and selective invalidation of draft operations are pending. Mesh diagnostics check intersections between triangles without shared vertices. Coplanar partial overlaps, shell nesting classification, wall-thickness measurements and high-density profiling require further verification and development.
+Freehand drawing currently produces closed extraction contours. Open surface paths, vertex and edge snapping, and selective invalidation of draft operations are pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps and nesting of disjoint closed shells. Wall-thickness measurements and high-density profiling are pending.
 
 Surface Region extracts one chosen region at a time. Face masks and vertex groups can come from Blender painting tools. Separate by Material processes multiple slots in one operation. Symmetric Cuts reflects the first plane and offers a separate normal offset for the second plane. Custom template reflection and independent rotation of the second plane are pending.
 

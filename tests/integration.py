@@ -652,7 +652,8 @@ class WorkflowTests(unittest.TestCase):
         bpy.ops.object.join()
         self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
         result = self.addon.diagnostics_ui.current(bpy.context).result
-        self.assertEqual({item.kind: item.count for item in result.findings}, {"SHELLS": 2})
+        self.assertEqual({item.kind: item.count for item in result.findings},
+                         {"SHELLS": 2, "CAVITY": 1})
         self.assertAlmostEqual(result.volume_mm3, 12**3 - 4**3, places=3)
         crossing = self.cube(5)
         crossing.location = (5, 1.25, 1.5)
@@ -669,6 +670,22 @@ class WorkflowTests(unittest.TestCase):
         result = self.addon.diagnostics_ui.current(bpy.context).result
         self.assertFalse(result.checked_intersections)
         self.assertNotIn("INTERSECTION", {item.kind for item in result.findings})
+        self.assertNotIn("CAVITY", {item.kind for item in result.findings})
+
+    def test_diagnostics_reports_inverted_exterior_and_miswound_internal_shell(self):
+        outer = self.cube(12)
+        inner = self.cube(4)
+        distant = self.cube(3)
+        distant.location.x = 10
+        distant.data.flip_normals()
+        inner.select_set(True)
+        outer.select_set(True)
+        bpy.context.view_layer.objects.active = outer
+        bpy.ops.object.join()
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result
+        findings = {item.kind: item.count for item in result.findings}
+        self.assertEqual(findings, {"SHELLS": 3, "INTERNAL": 1, "INVERTED": 1})
 
     def test_diagnostics_find_duplicate_faces_and_nearby_vertices(self):
         bpy.ops.mesh.primitive_plane_add(size=5)
@@ -683,6 +700,23 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(counts["DUP_FACE"], 1)
         self.assertEqual(counts["DUP_VERT"], 8)
         self.assertEqual(counts["OPEN"], 8)
+        self.assertEqual(counts["COPLANAR"], 2)
+
+    def test_diagnostics_detect_partial_coplanar_overlap_and_ignores_edge_contact(self):
+        mesh = bpy.data.meshes.new("Coplanar triangles")
+        points = [(0, 0, 0), (4, 0, 0), (0, 4, 0), (2, 1, 0), (5, 1, 0), (2, 3, 0),
+                  (4, 0, 0), (4, -1, 0), (0, 0, 0)]
+        mesh.from_pydata(points, [], [(0, 1, 2), (3, 4, 5), (6, 7, 8)])
+        mesh.update()
+        obj = bpy.data.objects.new("Overlapping faces", mesh)
+        bpy.context.scene.collection.objects.link(obj)
+        obj.rotation_euler = (.4, .9, .7)
+        bpy.context.view_layer.update()
+        self.addon.operators.select_results(bpy.context, [obj])
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result
+        counts = {item.kind: item.count for item in result.findings}
+        self.assertEqual(counts["COPLANAR"], 2)
 
     def test_material_batch_separates_multiple_solid_regions_atomically(self):
         source = self.cube()
