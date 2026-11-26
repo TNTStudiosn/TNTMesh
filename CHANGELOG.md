@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-alpha.2
+
+- Added editable concave contours with point-by-point and freehand viewport drawing.
+- Added pin and socket mesh templates with volumetric fit checks and preserved dimensions.
+
 ## 0.2.0-alpha.1
 
 - Added a persistent Draft mode for dependent cuts, with stable part IDs and transactional rebuilding.

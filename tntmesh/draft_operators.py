@@ -12,13 +12,17 @@ from .settings import TNTMESH_PG_settings
 
 GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diameter", "insertion",
                        "lateral", "axial", "wall", "connector_count", "loose_pins",
+                       "pin_template", "socket_template",
                        "cut_kind", "cutter", "profile_size",
-                       "profile_shift", "curve_controls", "curve_samples")
+                       "profile_shift", "curve_controls", "curve_samples", "contour_depth")
 
 
 def copy_settings(source: TNTMESH_PG_settings, destination: TNTMESH_PG_settings) -> None:
     for name in GEOMETRY_PROPERTIES:
         setattr(destination, name, getattr(source, name))
+    destination.contour.clear()
+    for point in source.contour:
+        destination.contour.add().position = point.position
 
 
 class TNTMESH_OT_draft_create(bpy.types.Operator, MeshOperator):

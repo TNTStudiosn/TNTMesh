@@ -19,8 +19,13 @@ def cut_properties(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) ->
     if settings.cut_kind == "PLANAR":
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
+        if settings.connector == "CUSTOM":
+            layout.prop(settings, "pin_template")
+            layout.prop(settings, "socket_template")
     elif settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_controls")
+    elif settings.cut_kind == "POLYGON":
+        layout.prop(settings, "contour_depth")
     else:
         layout.prop(settings, "profile_size")
 
@@ -29,13 +34,19 @@ def cut_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> No
     if settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_samples")
         return
-    if settings.cut_kind in {"RECTANGLE", "ELLIPSE"}:
+    if settings.cut_kind in {"RECTANGLE", "ELLIPSE", "POLYGON"}:
         layout.prop(settings, "profile_shift")
+        if settings.cut_kind == "POLYGON" and settings.contour:
+            layout.template_list(
+                "TNTMESH_UL_contour", "", settings, "contour", settings, "contour_index", rows=3,
+            )
         return
     if settings.cut_kind != "PLANAR":
         return
     layout.prop(settings, "kerf")
-    if settings.connector != "NONE":
+    if settings.connector == "CUSTOM":
+        layout.prop(settings, "wall")
+    elif settings.connector != "NONE":
         for prop in ("connector_count", "loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
             layout.prop(settings, prop)
 
@@ -43,6 +54,11 @@ def cut_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> No
 class TNTMESH_UL_draft_plans(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         layout.prop(item, "name", text="", emboss=False, icon="FILE_BLEND")
+
+
+class TNTMESH_UL_contour(bpy.types.UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
+        layout.row(align=True).prop(item, "position", text="")
 
 
 class TNTMESH_UL_draft_cuts(bpy.types.UIList):
@@ -161,8 +177,10 @@ class TNTMESH_PT_main(bpy.types.Panel):
             cut = layout.box()
             cut.label(text="Split", icon="MOD_BOOLEAN")
             cut_properties(cut, settings)
-            if settings.cut_kind == "PLANAR":
-                cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR")
+            if settings.cut_kind in {"PLANAR", "POLYGON"}:
+                cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=(
+                    "Draw Cut Line" if settings.cut_kind == "PLANAR" else "Draw Contour"
+                ))
             if settings.cut_kind != "OBJECT":
                 cut.prop(settings, "show_plane", text=(
                     "Show plane" if settings.cut_kind == "PLANAR" else "Show cutter"
@@ -184,4 +202,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
             layout.operator("tntmesh.export_stl", icon="EXPORT")
 
 
-CLASSES = (TNTMESH_UL_draft_plans, TNTMESH_UL_draft_cuts, TNTMESH_MT_draft_targets, TNTMESH_PT_main)
+CLASSES = (
+    TNTMESH_UL_draft_plans, TNTMESH_UL_contour, TNTMESH_UL_draft_cuts,
+    TNTMESH_MT_draft_targets, TNTMESH_PT_main,
+)

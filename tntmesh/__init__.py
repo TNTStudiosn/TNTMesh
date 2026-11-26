@@ -3,10 +3,11 @@ import bpy
 from bpy.props import CollectionProperty, IntProperty, PointerProperty
 
 from . import draft, draft_operators, draw_cut, localization, operators, ui, viewport
-from .settings import TNTMESH_PG_settings
+from .settings import TNTMESH_PG_contour_point, TNTMESH_PG_settings
 
 _CLASSES = (
-    TNTMESH_PG_settings, *draft.CLASSES, *operators.CLASSES, *draft_operators.CLASSES,
+    TNTMESH_PG_contour_point, TNTMESH_PG_settings, *draft.CLASSES, *operators.CLASSES,
+    *draft_operators.CLASSES,
     draw_cut.TNTMESH_OT_draw_plane, *ui.CLASSES,
 )
 _registered: list[type] = []

@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.2.0-alpha.1.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.2.0-alpha.2.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -20,7 +20,9 @@ The engine evaluates the source mesh and its transforms into a centered millimet
 
 The connector search uses a bounded grid on the seam. It checks solid material around candidates on both sides with Boolean difference probes, applies the pin union and socket difference, and validates closure, connected shell counts and expected volume changes. Clearances are measured perpendicular to the polygon edges. A 64-sided cylinder approximates a circular pin. A hexagonal pin specifies diameter across corners. The search can miss valid positions between grid points.
 
-Straight cuts take a world axis or an Euler rotation. Drawing a line sets the cutting plane through the corresponding screen rays. Bézier cuts approximate a cubic surface using a configurable number of strips. Rectangular and elliptical profiles extrude a finite cutter. A separate mesh can supply the cutter in assembly coordinates. Each volumetric cut uses the difference and intersection of that closed cutter and checks the sum of the resulting volumes. Fitted connectors currently require a straight cut.
+Straight cuts take a world axis or an Euler rotation. Drawing a line sets the cutting plane through the corresponding screen rays. Bézier cuts approximate a cubic surface using a configurable number of strips. Rectangular, elliptical and custom contours extrude a finite cutter. In Contour mode, click points or Shift-drag, then press Enter to close the outline. The drawn outline is projected to the view plane and its points remain editable in the cut settings. A separate mesh can supply the cutter in assembly coordinates. Each volumetric cut uses the difference and intersection of that closed cutter and checks the sum of the resulting volumes.
+
+Custom connectors take two closed mesh templates with matching object origins at the seam. Each template crosses its origin's XY plane. Positive Z is the pin's insertion direction and negative Z anchors the pin on the first piece or opens the socket cutter past the seam. Template translation is ignored. Rotation and scale are carried through. The socket template supplies the intended clearance. TNTMesh checks that it contains the protruding pin by volume. Custom templates currently require straight cuts with zero kerf.
 
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. The repaired copy must pass the mesh checks before it appears. Review filled regions because caps add geometry.
 
@@ -34,7 +36,7 @@ Rebuild runs all enabled operations in memory before replacing the previous gene
 
 The core integration suite ran on Windows x64 with Blender 4.5.17 LTS, 5.1.2 and 5.2.4 LTS. It covers the STL round trip, connector dimensions, closure, volume, kerf, transformed meshes, repeated operations, scale copies, torus and hollow cross sections, and rejection of an oversized connector and damaged input. The source also passed on 4.2.23 LTS. The extension manifest still requires 4.5 because packaged and viewport coverage targets 4.5 and newer.
 
-The graphical smoke test uses a separate Blender profile and runs `tests/viewport_smoke.py` with `TNTMESH_SMOKE_OUTPUT` set to a writable destination. It captures the viewport and checks the Spanish catalog and the undo stack. Set `TNTMESH_TEST_EVENTS=1` and launch with Blender's `--enable-event-simulate` to test clicks and Escape in the line tool. Use Blender's regular interface to verify keyboard navigation, different UI scales and native file dialogs.
+The graphical smoke test uses a separate Blender profile and runs `tests/viewport_smoke.py` with `TNTMESH_SMOKE_OUTPUT` set to a writable destination. It captures the viewport and checks the Spanish catalog and the undo stack. Set `TNTMESH_TEST_EVENTS=1` and launch with Blender's `--enable-event-simulate` to test viewport actions and export dialog cancellation. Set `TNTMESH_TEST_CONTOUR=1` to include the freehand drawing test.
 
 GitHub Actions validates the source and the installed ZIP on Linux. Release tags must match the manifest version. Release automation adds a SHA-256 checksum and flags alpha, beta and release candidates as prereleases.
 

@@ -153,6 +153,34 @@ def verify_cancel():
     assert not pieces()
 
 
+def start_contour():
+    bpy.context.scene.tntmesh_settings.cut_kind = "POLYGON"
+    start_line()
+
+
+def contour_click(x, y, *, value="PRESS", shift=False, event="LEFTMOUSE"):
+    window, _, region = viewport()
+    window.event_simulate(
+        type=event, value=value, shift=shift,
+        x=region.x + round(x * region.width), y=region.y + round(y * region.height),
+    )
+
+
+def finish_contour():
+    window, _, _ = viewport()
+    window.event_simulate(type="RET", value="PRESS")
+
+
+def verify_contour():
+    settings = bpy.context.scene.tntmesh_settings
+    assert settings.cut_kind == "POLYGON" and settings.axis == "FREE"
+    assert len(settings.contour) >= 4
+    assert settings.contour_depth > 24.0
+    screenshot("00-contour.png")
+    settings.cut_kind = "PLANAR"
+    settings.axis = "Z"
+
+
 def open_export_browser():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -180,11 +208,22 @@ def check_export_cancelled():
 
 line_steps = (start_line, click_start, click_end, verify_line, start_line, click_start,
               cancel_line, verify_cancel) if os.environ.get("TNTMESH_TEST_EVENTS") == "1" else ()
+contour_steps = (
+    start_contour,
+    lambda: contour_click(.40, .42, shift=True),
+    lambda: contour_click(.46, .42, event="MOUSEMOVE", value="NOTHING", shift=True),
+    lambda: contour_click(.52, .42, event="MOUSEMOVE", value="NOTHING", shift=True),
+    lambda: contour_click(.52, .42, value="RELEASE", shift=True),
+    lambda: contour_click(.52, .56),
+    lambda: contour_click(.40, .56),
+    finish_contour,
+    verify_contour,
+) if line_steps and os.environ.get("TNTMESH_TEST_CONTOUR") == "1" else ()
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
 steps = iter((
-    setup, panel, *line_steps, split, undo, redo, spanish, panel,
+    setup, panel, *line_steps, *contour_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, draft_panel, finish,
 ))

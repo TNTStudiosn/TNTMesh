@@ -214,6 +214,33 @@ class WorkflowTests(unittest.TestCase):
         self.assertAlmostEqual(self.checked(outside) + self.checked(inside), 24**3, places=2)
         self.assertAlmostEqual(self.checked(cutter), 8**3)
 
+    def test_concave_custom_contour_in_a_draft(self):
+        self.cube()
+        self.settings.cut_kind = "POLYGON"
+        self.settings.contour_depth = 8
+        self.settings.offset = 10
+        coordinates = [(-4, -4), (-4, 4), (0, 4), (0, 0), (4, 0), (4, -4)]
+        for point in coordinates:
+            self.settings.contour.add().position = point
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.settings.contour.clear()
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        outside, inside = self.parts()
+        self.assertAlmostEqual(self.checked(inside), 48 * 6, places=3)
+        self.assertAlmostEqual(self.checked(outside) + self.checked(inside), 24**3, places=2)
+
+    def test_crossing_contour_is_rejected_before_publication(self):
+        source = self.cube()
+        self.settings.cut_kind = "POLYGON"
+        for point in [(-4, -4), (4, 4), (-4, 4), (4, -4)]:
+            self.settings.contour.add().position = point
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        self.assertFalse(source.hide_get())
+
     def test_multiple_fixed_connectors(self):
         self.cube(40)
         self.settings.connector = "HEX"
@@ -225,6 +252,35 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((len(pin_tips), len(recesses)), (18, 18))
         self.checked(male)
         self.checked(female)
+
+    def test_custom_connector_fits_without_scaling_templates(self):
+        source = self.cube()
+        pin = self.cube(4)
+        pin.location.x = -32
+        socket = self.cube(4.4)
+        socket.location.x = 32
+        socket.scale.z = 1.1
+        self.settings.connector = "CUSTOM"
+        self.settings.pin_template = pin
+        self.settings.socket_template = socket
+        self.addon.operators.select_results(bpy.context, [source])
+        bpy.context.view_layer.update()
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        male, female = self.parts()
+        self.assertAlmostEqual(self.checked(male), 24**3 / 2 + 4 * 4 * 2, places=3)
+        self.assertAlmostEqual(self.checked(female), 24**3 / 2 - 4.4**2 * 2.42, places=3)
+        self.assertEqual((pin.location.x, socket.location.x), (-32, 32))
+
+    def test_custom_connector_rejects_a_socket_that_is_too_small(self):
+        source = self.cube()
+        self.settings.connector = "CUSTOM"
+        self.settings.pin_template = self.cube(4)
+        self.settings.socket_template = self.cube(3.5)
+        self.addon.operators.select_results(bpy.context, [source])
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
 
     def test_independent_pins_are_watertight_and_exported(self):
         self.cube(40)

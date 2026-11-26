@@ -63,8 +63,20 @@ SPANISH = {
     "The cutter must leave material on both sides of the cut.":
         "El cortador debe dejar material en ambos lados del corte.",
     "Draw Cut Line": "Dibujar línea de corte",
-    "Choose two points in the viewport to orient the cut plane":
-        "Elige dos puntos en la Vista 3D para orientar el plano de corte",
+    "Draw on Model": "Dibujar sobre el modelo",
+    "Draw a line or contour in the 3D Viewport": "Dibuja una línea o un contorno en la Vista 3D",
+    "Contour": "Contorno",
+    "Draw Contour": "Dibujar contorno",
+    "Extract a drawn or freehand contour": "Extrae una región dibujada punto a punto o a mano alzada",
+    "Click points or Shift-drag · Enter to close · Esc to cancel":
+        "Haz clic o arrastra con Mayús · Enter cierra · Esc cancela",
+    "The contour has reached 1024 points.": "El contorno llegó al límite de 1024 puntos.",
+    "Draw a contour with at least three valid points.": "Dibuja un contorno con al menos tres puntos válidos.",
+    "The contour has adjacent points that are too close.": "El contorno contiene puntos consecutivos muy cerca.",
+    "The contour crosses or folds over itself.": "El contorno se cruza o se dobla sobre sí mismo.",
+    "The contour does not enclose an area.": "El contorno no encierra un área.",
+    "Position (mm)": "Posición (mm)",
+    "Depth (mm)": "Profundidad (mm)",
     "Click the first point of the cut · Esc to cancel":
         "Haz clic en el primer punto del corte · Esc para cancelar",
     "Click the second point of the cut · Esc to cancel":
@@ -154,6 +166,24 @@ SPANISH = {
     "Separate pins": "Pasadores independientes",
     "Cut two sockets and generate removable pins": "Recorta dos cavidades y genera pasadores sueltos",
     "Pin {number}": "Pasador {number}",
+    "Custom Mesh": "Malla personalizada",
+    "Use a shaped pin mesh and a matching socket cutter":
+        "Usa una malla como pin y un cortador a juego para su cavidad",
+    "Pin template": "Plantilla de pin",
+    "Socket template": "Plantilla de cavidad",
+    "Connector templates must be meshes in this view layer.":
+        "Las plantillas de conector deben ser mallas de esta capa de vista.",
+    "Each connector template must be one closed shell.":
+        "Cada plantilla de conector debe ser una sola superficie cerrada.",
+    "Choose separate pin and socket templates.": "Elige plantillas distintas para el pin y la cavidad.",
+    "Custom templates require a cut with zero kerf.":
+        "Las plantillas personalizadas requieren un corte sin separación.",
+    "Both templates must cross the mating plane at their origin.":
+        "Ambas plantillas deben cruzar el plano de unión en su origen.",
+    "The custom pin protrudes outside its socket template.":
+        "El pin personalizado sobresale de su plantilla de cavidad.",
+    "Use connector templates separate from the input model.":
+        "Usa plantillas distintas del modelo de entrada.",
     "The connector could not be joined or the socket could not be cut.":
         "No se pudo unir el pin o recortar la cavidad.",
     "Check the cut offset and separation.": "Revisa el desplazamiento y la separación del corte.",

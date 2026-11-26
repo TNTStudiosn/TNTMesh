@@ -46,15 +46,21 @@ def cutter_paths(
         left = [(x, lower.y, z) for x, z in path]
         right = [(x, upper.y, z) for x, z in path]
         return [(left + right[::-1] + left[:1], False)]
-    if settings.cut_kind in {"RECTANGLE", "ELLIPSE"}:
-        width, height, depth = (value / unit for value in settings.profile_size)
+    if settings.cut_kind in {"RECTANGLE", "ELLIPSE", "POLYGON"}:
         center = (lower + upper) / 2
         center += Vector((*settings.profile_shift, settings.offset)) / unit
-        ring = outline(settings.cut_kind, width, height)
+        if settings.cut_kind == "POLYGON":
+            ring = [(point.position[0] / unit, point.position[1] / unit) for point in settings.contour]
+            if len(ring) < 3:
+                return []
+            depth = settings.contour_depth / unit
+        else:
+            width, height, depth = (value / unit for value in settings.profile_size)
+            ring = outline(settings.cut_kind, width, height)
         low = [(center.x + x, center.y + y, center.z - depth / 2) for x, y in ring]
         high = [(center.x + x, center.y + y, center.z + depth / 2) for x, y in ring]
         paths = [(low + low[:1], False), (high + high[:1], False)]
-        paths.extend(([low[i], high[i]], False) for i in range(0, len(low), len(low) // 4))
+        paths.extend(([low[i], high[i]], False) for i in range(0, len(low), max(1, len(low) // 4)))
         return paths
     pad = (upper - lower).length * 0.06
     z = (lower.z + upper.z) * 0.5 + settings.offset / unit

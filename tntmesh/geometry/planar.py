@@ -8,6 +8,7 @@ from mathutils import Euler, Matrix, Vector
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean, half_box
 from .connector import Connector, add_connector
+from .custom_connector import CustomConnector, add_custom_connector
 from .mesh import bounds, inspect
 
 
@@ -16,7 +17,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | None = None
+    connector: Connector | CustomConnector | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
@@ -61,6 +62,10 @@ def split(
     if (total > source.volume_mm3 + tolerance
             or (config.kerf == 0 and abs(total - source.volume_mm3) > tolerance)):
         raise MeshError("The split did not preserve the expected volume.")
+    if isinstance(config.connector, CustomConnector):
+        return add_custom_connector(
+            engine, minus, plus, frame, position, config.kerf, config.connector, epsilon
+        )
     if config.connector is not None:
         return add_connector(engine, minus, plus, frame, position, config.kerf,
                              config.connector, epsilon)

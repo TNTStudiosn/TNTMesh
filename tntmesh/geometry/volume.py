@@ -8,8 +8,10 @@ from mathutils import Matrix, Vector
 
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
+from .custom_connector import CustomConnector
 from .mesh import bounds, evaluated_mm, inspect, primitive
 from .planar import PlanarCut, axis_frame, split
+from .polygon import Point2, closed_outline
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,7 @@ class VolumeCut:
     controls: tuple[float, float]
     resolution: int
     cutter: bpy.types.Object | None
+    points: tuple[Point2, ...]
 
 
 def bezier_path(
@@ -109,13 +112,15 @@ def cutter_mesh(
         if not all(map(isfinite, config.controls)) or config.resolution < 4:
             raise MeshError("Check the control heights and curve resolution.")
         return curve_volume(transaction, frame, lower, upper, config)
-    if config.shape not in {"RECTANGLE", "ELLIPSE"} or (
+    if config.shape not in {"RECTANGLE", "ELLIPSE", "POLYGON"} or (
         not all(map(isfinite, (*config.size, *config.shift))) or min(config.size) <= 0
     ):
         raise MeshError("Check the position and dimensions of the cutter.")
     center = (lower + upper) / 2 + Vector((*config.shift, config.offset))
     width, height, depth = config.size
-    return extruded_volume(transaction, frame, center, outline(config.shape, width, height), depth)
+    coords = (closed_outline(config.points) if config.shape == "POLYGON"
+              else outline(config.shape, width, height))
+    return extruded_volume(transaction, frame, center, coords, depth)
 
 
 def apply_cut(
@@ -123,6 +128,10 @@ def apply_cut(
     config: PlanarCut | VolumeCut, origin: Vector, unit: float, source: bpy.types.Object,
 ) -> tuple[bpy.types.Mesh, ...]:
     if isinstance(config, PlanarCut):
+        if isinstance(config.connector, CustomConnector) and source in (
+            config.connector.pin, config.connector.socket
+        ):
+            raise MeshError("Use connector templates separate from the input model.")
         return split(context, transaction, mesh, config)
     original_volume = inspect(mesh).volume_mm3
     cutter = cutter_mesh(context, transaction, mesh, config, origin, unit, source)

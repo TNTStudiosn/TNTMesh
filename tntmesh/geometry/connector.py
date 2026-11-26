@@ -81,6 +81,43 @@ def candidates(mesh: bpy.types.Mesh, frame: Matrix, seam: float, epsilon: float)
             ))
 
 
+def safe_centers(
+    engine: ExactBoolean,
+    minus: bpy.types.Mesh,
+    plus: bpy.types.Mesh,
+    frame: Matrix,
+    planes: tuple[float, float],
+    depths: tuple[float, float],
+    envelope: float,
+    sides: int,
+    epsilon: float,
+    inset: float,
+    count: int,
+) -> list[Vector]:
+    low, high = planes
+    probes = ((minus, low - depths[0], low - inset), (plus, high + inset, high + depths[1]))
+    centers = []
+    for center in candidates(minus, frame, low, epsilon * 2):
+        if any((center - other).length < 2 * envelope for other in centers):
+            continue
+        with GeometryTransaction() as temporary:
+            test_engine = ExactBoolean(engine.context, temporary)
+            for mesh, start, end in probes:
+                probe = prism(temporary, frame, center, start, end, envelope, sides)
+                sample = test_engine.run(probe, mesh, "DIFFERENCE")
+                if sample.polygons:
+                    break
+            else:
+                centers.append(center)
+                if len(centers) == count:
+                    break
+    if not centers:
+        raise MeshError("No safe connector position. Reduce its size or move the cut.")
+    if len(centers) < count:
+        raise MeshError("Not enough safe positions. Reduce the connector count or size.")
+    return centers
+
+
 def add_connector(
     engine: ExactBoolean,
     minus: bpy.types.Mesh,
@@ -99,29 +136,11 @@ def add_connector(
     envelope = config.socket_radius + config.wall / cos(tau / (2 * config.sides))
     # Keep the probe inside the cut plane. The applied tool crosses the seam.
     inset = min(epsilon, anchor / 10, config.wall / 10)
-    probes = (
-        (minus, low - minus_depth - config.wall, low - inset),
-        (plus, high + inset, high + config.insertion + config.axial + config.wall),
+    centers = safe_centers(
+        engine, minus, plus, frame, (low, high),
+        (minus_depth + config.wall, config.insertion + config.axial + config.wall),
+        envelope, config.sides, epsilon, inset, config.count,
     )
-    centers = []
-    for center in candidates(minus, frame, low, epsilon * 2):
-        if any((center - other).length < 2 * envelope for other in centers):
-            continue
-        with GeometryTransaction() as temporary:
-            test_engine = ExactBoolean(engine.context, temporary)
-            for mesh, start, end in probes:
-                probe = prism(temporary, frame, center, start, end, envelope, config.sides)
-                sample = test_engine.run(probe, mesh, "DIFFERENCE")
-                if sample.polygons:
-                    break
-            else:
-                centers.append(center)
-                if len(centers) == config.count:
-                    break
-    if not centers:
-        raise MeshError("No safe connector position. Reduce its size or move the cut.")
-    if len(centers) < config.count:
-        raise MeshError("Not enough safe positions. Reduce the connector count or size.")
 
     polygon_factor = config.sides * sin(tau / config.sides) / 2
     pin_area = polygon_factor * (config.diameter / 2)**2
