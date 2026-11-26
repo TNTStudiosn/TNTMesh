@@ -108,6 +108,99 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result.shells, shells)
             return result.volume_mm3
 
+    def test_resin_hollow_preserves_source_and_suggested_drain_exports_a_plug(self):
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .01
+        source = self.cube(2.4)
+        source.location = (3, -4, 5)
+        original = source.data
+        settings = scene.tntmesh_resin
+        self.assertEqual(bpy.ops.tntmesh.hollow_resin(), {"FINISHED"})
+        hollow = bpy.context.active_object
+        self.assertEqual(source.data, original)
+        self.assertAlmostEqual(self.checked(source), 24**3, delta=.01)
+        hollow_volume = self.checked(hollow, shells=2)
+        self.assertAlmostEqual(hollow_volume, 24**3 - 20**3, delta=30)
+        self.assertEqual(tuple(hollow.location), (3, -4, 5))
+        settings.print_axis = (1, 0, 0)
+        settings.make_plug = True
+        self.assertEqual(bpy.ops.tntmesh.drain_resin(suggested=True), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 2)
+        drained = bpy.context.active_object
+        self.assertAlmostEqual(hollow_volume - self.checked(drained), 25, delta=.5)
+        plug = next(obj for obj in self.parts() if obj != drained)
+        self.assertAlmostEqual(self.checked(plug), 21.5, delta=.5)
+        self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(self.directory)), {"FINISHED"})
+        self.assertEqual(len(list(self.directory.glob("*.stl"))), 2)
+
+    def test_resin_protects_a_region_and_rejects_blind_drain_without_changes(self):
+        source = self.cube()
+        protection = self.cube(6)
+        protection.location = (0, 0, -10)
+        protection.hide_set(True)
+        protection_mesh = protection.data
+        settings = bpy.context.scene.tntmesh_resin
+        settings.protection = protection
+        settings.reinforcement_mm = 1
+        self.addon.operators.select_results(bpy.context, [source])
+        self.assertEqual(bpy.ops.tntmesh.hollow_resin(), {"FINISHED"})
+        hollow = bpy.context.active_object
+        self.assertGreater(self.checked(hollow, shells=2), 24**3 - 20**3 + 150)
+        self.assertTrue(protection.hide_get())
+        self.assertEqual(protection.data, protection_mesh)
+        settings.depth_mm = 3
+        names = tuple(bpy.data.objects.keys())
+        meshes = tuple(bpy.data.meshes.keys())
+        for point, normal in (((0, 0, -12), (0, 0, -1)), ((0, 0, -10), (0, 0, -1))):
+            self.assertEqual(bpy.ops.tntmesh.drain_resin(point=point, normal=normal), {"CANCELLED"})
+        self.assertEqual(tuple(bpy.data.objects.keys()), names)
+        self.assertEqual(tuple(bpy.data.meshes.keys()), meshes)
+        self.assertEqual(bpy.context.active_object, hollow)
+        self.assertFalse(bpy.data.node_groups)
+
+    def test_resin_custom_drain_preserves_its_cutter(self):
+        self.cube()
+        self.assertEqual(bpy.ops.tntmesh.hollow_resin(), {"FINISHED"})
+        hollow = bpy.context.active_object
+        cutter = self.cube(4)
+        cutter.scale.x = .5
+        cutter.location.z = -11
+        original = cutter.data
+        settings = bpy.context.scene.tntmesh_resin
+        settings.shape = "CUSTOM"
+        settings.cutter = cutter
+        self.addon.operators.select_results(bpy.context, [hollow])
+        self.assertEqual(bpy.ops.tntmesh.drain_resin(point=(0, 0, -12)), {"FINISHED"})
+        self.assertAlmostEqual(self.checked(hollow, shells=2) - self.checked(bpy.context.active_object),
+                               16, delta=.02)
+        self.assertEqual(cutter.data, original)
+        self.assertEqual(tuple(cutter.location), (0, 0, -11))
+
+    def test_resin_adds_a_second_drain_after_save_and_translation(self):
+        self.cube()
+        self.assertEqual(bpy.ops.tntmesh.hollow_resin(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.drain_resin(suggested=True), {"FINISHED"})
+        part = bpy.context.active_object
+        part.location = (10, 20, -5)
+        one_drain = self.checked(part)
+        filepath = str(self.directory / "resin.blend")
+        bpy.ops.wm.save_as_mainfile(filepath=filepath)
+        bpy.ops.wm.open_mainfile(filepath=filepath)
+        current = bpy.context.active_object
+        self.assertIsInstance(current[self.addon.resin_ui.RESIN_REFERENCE], bpy.types.Mesh)
+        self.assertEqual(bpy.ops.tntmesh.drain_resin(point=(10, 20, -17)), {"CANCELLED"})
+        self.assertEqual(bpy.context.active_object, current)
+        self.assertEqual(bpy.ops.tntmesh.drain_resin(suggested=True), {"FINISHED"})
+        self.assertAlmostEqual(one_drain - self.checked(bpy.context.active_object), 25, delta=.5)
+
+    def test_resin_no_room_preserves_the_selected_mesh(self):
+        source = self.cube(3)
+        self.assertEqual(bpy.ops.tntmesh.hollow_resin(), {"CANCELLED"})
+        self.assertEqual(bpy.context.active_object, source)
+        self.assertEqual(self.parts(), [])
+        self.assertFalse(bpy.data.node_groups)
+
     def test_stl_split_connector_export_round_trip(self):
         bpy.context.scene.unit_settings.system = "METRIC"
         bpy.context.scene.unit_settings.scale_length = 0.01

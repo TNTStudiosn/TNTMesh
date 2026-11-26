@@ -2,6 +2,67 @@
 import bpy
 
 SPANISH = {
+    "Resin Preparation": "Preparación para resina",
+    "Hollow": "Ahuecado",
+    "Voxel size (mm)": "Vóxel (mm)",
+    "Solid region": "Región sólida",
+    "Closed mesh volume to leave solid when hollowing": "Volumen cerrado que se conserva sólido al ahuecar",
+    "Reinforcement (mm)": "Refuerzo (mm)",
+    "Create Hollow Copy": "Crear copia hueca",
+    "Hollow the evaluated mesh and keep the original geometry":
+        "Ahueca la malla evaluada y conserva la geometría original",
+    "Drain Holes": "Drenajes",
+    "Drain shape": "Forma del drenaje",
+    "Circular": "Circular",
+    "Custom mesh": "Malla personalizada",
+    "Cut a circular drain with the specified diameter and depth":
+        "Abre un drenaje circular con el diámetro y la profundidad indicados",
+    "Use a closed cutter positioned across the exterior and cavity":
+        "Usa una malla cerrada que atraviese el exterior y la cavidad",
+    "Drain cutter": "Malla de corte",
+    "Use surface normal": "Usar normal de la superficie",
+    "Inward direction": "Dirección hacia dentro",
+    "Print direction": "Dirección de impresión",
+    "Generate plug": "Generar tapón",
+    "Radial clearance (mm)": "Holgura radial (mm)",
+    "Place Drain": "Colocar drenaje",
+    "Place Suggested Drain": "Colocar drenaje sugerido",
+    "Click the exterior to open a closed cavity": "Haz clic en el exterior para abrir una cavidad cerrada",
+    "Click the exterior to place a drain · Esc to cancel":
+        "Haz clic en el exterior para colocar un drenaje · Esc para cancelar",
+    "Drained": "Drenada",
+    "Drain Plug": "Tapón de drenaje",
+    "Use a separate mesh in this view layer.": "Usa una malla separada en esta capa de vista.",
+    "Use the 3D Viewport to place a drain.": "Coloca el drenaje desde la vista 3D.",
+    "Removed {volume:.2f} mL. Add a drain before printing.":
+        "Se retiraron {volume:.2f} mL. Agrega un drenaje antes de imprimir.",
+    "Use a closed resin mesh without intersecting faces.": "Usa una malla cerrada sin caras que se crucen.",
+    "Increase the voxel size to reduce the resin grid's memory use.":
+        "Aumenta el tamaño de vóxel para reducir el consumo de memoria.",
+    "Check the wall thickness and resin voxel size.": "Revisa el grosor de pared y el tamaño de vóxel.",
+    "No room for a cavity at this wall thickness and voxel size.":
+        "No hay espacio para una cavidad con este grosor de pared y tamaño de vóxel.",
+    "The protected region leaves no room for a cavity.": "La región protegida no deja espacio para una cavidad.",
+    "The protected region must connect to a wall of the model.":
+        "La región protegida debe quedar unida a una pared del modelo.",
+    "The cavity intersects the surface. Adjust the wall or voxel size.":
+        "La cavidad atraviesa la superficie. Ajusta el grosor o el tamaño de vóxel.",
+    "Check the drain diameter, direction and depth.": "Revisa el diámetro, la dirección y la profundidad del drenaje.",
+    "No closed cavity is available to drain.": "No hay cavidades cerradas por drenar.",
+    "Place the drain on the outside surface with its direction pointing inward.":
+        "Coloca el drenaje en la superficie exterior y dirígelo hacia el interior.",
+    "Use a single closed mesh for the custom drain.": "Usa una sola malla cerrada para el drenaje personalizado.",
+    "The custom drain must enclose the entry point and extend outside the surface.":
+        "La malla de corte debe envolver el punto de entrada y sobresalir de la superficie.",
+    "The drain did not open a cavity to the outside. Check its placement and depth.":
+        "El drenaje no abrió una cavidad al exterior. Revisa su posición y profundidad.",
+    "Plug clearance must be smaller than the drain radius.": "La holgura del tapón debe ser menor al radio del drenaje.",
+    "No drain fits along this print direction. Try placing one manually.":
+        "No hay espacio para drenar en esta dirección de impresión. Intenta colocarlo manualmente.",
+    "Choose a custom drain cutter mesh.": "Elige una malla de corte para el drenaje personalizado.",
+    "Drain verified from the cavity to the exterior.": "Se verificó la conexión de la cavidad con el exterior.",
+    "The new drain overlaps an existing opening or modified wall. Move it to intact material.":
+        "El drenaje cruza una abertura o pared modificada. Muévelo a una zona intacta.",
     "Magnets": "Imanes",
     "Cut pockets on both sides for purchased magnets": "Recorta cavidades a ambos lados para imanes comerciales",
     "Disc": "Disco",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0-alpha.10
+
+- Added resin hollowing on a copy, with adjustable wall thickness, voxel size and reinforced regions.
+- Added manual and suggested circular drains, custom cutters and optional printable plugs.
+- Verify that each drain connects a cavity to the exterior. Successive drains retain earlier openings across save and reopen.
+
 ## 0.3.0-alpha.9
 
 - Added per-piece and assembly material, weight and cost estimates for FDM and resin.

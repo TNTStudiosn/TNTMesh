@@ -585,6 +585,45 @@ def reset_magnet_preview():
     settings.connector_points.clear()
 
 
+def prepare_resin():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        bpy.ops.mesh.primitive_cube_add(size=24, location=(0, 0, 40))
+        bpy.context.active_object.name = "Resin Smoke"
+        assert bpy.ops.tntmesh.hollow_resin() == {"FINISHED"}
+        area.spaces.active.region_3d.view_location = (0, 0, 40)
+        area.spaces.active.region_3d.view_rotation = Euler((0, 0, 0), "XYZ").to_quaternion()
+        bpy.context.scene.tntmesh_resin.make_plug = True
+    area.tag_redraw()
+
+
+def place_resin_drain():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.drain_resin("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
+
+
+def verify_resin_drain():
+    addon = importlib.import_module(PACKAGE)
+    result = bpy.context.active_object
+    assert addon.resin_ui.RESIN_REFERENCE in result
+    assert addon.operators.inspect(result.data).shells == 1
+    assert any("Tapón de drenaje" in obj.name for obj in pieces())
+    screenshot("24-resin-drain.png")
+
+
+def reset_resin_preview():
+    for obj in list(bpy.context.scene.objects):
+        if obj.name.startswith("Resin Smoke"):
+            bpy.data.objects.remove(obj, do_unlink=True)
+    _, area, _ = viewport()
+    area.spaces.active.region_3d.view_location = (0, 0, 0)
+    area.spaces.active.region_3d.view_rotation = Euler((1, 0, .55), "XYZ").to_quaternion()
+    first = sorted(pieces(), key=lambda obj: obj.name)[0]
+    first.select_set(True)
+    bpy.context.view_layer.objects.active = first
+
+
 def scroll_magnet_details(up=False):
     window, area, _ = viewport()
     sidebar = next(region for region in area.regions if region.type == "UI")
@@ -701,12 +740,19 @@ estimate_steps = (
      capture_material_estimate, lambda: toggle_smoke_panel(173), lambda: toggle_smoke_panel(93))
     if os.environ.get("TNTMESH_TEST_ESTIMATE") == "1" else ()
 )
+resin_steps = (
+    (prepare_resin, lambda: toggle_smoke_panel(93), lambda: toggle_smoke_panel(200),
+     lambda: screenshot("24-resin-panel.png"), place_resin_drain, cancel_line, place_resin_drain,
+     lambda: contour_click(.50, .50), verify_resin_drain,
+     lambda: toggle_smoke_panel(200), lambda: toggle_smoke_panel(93), reset_resin_preview)
+    if line_steps and os.environ.get("TNTMESH_TEST_RESIN") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps,
     *magnet_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
-    *estimate_steps,
+    *estimate_steps, *resin_steps,
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
     *base_steps, draft_panel, *diagnostics_steps, finish, *repair_steps,
 ))
