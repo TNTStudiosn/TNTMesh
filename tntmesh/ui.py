@@ -7,16 +7,36 @@ from .settings import TNTMESH_PG_settings
 
 
 def cut_properties(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    layout.label(text="Cut type")
+    layout.prop(settings, "cut_kind", text="")
+    if settings.cut_kind == "OBJECT":
+        layout.prop(settings, "cutter")
+        return
     layout.row(align=True).prop(settings, "axis", expand=True)
+    if settings.axis == "FREE":
+        layout.column(align=True).prop(settings, "rotation")
     layout.prop(settings, "offset")
-    layout.label(text="Connector")
-    layout.prop(settings, "connector", text="")
+    if settings.cut_kind == "PLANAR":
+        layout.label(text="Connector")
+        layout.prop(settings, "connector", text="")
+    elif settings.cut_kind == "BEZIER":
+        layout.prop(settings, "curve_controls")
+    else:
+        layout.prop(settings, "profile_size")
 
 
 def cut_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    if settings.cut_kind == "BEZIER":
+        layout.prop(settings, "curve_samples")
+        return
+    if settings.cut_kind in {"RECTANGLE", "ELLIPSE"}:
+        layout.prop(settings, "profile_shift")
+        return
+    if settings.cut_kind != "PLANAR":
+        return
     layout.prop(settings, "kerf")
     if settings.connector != "NONE":
-        for prop in ("diameter", "insertion", "lateral", "axial", "wall"):
+        for prop in ("connector_count", "loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
             layout.prop(settings, prop)
 
 
@@ -87,10 +107,11 @@ def draw_draft(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
         if operation.enabled and operation.target not in draft.free_targets(plan, plan.cut_index):
             layout.label(text="Choose an available input piece.", icon="ERROR")
         cut_properties(layout.box(), operation.settings)
-        header, body = layout.panel("tntmesh_draft_cut_settings", default_closed=True)
-        header.label(text="Cut settings")
-        if body:
-            cut_details(body, operation.settings)
+        if operation.settings.cut_kind != "OBJECT":
+            header, body = layout.panel("tntmesh_draft_cut_settings", default_closed=True)
+            header.label(text="Cut settings")
+            if body:
+                cut_details(body, operation.settings)
     action = layout.row()
     action.scale_y = 1.45
     action.operator("tntmesh.draft_build", icon="CHECKMARK")
@@ -127,11 +148,25 @@ class TNTMESH_PT_main(bpy.types.Panel):
                     body.label(text="Without scene units, 1 BU = 1 mm.", icon="INFO")
                 body.operator("tntmesh.resize")
 
+            header, body = layout.panel("tntmesh_repair", default_closed=True)
+            header.label(text="Repair", icon="TOOL_SETTINGS")
+            if body:
+                body.prop(settings, "repair_weld")
+                body.prop(settings, "repair_holes")
+                if settings.repair_holes:
+                    body.prop(settings, "repair_hole_edges")
+                body.operator("tntmesh.repair")
+
             layout.separator()
             cut = layout.box()
             cut.label(text="Split", icon="MOD_BOOLEAN")
-            cut.prop(settings, "show_plane")
             cut_properties(cut, settings)
+            if settings.cut_kind == "PLANAR":
+                cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR")
+            if settings.cut_kind != "OBJECT":
+                cut.prop(settings, "show_plane", text=(
+                    "Show plane" if settings.cut_kind == "PLANAR" else "Show cutter"
+                ))
 
             header, body = layout.panel("tntmesh_cut_settings", default_closed=True)
             header.label(text="Cut settings")

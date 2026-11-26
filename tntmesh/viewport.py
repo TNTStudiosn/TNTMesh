@@ -5,11 +5,13 @@ from mathutils import Matrix, Vector
 
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
+from .geometry.volume import bezier_path, outline
 from .model import millimeters_per_unit
 from .operators import active_mesh
+from .settings import TNTMESH_PG_settings
 
 _handle = None
-_preview_bounds: dict[tuple[int, int, str], tuple[Vector, Vector]] = {}
+_preview_bounds: dict[tuple[int, int, tuple], tuple[Vector, Vector]] = {}
 
 
 @persistent
@@ -18,9 +20,9 @@ def invalidate_bounds(*_args: object) -> None:
 
 
 def project_bounds(
-    obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph, axis: str, frame: Matrix
+    obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph, frame: Matrix
 ) -> tuple[Vector, Vector] | None:
-    key = (depsgraph.as_pointer(), obj.as_pointer(), axis)
+    key = (depsgraph.as_pointer(), obj.as_pointer(), tuple(tuple(row) for row in frame))
     if key in _preview_bounds:
         return _preview_bounds[key]
     evaluated = obj.evaluated_get(depsgraph)
@@ -28,8 +30,41 @@ def project_bounds(
         return None
     transform = frame.transposed().to_4x4() @ evaluated.matrix_world
     result = bounds(transform @ vertex.co for vertex in evaluated.data.vertices)
+    if len(_preview_bounds) >= 12:
+        _preview_bounds.clear()
     _preview_bounds[key] = result
     return result
+
+
+def cutter_paths(
+    settings: TNTMESH_PG_settings, lower: Vector, upper: Vector, unit: float,
+) -> list[tuple[list[tuple[float, float, float]], bool]]:
+    if settings.cut_kind == "BEZIER":
+        controls = tuple(value / unit for value in settings.curve_controls)
+        path = list(bezier_path(lower, upper, settings.offset / unit,
+                                controls, settings.curve_samples))
+        left = [(x, lower.y, z) for x, z in path]
+        right = [(x, upper.y, z) for x, z in path]
+        return [(left + right[::-1] + left[:1], False)]
+    if settings.cut_kind in {"RECTANGLE", "ELLIPSE"}:
+        width, height, depth = (value / unit for value in settings.profile_size)
+        center = (lower + upper) / 2
+        center += Vector((*settings.profile_shift, settings.offset)) / unit
+        ring = outline(settings.cut_kind, width, height)
+        low = [(center.x + x, center.y + y, center.z - depth / 2) for x, y in ring]
+        high = [(center.x + x, center.y + y, center.z + depth / 2) for x, y in ring]
+        paths = [(low + low[:1], False), (high + high[:1], False)]
+        paths.extend(([low[i], high[i]], False) for i in range(0, len(low), len(low) // 4))
+        return paths
+    pad = (upper - lower).length * 0.06
+    z = (lower.z + upper.z) * 0.5 + settings.offset / unit
+    separation = settings.kerf / unit / 2
+    heights = (z,) if separation == 0.0 else (z - separation, z + separation)
+    return [
+        ([(lower.x - pad, lower.y - pad, level), (upper.x + pad, lower.y - pad, level),
+          (upper.x + pad, upper.y + pad, level), (lower.x - pad, upper.y + pad, level)], True)
+        for level in heights
+    ]
 
 
 def draw_plane() -> None:
@@ -41,33 +76,29 @@ def draw_plane() -> None:
     obj = active_mesh(context)
     if context.mode != "OBJECT" or settings.mode != "EASY" or not settings.show_plane or obj is None:
         return
-    frame = axis_frame(settings.axis)
-    extents = project_bounds(obj, context.evaluated_depsgraph_get(), settings.axis, frame)
+    if settings.cut_kind == "OBJECT":
+        return
+    frame = axis_frame(settings.axis, tuple(settings.rotation))
+    extents = project_bounds(obj, context.evaluated_depsgraph_get(), frame)
     if extents is None:
         return
     lower, upper = extents
-    pad = (upper - lower).length * 0.06
     unit = millimeters_per_unit(context.scene)
-    z = (lower.z + upper.z) * 0.5 + settings.offset / unit
-    separation = settings.kerf / unit / 2
-    heights = (z,) if separation == 0.0 else (z - separation, z + separation)
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
     previous_blend = gpu.state.blend_get()
     previous_depth = gpu.state.depth_test_get()
     gpu.state.blend_set("ALPHA")
     gpu.state.depth_test_set("LESS_EQUAL")
     try:
-        for height in heights:
-            vertices = [
-                frame @ Vector((x, y, height))
-                for x, y in ((lower.x - pad, lower.y - pad), (upper.x + pad, lower.y - pad),
-                             (upper.x + pad, upper.y + pad), (lower.x - pad, upper.y + pad))
-            ]
+        for points, fill in cutter_paths(settings, lower, upper, unit):
+            vertices = [frame @ Vector(point) for point in points]
             shader.bind()
-            shader.uniform_float("color", (0.0, 1.0, 1.0, 0.16))
-            batch_for_shader(shader, "TRI_FAN", {"pos": vertices}).draw(shader)
+            if fill:
+                shader.uniform_float("color", (0.0, 1.0, 1.0, 0.16))
+                batch_for_shader(shader, "TRI_FAN", {"pos": vertices}).draw(shader)
+                vertices.append(vertices[0])
             shader.uniform_float("color", (0.0, 1.0, 1.0, 0.9))
-            batch_for_shader(shader, "LINE_STRIP", {"pos": vertices + vertices[:1]}).draw(shader)
+            batch_for_shader(shader, "LINE_STRIP", {"pos": vertices}).draw(shader)
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)

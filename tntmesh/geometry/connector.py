@@ -18,6 +18,8 @@ class Connector:
     lateral: float = 0.15
     axial: float = 0.2
     wall: float = 0.8
+    count: int = 1
+    loose: bool = False
 
     @property
     def sides(self) -> int:
@@ -32,7 +34,7 @@ class Connector:
         values = (self.diameter, self.insertion, self.lateral, self.axial, self.wall)
         if (self.shape not in {"ROUND", "HEX"} or not all(map(isfinite, values))
                 or min(self.diameter, self.insertion, self.wall) <= 0
-                or min(self.lateral, self.axial) < 0):
+                or min(self.lateral, self.axial) < 0 or self.count < 1):
             raise MeshError("Check the connector dimensions and clearances.")
 
 
@@ -88,19 +90,23 @@ def add_connector(
     kerf: float,
     config: Connector,
     epsilon: float,
-) -> tuple[bpy.types.Mesh, bpy.types.Mesh]:
+) -> tuple[bpy.types.Mesh, ...]:
     config.validate()
     low = position - kerf / 2
     high = position + kerf / 2
     anchor = min(config.insertion / 2, config.diameter / 2)
+    minus_depth = config.insertion + config.axial if config.loose else anchor
     envelope = config.socket_radius + config.wall / cos(tau / (2 * config.sides))
     # Keep the probe inside the cut plane. The applied tool crosses the seam.
     inset = min(epsilon, anchor / 10, config.wall / 10)
     probes = (
-        (minus, low - anchor - config.wall, low - inset),
+        (minus, low - minus_depth - config.wall, low - inset),
         (plus, high + inset, high + config.insertion + config.axial + config.wall),
     )
+    centers = []
     for center in candidates(minus, frame, low, epsilon * 2):
+        if any((center - other).length < 2 * envelope for other in centers):
+            continue
         with GeometryTransaction() as temporary:
             test_engine = ExactBoolean(engine.context, temporary)
             for mesh, start, end in probes:
@@ -109,31 +115,58 @@ def add_connector(
                 if sample.polygons:
                     break
             else:
-                break
-    else:
+                centers.append(center)
+                if len(centers) == config.count:
+                    break
+    if not centers:
         raise MeshError("No safe connector position. Reduce its size or move the cut.")
+    if len(centers) < config.count:
+        raise MeshError("Not enough safe positions. Reduce the connector count or size.")
 
-    pin = prism(
-        engine.transaction, frame, center, low - anchor, high + config.insertion,
-        config.diameter / 2, config.sides,
-    )
-    socket = prism(
-        engine.transaction, frame, center, high - inset, high + config.insertion + config.axial,
-        config.socket_radius, config.sides,
-    )
-    male = engine.run(minus, pin, "UNION")
-    female = engine.run(plus, socket, "DIFFERENCE")
-    before_male, after_male = inspect(minus), inspect(male)
-    before_female, after_female = inspect(plus), inspect(female)
     polygon_factor = config.sides * sin(tau / config.sides) / 2
-    pin_volume = polygon_factor * (config.diameter / 2)**2 * (config.insertion + kerf)
-    socket_volume = polygon_factor * config.socket_radius**2 * (config.insertion + config.axial)
+    pin_area = polygon_factor * (config.diameter / 2)**2
+    socket_area = polygon_factor * config.socket_radius**2
+    socket_depth = config.insertion + config.axial
+    socket_volume = socket_area * socket_depth * len(centers)
+    pin_volume = pin_area * (config.insertion + kerf) * len(centers)
+    before_minus, before_plus = inspect(minus), inspect(plus)
+    separate_pins = []
+
+    for center in centers:
+        pin_start = low - (config.insertion if config.loose else anchor)
+        pin = prism(
+            engine.transaction, frame, center, pin_start, high + config.insertion,
+            config.diameter / 2, config.sides,
+        )
+        if config.loose:
+            inspect(pin)
+            separate_pins.append(pin)
+            negative_tool = prism(
+                engine.transaction, frame, center, low - socket_depth, low + inset,
+                config.socket_radius, config.sides,
+            )
+            new_minus = engine.run(minus, negative_tool, "DIFFERENCE")
+            engine.transaction.remove_mesh(negative_tool)
+        else:
+            new_minus = engine.run(minus, pin, "UNION")
+            engine.transaction.remove_mesh(pin)
+        socket = prism(
+            engine.transaction, frame, center, high - inset, high + socket_depth,
+            config.socket_radius, config.sides,
+        )
+        new_plus = engine.run(plus, socket, "DIFFERENCE")
+        for mesh in (minus, plus, socket):
+            engine.transaction.remove_mesh(mesh)
+        minus, plus = new_minus, new_plus
+
+    after_minus, after_plus = inspect(minus), inspect(plus)
     deltas = (
-        (after_male.volume_mm3 - before_male.volume_mm3, pin_volume),
-        (before_female.volume_mm3 - after_female.volume_mm3, socket_volume),
+        (after_minus.volume_mm3 - before_minus.volume_mm3,
+         -socket_volume if config.loose else pin_volume),
+        (before_plus.volume_mm3 - after_plus.volume_mm3, socket_volume),
     )
-    if (after_male.shells != before_male.shells or after_female.shells != before_female.shells
-            or any(abs(actual - expected) > max(VOLUME_EPSILON, expected * .01)
+    if (after_minus.shells != before_minus.shells or after_plus.shells != before_plus.shells
+            or any(abs(actual - expected) > max(VOLUME_EPSILON, abs(expected) * .01)
                    for actual, expected in deltas)):
         raise MeshError("The connector could not be joined or the socket could not be cut.")
-    return male, female
+    return minus, plus, *separate_pins

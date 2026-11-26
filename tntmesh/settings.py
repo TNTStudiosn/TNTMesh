@@ -1,9 +1,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty
+from bpy.props import (
+    BoolProperty,
+    EnumProperty,
+    FloatProperty,
+    FloatVectorProperty,
+    IntProperty,
+    PointerProperty,
+)
 
 from .geometry.connector import Connector
 from .geometry.planar import PlanarCut
+from .geometry.volume import VolumeCut
+
+
+def is_mesh(self, obj: bpy.types.Object) -> bool:
+    return obj.type == "MESH"
 
 
 class TNTMESH_PG_settings(bpy.types.PropertyGroup):
@@ -13,9 +25,26 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
                ("DRAFT", "Draft", "Plan multiple cuts before generating pieces")],
         default="EASY",
     )
+    cut_kind: EnumProperty(
+        name="Cut type",
+        items=[
+            ("PLANAR", "Straight", "Split along a plane"),
+            ("BEZIER", "Bézier Curve", "Split along a cubic Bézier profile"),
+            ("RECTANGLE", "Rectangle", "Extract a rectangular region"),
+            ("ELLIPSE", "Ellipse", "Extract an elliptical region"),
+            ("OBJECT", "Cutter Object", "Extract the region inside a closed mesh"),
+        ],
+        default="PLANAR",
+    )
+    cutter: PointerProperty(name="Cutter", type=bpy.types.Object, poll=is_mesh)
     axis: EnumProperty(
         name="Axis", description="World axis perpendicular to the cutting plane",
-        items=[(name, name, "") for name in "XYZ"], default="Z",
+        items=[*((name, name, "") for name in "XYZ"), ("FREE", "Free", "Rotate the cutting plane")],
+        default="Z",
+    )
+    rotation: FloatVectorProperty(
+        name="Plane rotation", subtype="EULER", unit="ROTATION", size=3, precision=2,
+        description="World rotation of the plane from its default Z orientation",
     )
     offset: FloatProperty(
         name="Offset (mm)", description="Distance from the center along the cut axis",
@@ -55,16 +84,46 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Min. wall (mm)", description="Minimum material around the socket and pin root",
         default=0.8, min=0.01, precision=2,
     )
+    connector_count: IntProperty(name="Connector count", min=1, default=1, soft_max=12)
+    loose_pins: BoolProperty(
+        name="Separate pins", description="Cut two sockets and generate removable pins",
+    )
     hide_source: BoolProperty(name="Hide input after split", default=True)
     scale_axis: EnumProperty(
         name="Reference axis", items=[(name, name, "") for name in "XYZ"], default="Z",
     )
     target_size: FloatProperty(name="Target size (mm)", default=50.0, min=0.01, precision=2)
+    repair_weld: FloatProperty(
+        name="Weld distance (mm)", description="Merge vertices within this distance on the copy",
+        default=0.001, min=0.0, precision=4,
+    )
+    repair_holes: BoolProperty(
+        name="Fill small holes", description="Attempt to cap simple boundary loops on the copy",
+    )
+    repair_hole_edges: IntProperty(name="Max. hole edges", min=3, max=64, default=8)
+    profile_size: FloatVectorProperty(
+        name="Size (mm)", description="Width, height and depth of the extraction volume",
+        default=(10.0, 10.0, 10.0), min=0.01, precision=2, size=3, subtype="XYZ",
+    )
+    profile_shift: FloatVectorProperty(
+        name="In-plane shift (mm)", default=(0.0, 0.0), precision=2, size=2, subtype="XYZ",
+    )
+    curve_controls: FloatVectorProperty(
+        name="Control heights (mm)", default=(4.0, -4.0), precision=2, size=2, subtype="XYZ",
+    )
+    curve_samples: IntProperty(name="Curve samples", min=4, max=256, default=24)
 
-    def config(self) -> PlanarCut:
+    def config(self) -> PlanarCut | VolumeCut:
+        if self.cut_kind != "PLANAR":
+            return VolumeCut(
+                self.cut_kind, self.axis, tuple(self.rotation), self.offset,
+                tuple(self.profile_shift), tuple(self.profile_size), tuple(self.curve_controls),
+                self.curve_samples, self.cutter,
+            )
         connector = None
         if self.connector != "NONE":
             connector = Connector(
-                self.connector, self.diameter, self.insertion, self.lateral, self.axial, self.wall
+                self.connector, self.diameter, self.insertion, self.lateral, self.axial, self.wall,
+                self.connector_count, self.loose_pins,
             )
-        return PlanarCut(self.axis, self.offset, self.kerf, connector)
+        return PlanarCut(self.axis, self.offset, self.kerf, connector, tuple(self.rotation))

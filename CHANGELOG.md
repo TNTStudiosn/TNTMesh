@@ -1,8 +1,12 @@
 # Changelog
 
-## Unreleased · 0.2.0-alpha.1
+## 0.2.0-alpha.1
 
-- Added a persistent Draft mode for dependent planar cuts, with stable part IDs and transactional rebuilding.
+- Added a persistent Draft mode for dependent cuts, with stable part IDs and transactional rebuilding.
+- Added exact rotation and viewport line drawing for plane positioning.
+- Added cubic Bézier splits, rectangular and elliptical extraction, and splits using another mesh as a cutter.
+- Added multiple connectors and separately printable pins for straight cuts.
+- Added per-piece OBJ and FBX export and basic repair that preserves the original model.
 - Added stable and experimental indices for Blender's native extension manager, served through GitHub Pages.
 
 ## 0.1.0-alpha.1

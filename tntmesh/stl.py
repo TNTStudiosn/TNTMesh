@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-import re
 import struct
 from math import isfinite
 from pathlib import Path
@@ -8,13 +7,11 @@ from typing import BinaryIO
 import bmesh
 import bpy
 
-from .geometry.mesh import evaluated_mm, inspect
-from .model import GeometryTransaction, MeshError, millimeters_per_unit
+from .model import MeshError, millimeters_per_unit
 
 _HEADER = b"TNTMesh | millimeters".ljust(80, b"\0")
 _COUNT = struct.Struct("<I")
 _TRIANGLE = struct.Struct("<12fH")
-_INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
 def import_model(
@@ -66,36 +63,3 @@ def triangulate_for_stl(mesh: bpy.types.Mesh) -> None:
     finally:
         bm.free()
     mesh.update()
-
-
-def export_parts(
-    context: bpy.types.Context, parts: list[bpy.types.Object], directory: Path
-) -> list[Path]:
-    created: list[Path] = []
-    try:
-        for index, obj in enumerate(parts, 1):
-            name = _INVALID_FILENAME.sub("_", obj.name).strip(" .")[:80].rstrip(" .")
-            stem = f"{index:02d}_{name or 'Part'}"
-            with GeometryTransaction() as transaction:
-                mesh, _ = evaluated_mm(
-                    context, obj, transaction, millimeters_per_unit(context.scene), centered=False
-                )
-                triangulate_for_stl(mesh)
-                inspect(mesh)
-                suffix = 1
-                while True:
-                    path = directory / (f"{stem}.stl" if suffix == 1 else f"{stem}_{suffix}.stl")
-                    try:
-                        output = path.open("xb")
-                    except FileExistsError:
-                        suffix += 1
-                    else:
-                        break
-                created.append(path)
-                with output:
-                    write_binary(mesh, output)
-    except Exception:
-        for path in created:
-            path.unlink(missing_ok=True)
-        raise
-    return created

@@ -2,11 +2,12 @@
 import bpy
 from bpy.props import CollectionProperty, IntProperty, PointerProperty
 
-from . import draft, draft_operators, localization, operators, ui, viewport
+from . import draft, draft_operators, draw_cut, localization, operators, ui, viewport
 from .settings import TNTMESH_PG_settings
 
 _CLASSES = (
-    TNTMESH_PG_settings, *draft.CLASSES, *operators.CLASSES, *draft_operators.CLASSES, *ui.CLASSES,
+    TNTMESH_PG_settings, *draft.CLASSES, *operators.CLASSES, *draft_operators.CLASSES,
+    draw_cut.TNTMESH_OT_draw_plane, *ui.CLASSES,
 )
 _registered: list[type] = []
 
@@ -29,6 +30,7 @@ def register() -> None:
 
 
 def unregister() -> None:
+    draw_cut.cancel_sessions()
     viewport.unregister()
     for name in ("tntmesh_draft_index", "tntmesh_drafts", "tntmesh_settings"):
         if hasattr(bpy.types.Scene, name):

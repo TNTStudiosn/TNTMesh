@@ -111,9 +111,82 @@ def finish():
     (output / "status.txt").write_text("PASS\n", encoding="utf-8")
 
 
+def start_line():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.draw_plane("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
+
+
+def click_start():
+    window, _, region = viewport()
+    window.event_simulate(
+        type="LEFTMOUSE", value="PRESS", x=region.x + region.width // 5,
+        y=region.y + region.height // 2,
+    )
+
+
+def click_end():
+    window, _, region = viewport()
+    window.event_simulate(
+        type="LEFTMOUSE", value="PRESS", x=region.x + 3 * region.width // 5,
+        y=region.y + 2 * region.height // 5,
+    )
+
+
+def verify_line():
+    settings = bpy.context.scene.tntmesh_settings
+    assert settings.axis == "FREE"
+    assert settings.show_plane
+    assert not pieces()
+    screenshot("00-drawn-plane.png")
+    settings.axis = "Z"
+    settings.offset = 0.0
+
+
+def cancel_line():
+    window, _, _ = viewport()
+    window.event_simulate(type="ESC", value="PRESS")
+
+
+def verify_cancel():
+    assert bpy.context.scene.tntmesh_settings.axis == "Z"
+    assert not pieces()
+
+
+def open_export_browser():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.export_stl("INVOKE_DEFAULT", directory=str(output)) == {"RUNNING_MODAL"}
+
+
+def check_export_browser():
+    window, area = next(
+        (window, area) for window in bpy.context.window_manager.windows
+        for area in window.screen.areas if area.type == "FILE_BROWSER"
+    )
+    with bpy.context.temp_override(window=window, area=area):
+        result = bpy.ops.screen.screenshot(filepath=str(output / "05-export.png"))
+        assert result == {"FINISHED"}
+    window.event_simulate(type="ESC", value="PRESS")
+
+
+def check_export_cancelled():
+    assert not any(
+        area.type == "FILE_BROWSER" for window in bpy.context.window_manager.windows
+        for area in window.screen.areas
+    )
+    assert len(pieces()) == 2
+
+
+line_steps = (start_line, click_start, click_end, verify_line, start_line, click_start,
+              cancel_line, verify_cancel) if os.environ.get("TNTMESH_TEST_EVENTS") == "1" else ()
+export_steps = (
+    (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
+)
 steps = iter((
-    setup, panel, split, undo, redo, spanish, panel, lambda: screenshot("03-spanish.png"),
-    draft_panel, finish,
+    setup, panel, *line_steps, split, undo, redo, spanish, panel,
+    lambda: screenshot("03-spanish.png"),
+    *export_steps, draft_panel, finish,
 ))
 
 

@@ -6,7 +6,7 @@ from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProp
 from mathutils import Matrix
 
 from .geometry.mesh import evaluated_mm
-from .geometry.planar import split
+from .geometry.volume import apply_cut
 from .localization import tr
 from .model import (
     DRAFT_ID,
@@ -31,15 +31,20 @@ class TNTMESH_PG_draft_cut(bpy.types.PropertyGroup):
     settings: PointerProperty(type=TNTMESH_PG_settings)
 
 
+class TNTMESH_PG_draft_output(bpy.types.PropertyGroup):
+    obj: PointerProperty(type=bpy.types.Object)
+
+
 class TNTMESH_PG_draft_plan(bpy.types.PropertyGroup):
     uid: StringProperty()
     schema: IntProperty(default=SCHEMA)
     source: PointerProperty(type=bpy.types.Object)
     cuts: CollectionProperty(type=TNTMESH_PG_draft_cut)
+    results: CollectionProperty(type=TNTMESH_PG_draft_output)
     cut_index: IntProperty(min=0)
 
 
-CLASSES = (TNTMESH_PG_draft_cut, TNTMESH_PG_draft_plan)
+CLASSES = (TNTMESH_PG_draft_cut, TNTMESH_PG_draft_output, TNTMESH_PG_draft_plan)
 
 
 def active_plan(scene: bpy.types.Scene) -> TNTMESH_PG_draft_plan | None:
@@ -108,8 +113,25 @@ def order(plan: TNTMESH_PG_draft_plan) -> list[TNTMESH_PG_draft_cut]:
     return operations
 
 
-def current_results(scene: bpy.types.Scene, plan: TNTMESH_PG_draft_plan) -> list[bpy.types.Object]:
-    return [obj for obj in scene.objects if obj.get(DRAFT_ID) == plan.uid]
+def current_results(plan: TNTMESH_PG_draft_plan) -> list[bpy.types.Object]:
+    return list(dict.fromkeys(
+        result.obj for result in plan.results
+        if result.obj is not None and result.obj.get(DRAFT_ID) == plan.uid
+    ))
+
+
+def track_followups(
+    scene: bpy.types.Scene, source: bpy.types.Object, parts: list[bpy.types.Object]
+) -> None:
+    draft_id = source.get(DRAFT_ID)
+    if draft_id is None:
+        return
+    for plan in scene.tntmesh_drafts:
+        if plan.uid == draft_id and source in current_results(plan):
+            for part in parts:
+                part[DRAFT_ID] = draft_id
+                plan.results.add().obj = part
+            return
 
 
 def rebuild(
@@ -122,7 +144,7 @@ def rebuild(
         raise MeshError("The draft source is missing from this view layer.")
     operations = order(plan)
     project = UUID(plan.uid)
-    previous = current_results(context.scene, plan)
+    previous = current_results(plan)
     names = {obj.get(PART_ID): obj.name for obj in previous if obj.get(ROLE) == "part"}
     created = []
     unit = millimeters_per_unit(context.scene)
@@ -140,22 +162,31 @@ def rebuild(
                 if was_hidden:
                     source.hide_set(True)
             leaves = {SOURCE: mesh}
+            pins = {}
             for index, operation in enumerate(operations, 1):
                 target = leaves.pop(operation.target)
                 try:
-                    pieces = split(context, transaction, target, operation.settings.config())
+                    pieces = apply_cut(
+                        context, transaction, target, operation.settings.config(), origin, unit,
+                        source,
+                    )
                 except MeshError as error:
                     raise DraftError(operation.name, str(error)) from error
                 transaction.remove_mesh(target)
-                leaves.update(zip(cut_outputs(operation), pieces, strict=True))
+                leaves.update(zip(cut_outputs(operation), pieces[:2], strict=True))
+                pins.update(
+                    (f"{operation.uid}:pin:{number}", pin)
+                    for number, pin in enumerate(pieces[2:], 1)
+                )
                 wm.progress_update(index)
 
             collection = owned_collection(context.scene, "part")
-            for index, (key, mesh) in enumerate(leaves.items(), 1):
+            for index, (key, mesh) in enumerate((leaves | pins).items(), 1):
                 mesh.transform(Matrix.Scale(1.0 / unit, 4))
                 mesh.update()
                 part_id = uuid5(project, key).hex
-                name = names.get(part_id, f"{plan.name} · {index:02d}")
+                label = tr("Pin {number}").format(number=index - len(leaves)) if key in pins else f"{index:02d}"
+                name = names.get(part_id, f"{plan.name} · {label}")
                 obj = transaction.object(collection, name, mesh)
                 obj.location = origin
                 identify_part(obj, plan.uid, part_id)
@@ -175,8 +206,10 @@ def rebuild(
             bpy.data.objects.remove(obj, do_unlink=True)
             if isinstance(data, bpy.types.Mesh) and data.users == 0:
                 bpy.data.meshes.remove(data)
+        plan.results.clear()
         for obj, name in created:
             obj.name = name
+            plan.results.add().obj = obj
         wm.progress_update(len(operations) + 1)
         return [obj for obj, _ in created]
     finally:

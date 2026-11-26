@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+from collections.abc import Iterator
+from dataclasses import dataclass
+from math import cos, isfinite, sin, tau
+
+import bpy
+from mathutils import Matrix, Vector
+
+from ..model import GeometryTransaction, MeshError
+from .boolean import ExactBoolean
+from .mesh import bounds, evaluated_mm, inspect, primitive
+from .planar import PlanarCut, axis_frame, split
+
+
+@dataclass(frozen=True)
+class VolumeCut:
+    shape: str
+    axis: str
+    rotation: tuple[float, float, float]
+    offset: float
+    shift: tuple[float, float]
+    size: tuple[float, float, float]
+    controls: tuple[float, float]
+    resolution: int
+    cutter: bpy.types.Object | None
+
+
+def bezier_path(
+    lower: Vector, upper: Vector, offset: float, controls: tuple[float, float], samples: int
+) -> Iterator[tuple[float, float]]:
+    depth = (lower.z + upper.z) / 2 + offset
+    pad = (upper - lower).length * 0.1
+    yield lower.x - pad, depth
+    for step in range(samples + 1):
+        t = step / samples
+        complement = 1.0 - t
+        height = 3 * complement * t * (complement * controls[0] + t * controls[1])
+        yield lower.x + (upper.x - lower.x) * t, depth + height
+    yield upper.x + pad, depth
+
+
+def outline(shape: str, width: float, height: float) -> list[tuple[float, float]]:
+    if shape == "RECTANGLE":
+        return [(-width / 2, -height / 2), (width / 2, -height / 2),
+                (width / 2, height / 2), (-width / 2, height / 2)]
+    return [(width / 2 * cos(i * tau / 64), height / 2 * sin(i * tau / 64)) for i in range(64)]
+
+
+def extruded_volume(
+    transaction: GeometryTransaction, frame: Matrix, center: Vector,
+    coords: list[tuple[float, float]], depth: float,
+) -> bpy.types.Mesh:
+    count = len(coords)
+    vertices = [
+        frame @ (center + Vector((x, y, z)))
+        for z in (-depth / 2, depth / 2)
+        for x, y in coords
+    ]
+    faces = [tuple(reversed(range(count))), tuple(range(count, 2 * count))]
+    for i in range(count):
+        j = (i + 1) % count
+        faces.append((i, j, j + count, i + count))
+    return primitive(transaction, ".TNTMesh region tool", vertices, faces)
+
+
+def curve_volume(
+    transaction: GeometryTransaction, frame: Matrix, lower: Vector, upper: Vector, config: VolumeCut
+) -> bpy.types.Mesh:
+    path = list(bezier_path(lower, upper, config.offset, config.controls, config.resolution))
+    pad = (upper - lower).length * 0.1
+    low_y = lower.y - pad
+    high_y = upper.y + pad
+    top = max(upper.z, *(height for _, height in path)) + pad
+    vertices = [
+        frame @ Vector(point)
+        for x, height in path
+        for point in ((x, low_y, height), (x, high_y, height),
+                      (x, high_y, top), (x, low_y, top))
+    ]
+    faces = [(3, 2, 1, 0), tuple(range(len(vertices) - 4, len(vertices)))]
+    for i in range(0, len(vertices) - 4, 4):
+        for side in range(4):
+            next_side = (side + 1) % 4
+            faces.append((i + side, i + next_side, i + next_side + 4, i + side + 4))
+    return primitive(transaction, ".TNTMesh curved tool", vertices, faces)
+
+
+def cutter_mesh(
+    context: bpy.types.Context, transaction: GeometryTransaction, mesh: bpy.types.Mesh,
+    config: VolumeCut, origin: Vector, unit: float, source: bpy.types.Object,
+) -> bpy.types.Mesh:
+    if config.shape == "OBJECT":
+        obj = config.cutter
+        if obj is None or obj == source or obj.type != "MESH":
+            raise MeshError("Choose a separate closed mesh as the cutter.")
+        if obj.name not in context.view_layer.objects:
+            raise MeshError("The cutter is not in this view layer.")
+        cutter, cutter_origin = evaluated_mm(context, obj, transaction, unit)
+        cutter.transform(Matrix.Translation((cutter_origin - origin) * unit))
+        cutter.update()
+        return cutter
+
+    frame = axis_frame(config.axis, config.rotation)
+    inverse = frame.transposed()
+    lower, upper = bounds(inverse @ vertex.co for vertex in mesh.vertices)
+    if not isfinite(config.offset):
+        raise MeshError("Check the position and dimensions of the cutter.")
+    if config.shape == "BEZIER":
+        if not all(map(isfinite, config.controls)) or config.resolution < 4:
+            raise MeshError("Check the control heights and curve resolution.")
+        return curve_volume(transaction, frame, lower, upper, config)
+    if config.shape not in {"RECTANGLE", "ELLIPSE"} or (
+        not all(map(isfinite, (*config.size, *config.shift))) or min(config.size) <= 0
+    ):
+        raise MeshError("Check the position and dimensions of the cutter.")
+    center = (lower + upper) / 2 + Vector((*config.shift, config.offset))
+    width, height, depth = config.size
+    return extruded_volume(transaction, frame, center, outline(config.shape, width, height), depth)
+
+
+def apply_cut(
+    context: bpy.types.Context, transaction: GeometryTransaction, mesh: bpy.types.Mesh,
+    config: PlanarCut | VolumeCut, origin: Vector, unit: float, source: bpy.types.Object,
+) -> tuple[bpy.types.Mesh, ...]:
+    if isinstance(config, PlanarCut):
+        return split(context, transaction, mesh, config)
+    original_volume = inspect(mesh).volume_mm3
+    cutter = cutter_mesh(context, transaction, mesh, config, origin, unit, source)
+    inspect(cutter)
+    engine = ExactBoolean(context, transaction)
+    outside = engine.run(mesh, cutter, "DIFFERENCE")
+    inside = engine.run(mesh, cutter, "INTERSECT")
+    if not outside.polygons or not inside.polygons:
+        raise MeshError("The cutter must leave material on both sides of the cut.")
+    total = inspect(outside).volume_mm3 + inspect(inside).volume_mm3
+    if abs(total - original_volume) > original_volume * .001:
+        raise MeshError("The split did not preserve the expected volume.")
+    return outside, inside

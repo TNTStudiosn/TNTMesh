@@ -4,9 +4,11 @@ import os
 import sys
 import tempfile
 import unittest
+from math import sin, tau
 from pathlib import Path
 
 import addon_utils
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -151,6 +153,125 @@ class WorkflowTests(unittest.TestCase):
                 self.assertAlmostEqual(radius, expected, places=4)
             self.checked(piece)
 
+    def test_free_rotation_splits_at_the_requested_plane(self):
+        self.cube()
+        self.settings.axis = "FREE"
+        self.settings.rotation = (0.29, 0.14, 0.0)
+        self.settings.offset = 1.5
+        self.settings.connector = "NONE"
+        frame = self.addon.geometry.planar.axis_frame("FREE", tuple(self.settings.rotation))
+        normal = frame.col[2]
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        minus, plus = self.parts()
+        self.assertAlmostEqual(max(normal.dot(v.co) for v in minus.data.vertices), 1.5, places=4)
+        self.assertAlmostEqual(min(normal.dot(v.co) for v in plus.data.vertices), 1.5, places=4)
+        self.assertAlmostEqual(self.checked(minus) + self.checked(plus), 24**3, places=2)
+
+    def test_bezier_split_preserves_volume_and_generates_a_nonplanar_seam(self):
+        self.cube()
+        self.settings.cut_kind = "BEZIER"
+        self.settings.curve_controls = (8.0, -8.0)
+        self.settings.curve_samples = 32
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        for part in self.parts():
+            self.assertAlmostEqual(self.checked(part), 24**3 / 2, places=2)
+            seam = [vertex.co.z for vertex in part.data.vertices if abs(vertex.co.z) < 11.9]
+            self.assertGreater(max(seam), 2.0)
+            self.assertLess(min(seam), -2.0)
+
+    def test_rectangular_and_elliptical_extraction(self):
+        source = self.cube()
+        self.settings.offset = 10
+        self.settings.profile_size = (8, 6, 8)
+        for shape, area in (("RECTANGLE", 48), ("ELLIPSE", 64 * sin(tau / 64) * 4 * 3 / 2)):
+            with self.subTest(shape=shape):
+                self.settings.cut_kind = shape
+                source.hide_set(False)
+                for obj in bpy.context.selected_objects:
+                    obj.select_set(False)
+                source.select_set(True)
+                bpy.context.view_layer.objects.active = source
+                old = set(self.parts())
+                self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+                outside, inside = sorted(set(self.parts()) - old, key=lambda obj: obj.name)
+                self.assertAlmostEqual(self.checked(inside), area * 6, places=3)
+                self.assertAlmostEqual(self.checked(outside) + self.checked(inside), 24**3, places=2)
+
+    def test_cutter_object_remains_intact(self):
+        source = self.cube()
+        source.location = (25, 12, 8)
+        cutter = self.cube(8)
+        cutter.location = (25, 12, 19)
+        self.settings.cut_kind = "OBJECT"
+        self.settings.cutter = cutter
+        cutter.select_set(False)
+        source.select_set(True)
+        bpy.context.view_layer.objects.active = source
+        bpy.context.view_layer.update()
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        outside, inside = self.parts()
+        self.assertAlmostEqual(self.checked(inside), 8 * 8 * 5, places=3)
+        self.assertAlmostEqual(self.checked(outside) + self.checked(inside), 24**3, places=2)
+        self.assertAlmostEqual(self.checked(cutter), 8**3)
+
+    def test_multiple_fixed_connectors(self):
+        self.cube(40)
+        self.settings.connector = "HEX"
+        self.settings.connector_count = 3
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        male, female = self.parts()
+        pin_tips = [vertex for vertex in male.data.vertices if abs(vertex.co.z - 4.0) < 1e-5]
+        recesses = [vertex for vertex in female.data.vertices if abs(vertex.co.z - 4.2) < 1e-5]
+        self.assertEqual((len(pin_tips), len(recesses)), (18, 18))
+        self.checked(male)
+        self.checked(female)
+
+    def test_independent_pins_are_watertight_and_exported(self):
+        self.cube(40)
+        self.settings.connector_count = 2
+        self.settings.loose_pins = True
+        self.settings.kerf = 0.5
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        pieces = self.parts()
+        self.assertEqual(len(pieces), 4)
+        for part in pieces[:2]:
+            self.assertLess(self.checked(part), 40 * 40 * 19.75)
+        pin_area = 64 * sin(tau / 64) * 2.5**2 / 2
+        for pin in pieces[2:]:
+            self.assertAlmostEqual(self.checked(pin), pin_area * 8.5, places=3)
+        self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(self.directory)), {"FINISHED"})
+        self.assertEqual(len(list(self.directory.glob("*.stl"))), 4)
+
+    def test_obj_and_fbx_export_preserve_dimensions(self):
+        bpy.context.scene.unit_settings.system = "METRIC"
+        bpy.context.scene.unit_settings.scale_length = 0.001
+        self.cube()
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        for format_id in ("OBJ", "FBX"):
+            with self.subTest(format=format_id):
+                self.addon.operators.select_results(bpy.context, parts)
+                self.assertEqual(
+                    bpy.ops.tntmesh.export_stl(directory=str(self.directory), file_format=format_id),
+                    {"FINISHED"},
+                )
+                paths = sorted(self.directory.glob("*." + format_id.lower()))
+                self.assertEqual(len(paths), 2)
+                for path in paths:
+                    count = len(bpy.context.scene.objects)
+                    if format_id == "OBJ":
+                        result = bpy.ops.wm.obj_import(
+                            filepath=str(path), forward_axis="Y", up_axis="Z"
+                        )
+                    else:
+                        result = bpy.ops.import_scene.fbx(filepath=str(path), use_anim=False)
+                    self.assertEqual(result, {"FINISHED"})
+                    self.assertEqual(len(bpy.context.scene.objects), count + 1)
+                    self.assertAlmostEqual(self.checked(bpy.context.active_object), 24**3 / 2, places=2)
+
     def test_unsafe_connector_and_tangent_leave_no_geometry(self):
         source = self.cube()
         before_objects = set(bpy.data.objects.keys())
@@ -204,6 +325,26 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(bpy.ops.tntmesh.validate(), {"CANCELLED"})
         self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
         self.assertEqual(self.parts(), [])
+
+    def test_repair_closes_a_small_hole_on_a_copy(self):
+        source = self.cube()
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(source.data)
+            bm.faces.remove(next(iter(bm.faces)))
+            bm.to_mesh(source.data)
+        finally:
+            bm.free()
+        source.data.update()
+        before = set(bpy.data.objects.keys())
+        self.assertEqual(bpy.ops.tntmesh.repair(), {"CANCELLED"})
+        self.assertEqual(set(bpy.data.objects.keys()), before)
+        self.settings.repair_holes = True
+        self.assertEqual(bpy.ops.tntmesh.repair(), {"FINISHED"})
+        result = bpy.context.active_object
+        self.assertNotEqual(result, source)
+        self.assertEqual(len(source.data.polygons), 5)
+        self.assertAlmostEqual(self.checked(result), 24**3, places=3)
 
     def test_dependent_draft_saves_and_preserves_identity_on_rebuild(self):
         source = self.cube()
@@ -262,6 +403,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual({obj.as_pointer() for obj in bpy.context.selected_objects}, selected)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
         self.assertTrue(source.hide_get())
+
+    def test_rebuild_keeps_objects_duplicated_outside_draft_ownership(self):
+        self.cube()
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        part = self.parts()[0]
+        foreign_copy = part.copy()
+        foreign_copy.data = part.data.copy()
+        foreign_copy.name = "User copy"
+        part.users_collection[0].objects.link(foreign_copy)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        self.assertIs(bpy.context.scene.objects["User copy"], foreign_copy)
 
 
 if __name__ == "__main__":

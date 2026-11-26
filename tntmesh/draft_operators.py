@@ -10,8 +10,10 @@ from .model import DRAFT_ID, MeshError
 from .operators import MeshOperator, active_mesh, report_failure, select_results
 from .settings import TNTMESH_PG_settings
 
-GEOMETRY_PROPERTIES = ("axis", "offset", "kerf", "connector", "diameter", "insertion",
-                       "lateral", "axial", "wall")
+GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diameter", "insertion",
+                       "lateral", "axial", "wall", "connector_count", "loose_pins",
+                       "cut_kind", "cutter", "profile_size",
+                       "profile_shift", "curve_controls", "curve_samples")
 
 
 def copy_settings(source: TNTMESH_PG_settings, destination: TNTMESH_PG_settings) -> None:

@@ -8,12 +8,12 @@ from bpy.props import EnumProperty, StringProperty
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix
 
-from . import stl
+from . import draft, exporters, stl
 from .geometry.mesh import bounds, evaluated_mm, inspect
-from .geometry.planar import split
+from .geometry.repair import repair_copy
+from .geometry.volume import apply_cut
 from .localization import tr
 from .model import (
-    DRAFT_ID,
     PART_ID,
     PROJECT_ID,
     ROLE,
@@ -159,23 +159,23 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
             with GeometryTransaction() as transaction:
                 mesh, origin = evaluated_mm(context, source, transaction, unit)
                 wm.progress_update(1)
-                meshes = split(context, transaction, mesh, settings.config())
+                meshes = apply_cut(context, transaction, mesh, settings.config(), origin, unit, source)
                 wm.progress_update(2)
                 collection = owned_collection(context.scene, "part")
                 for index, result in enumerate(meshes, 1):
                     result.transform(Matrix.Scale(1.0 / unit, 4))
                     result.update()
-                    obj = transaction.object(collection, f"{source.name} · {index:02d}", result)
+                    label = tr("Pin {number}").format(number=index - 2) if index > 2 else f"{index:02d}"
+                    obj = transaction.object(collection, f"{source.name} · {label}", result)
                     obj.location = origin
                     identify_part(obj, project_id)
                     obj["tntmesh_parent_part_id"] = source.get(PART_ID, "")
-                    if source.get(DRAFT_ID):
-                        obj[DRAFT_ID] = source[DRAFT_ID]
                     parts.append(obj)
                 for obj in parts:
                     transaction.publish(obj)
             context.view_layer.update()
             select_results(context, parts)
+            draft.track_followups(context.scene, source, parts)
             if source.get(ROLE) == "part":
                 source[ROLE] = "superseded"
             if settings.hide_source:
@@ -187,7 +187,9 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
         finally:
             wm.progress_end()
             context.view_layer.update()
-        self.report({"INFO"}, tr("Created two pieces. The input mesh was kept."))
+        self.report(
+            {"INFO"}, tr("Created {count} pieces. The input mesh was kept.").format(count=len(parts))
+        )
         return {"FINISHED"}
 
 
@@ -214,12 +216,51 @@ class TNTMESH_OT_validate(bpy.types.Operator, MeshOperator):
         return {"FINISHED"}
 
 
+class TNTMESH_OT_repair(bpy.types.Operator, MeshOperator):
+    bl_idname = "tntmesh.repair"
+    bl_label = "Create Repaired Copy"
+    bl_description = "Weld close vertices and optionally fill simple holes on a new copy"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        source = active_mesh(context)
+        settings = context.scene.tntmesh_settings
+        unit = millimeters_per_unit(context.scene)
+        try:
+            with GeometryTransaction() as transaction:
+                mesh, origin = evaluated_mm(context, source, transaction, unit)
+                repair_copy(mesh, settings.repair_weld,
+                            settings.repair_hole_edges if settings.repair_holes else 0)
+                mesh.transform(Matrix.Scale(1.0 / unit, 4))
+                mesh.update()
+                collection = owned_collection(context.scene, "source")
+                name = tr("{name} · Repaired").format(name=source.name)
+                repaired = transaction.object(collection, name, mesh)
+                repaired.location = origin
+                repaired[ROLE] = "source"
+                repaired[PROJECT_ID] = uuid4().hex
+                transaction.publish(repaired)
+            context.view_layer.update()
+            select_results(context, [repaired])
+            if settings.hide_source and source.get(ROLE) != "part":
+                source.hide_set(True)
+        except (MeshError, RuntimeError, ValueError) as error:
+            return report_failure(self, error)
+        self.report({"INFO"}, tr("Created a closed repaired copy. The input mesh was kept."))
+        return {"FINISHED"}
+
+
 class TNTMESH_OT_export_stl(bpy.types.Operator):
     bl_idname = "tntmesh.export_stl"
-    bl_label = "Export STL Pieces"
-    bl_description = "Write one validated, millimeter-based STL per generated piece"
+    bl_label = "Export Pieces"
+    bl_description = "Write one STL, OBJ or FBX per generated piece"
 
     directory: StringProperty(subtype="DIR_PATH")
+    file_format: EnumProperty(
+        name="Format",
+        items=[("STL", "STL", ""), ("OBJ", "OBJ", ""), ("FBX", "FBX", "")],
+        default="STL",
+    )
     scope: EnumProperty(
         name="Pieces",
         items=[
@@ -239,6 +280,10 @@ class TNTMESH_OT_export_stl(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
+    def draw(self, context: bpy.types.Context) -> None:
+        self.layout.prop(self, "file_format")
+        self.layout.prop(self, "scope")
+
     def execute(self, context: bpy.types.Context) -> set[str]:
         pieces = managed_parts(context, self.scope)
         if not pieces:
@@ -247,14 +292,18 @@ class TNTMESH_OT_export_stl(bpy.types.Operator):
         if not self.directory or not path.is_dir():
             return report_failure(self, MeshError("Choose an existing destination folder."))
         try:
-            outputs = stl.export_parts(context, pieces, path)
+            outputs = exporters.export_parts(context, pieces, path, self.file_format)
         except (MeshError, OSError, RuntimeError, ValueError, OverflowError) as error:
             return report_failure(self, error)
-        self.report({"INFO"}, tr("Exported {count} STL file(s).").format(count=len(outputs)))
+        self.report(
+            {"INFO"}, tr("Exported {count} {format} file(s).").format(
+                count=len(outputs), format=self.file_format
+            ),
+        )
         return {"FINISHED"}
 
 
 CLASSES = (
     TNTMESH_OT_import_stl, TNTMESH_OT_resize, TNTMESH_OT_split,
-    TNTMESH_OT_validate, TNTMESH_OT_export_stl,
+    TNTMESH_OT_validate, TNTMESH_OT_repair, TNTMESH_OT_export_stl,
 )
