@@ -121,6 +121,13 @@ SPANISH = {
         "Marca los vértices dentro de esta distancia. Cero omite esta comprobación",
     "Small shell (mm³)": "Componente pequeño (mm³)",
     "Check intersections": "Buscar intersecciones",
+    "Minimum wall (mm)": "Grosor mínimo (mm)",
+    "Flag walls thinner than this limit. Zero skips the thickness check":
+        "Marca paredes por debajo de este grosor. Usa cero para omitir la revisión",
+    "Thin wall faces": "Caras con pared delgada",
+    "Wall check needs a closed solid.": "El grosor requiere un sólido cerrado.",
+    "Thinnest sample · {size:.3f} mm": "Menor grosor medido · {size:.3f} mm",
+    "No samples below {size:.3f} mm": "Sin muestras por debajo de {size:.3f} mm",
     "Choose nonnegative mesh tolerances.": "Usa tolerancias de malla de cero o mayores.",
     "No faces": "Sin caras",
     "Invalid coordinates": "Coordenadas inválidas",

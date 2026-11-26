@@ -687,6 +687,37 @@ class WorkflowTests(unittest.TestCase):
         findings = {item.kind: item.count for item in result.findings}
         self.assertEqual(findings, {"SHELLS": 3, "INTERNAL": 1, "INVERTED": 1})
 
+    def test_diagnostics_marks_hollow_walls_with_a_measured_thickness(self):
+        outer = self.cube(10)
+        inner = self.cube(8.8)
+        inner.data.flip_normals()
+        outer.select_set(True)
+        bpy.context.view_layer.objects.active = outer
+        bpy.ops.object.join()
+        geometry = self.addon.diagnostics_ui
+        self.assertEqual(bpy.ops.tntmesh.diagnose(wall_mm=.55), {"FINISHED"})
+        report = geometry.current(bpy.context).result
+        self.assertTrue(report.checked_walls)
+        self.assertIsNone(report.thinnest_wall_mm)
+        self.assertEqual(bpy.ops.tntmesh.diagnose(wall_mm=.8), {"FINISHED"})
+        preview = geometry.current(bpy.context)
+        thin, = (finding for finding in preview.result.findings if finding.kind == "THIN_WALL")
+        self.assertEqual(thin.count, 12)
+        self.assertAlmostEqual(preview.result.thinnest_wall_mm, .6, places=5)
+        for first, second in preview.marks["THIN_WALL"]:
+            self.assertAlmostEqual((first - second).length, .6, places=5)
+        self.assertEqual(bpy.ops.tntmesh.diagnostic_view(kind="THIN_WALL"), {"FINISHED"})
+        self.assertEqual(preview.kind, "THIN_WALL")
+
+    def test_diagnostics_reports_when_thickness_cannot_be_measured_on_an_open_sheet(self):
+        bpy.ops.mesh.primitive_plane_add(size=5)
+        self.assertEqual(bpy.ops.tntmesh.diagnose(wall_mm=1), {"FINISHED"})
+        report = self.addon.diagnostics_ui.current(bpy.context).result
+        self.assertEqual(report.wall_limit_mm, 1)
+        self.assertFalse(report.checked_walls)
+        self.assertIsNone(report.thinnest_wall_mm)
+        self.assertNotIn("THIN_WALL", {finding.kind for finding in report.findings})
+
     def test_diagnostics_find_duplicate_faces_and_nearby_vertices(self):
         bpy.ops.mesh.primitive_plane_add(size=5)
         first = bpy.context.active_object

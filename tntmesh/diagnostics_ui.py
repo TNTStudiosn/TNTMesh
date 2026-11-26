@@ -21,7 +21,7 @@ LABELS = {
     "FRAGMENT": "Small closed shells", "INTERSECTION": "Faces with intersections",
     "CAVITY": "Closed cavities", "INTERNAL": "Miswound internal shells",
     "INVERTED": "Inverted shells",
-    "COPLANAR": "Overlapping coplanar faces",
+    "COPLANAR": "Overlapping coplanar faces", "THIN_WALL": "Thin wall faces",
 }
 INFORMATIONAL = {"SHELLS", "CAVITY"}
 FINDINGS = [("ALL", "All Findings", "")] + [
@@ -91,13 +91,17 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
         name="Small shell (mm³)", min=0, default=.05, precision=4,
     )
     intersections: BoolProperty(name="Check intersections", default=True)
+    wall_mm: FloatProperty(
+        name="Minimum wall (mm)", min=0, default=0, precision=3,
+        description="Flag walls thinner than this limit. Zero skips the thickness check",
+    )
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         return context.window_manager.invoke_props_dialog(self, width=330)
 
     def draw(self, context: bpy.types.Context) -> None:
         self.layout.use_property_split = True
-        for name in ("weld_mm", "fragment_mm3", "intersections"):
+        for name in ("weld_mm", "fragment_mm3", "wall_mm", "intersections"):
             self.layout.prop(self, name)
 
     def execute(self, context: bpy.types.Context) -> set[str]:
@@ -112,7 +116,9 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
             with GeometryTransaction() as transaction:
                 mesh, origin = evaluated_mm(context, obj, transaction, unit)
                 wm.progress_update(1)
-                report = scan(mesh, self.weld_mm, self.fragment_mm3, intersections=self.intersections)
+                report = scan(
+                    mesh, self.weld_mm, self.fragment_mm3, intersections=self.intersections, wall_mm=self.wall_mm,
+                )
                 markers = {item.kind: [(origin + a / unit, origin + b / unit) for a, b in item.marks]
                            for item in report.findings if item.marks}
             context.view_layer.update()
@@ -126,9 +132,10 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
         finally:
             wm.progress_end()
             redraw(wm)
-        if any(item.kind not in INFORMATIONAL for item in report.findings):
+        issues = sum(item.kind not in INFORMATIONAL for item in report.findings)
+        if issues:
             self.report({"WARNING"}, tr("Mesh scan found {count} issue categories.").format(
-                count=len(report.findings),
+                count=issues,
             ))
         elif report.findings:
             self.report({"INFO"}, tr("Review the shells and cavities in Mesh Diagnostics."))
@@ -191,6 +198,15 @@ def controls(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
             row.label(text=text, translate=False)
     if not preview.result.checked_intersections:
         box.label(text="Intersection check skipped", icon="INFO")
+    if preview.result.wall_limit_mm:
+        if not preview.result.checked_walls:
+            box.label(text="Wall check needs a closed solid.", icon="INFO")
+        elif preview.result.thinnest_wall_mm is not None:
+            text = tr("Thinnest sample · {size:.3f} mm").format(size=preview.result.thinnest_wall_mm)
+            box.label(text=text, translate=False)
+        else:
+            text = tr("No samples below {size:.3f} mm").format(size=preview.result.wall_limit_mm)
+            box.label(text=text, translate=False)
     if preview.kind != "ALL":
         box.operator("tntmesh.diagnostic_view", text="All Findings").kind = "ALL"
     row = box.row(align=True)

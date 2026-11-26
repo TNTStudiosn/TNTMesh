@@ -13,6 +13,7 @@ from mathutils.kdtree import KDTree
 from ..model import MeshError
 from .coplanar import coplanar_faces
 from .mesh import VOLUME_EPSILON, bounds
+from .wall import thin_wall_samples
 
 MAX_MARKS = 256
 Marker = tuple[Vector, Vector]
@@ -31,6 +32,9 @@ class Diagnostics:
     shells: int
     volume_mm3: float | None
     checked_intersections: bool
+    wall_limit_mm: float = 0
+    checked_walls: bool = False
+    thinnest_wall_mm: float | None = None
 
 
 @dataclass(frozen=True)
@@ -141,14 +145,14 @@ def shell_volume(faces: list[bmesh.types.BMFace]) -> float:
 
 
 def scan(
-    mesh: bpy.types.Mesh, weld_mm: float, fragment_mm3: float, *, intersections: bool,
+    mesh: bpy.types.Mesh, weld_mm: float, fragment_mm3: float, *, intersections: bool, wall_mm: float = 0,
 ) -> Diagnostics:
-    if not all(isfinite(number) and number >= 0 for number in (weld_mm, fragment_mm3)):
+    if not all(isfinite(number) and number >= 0 for number in (weld_mm, fragment_mm3, wall_mm)):
         raise MeshError("Choose nonnegative mesh tolerances.")
     if not mesh.polygons:
-        return Diagnostics((Finding("EMPTY", 1, ()),), 0, None, False)
+        return Diagnostics((Finding("EMPTY", 1, ()),), 0, None, False, wall_mm)
     if any(not all(map(isfinite, vertex.co)) for vertex in mesh.vertices):
-        return Diagnostics((Finding("INVALID", 1, ()),), 0, None, False)
+        return Diagnostics((Finding("INVALID", 1, ()),), 0, None, False, wall_mm)
 
     counts: dict[str, int] = defaultdict(int)
     markers: dict[str, list[Marker]] = defaultdict(list)
@@ -246,5 +250,20 @@ def scan(
                 elif shell.volume < -VOLUME_EPSILON:
                     mark("INVERTED", shell.point)
 
+    wall_geometry_ok = topology_ok and not any(counts.get(kind) for kind in (
+        "VOLUME", "DEGENERATE", "DUP_FACE", "INTERSECTION", "COPLANAR", "INVERTED", "INTERNAL",
+    ))
+    checked_walls = wall_mm > 0 and wall_geometry_ok
+    thinnest = None
+    if checked_walls:
+        thin_faces = set()
+        for face, start, end in thin_wall_samples(mesh, coordinates, wall_mm):
+            thickness = (end - start).length
+            if thinnest is None or thickness < thinnest:
+                thinnest = thickness
+            if face not in thin_faces:
+                thin_faces.add(face)
+                mark("THIN_WALL", start, end)
+
     findings = tuple(Finding(kind, count, tuple(markers[kind])) for kind, count in counts.items())
-    return Diagnostics(findings, shell_count, volume, intersections)
+    return Diagnostics(findings, shell_count, volume, intersections, wall_mm, checked_walls, thinnest)

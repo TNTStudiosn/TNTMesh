@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added an optional thin-wall diagnosis for closed solids with a minimum thickness in millimeters.
+
 ## 0.3.0-alpha.5
 
 - Added closed-cavity and shell-orientation classification for disjoint closed surfaces.

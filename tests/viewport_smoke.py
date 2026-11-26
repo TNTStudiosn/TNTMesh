@@ -270,6 +270,24 @@ def capture_diagnostics():
     assert bpy.ops.tntmesh.diagnostic_view(kind="CLEAR") == {"FINISHED"}
 
 
+def start_wall_check():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        bpy.ops.mesh.primitive_cube_add(size=20, location=(0, 0, 19))
+        slab = bpy.context.object
+        slab.name = "0.6 mm wall"
+        slab.scale.z = .03
+        bpy.context.view_layer.update()
+        assert bpy.ops.tntmesh.diagnose(wall_mm=.8) == {"FINISHED"}
+        assert bpy.ops.tntmesh.diagnostic_view(kind="THIN_WALL", focus=True) == {"FINISHED"}
+    area.tag_redraw()
+
+
+def capture_wall_check():
+    screenshot("15-wall-thickness.png")
+    assert bpy.ops.tntmesh.diagnostic_view(kind="CLEAR") == {"FINISHED"}
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -407,7 +425,7 @@ insertion_steps = (
     if os.environ.get("TNTMESH_TEST_INSERTION") == "1" else ()
 )
 diagnostics_steps = (
-    (start_diagnostics, capture_diagnostics)
+    (start_diagnostics, capture_diagnostics, start_wall_check, capture_wall_check)
     if os.environ.get("TNTMESH_TEST_DIAGNOSTICS") == "1" else ()
 )
 steps = iter((
