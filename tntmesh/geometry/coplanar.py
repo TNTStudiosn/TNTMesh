@@ -1,48 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from collections.abc import Iterator
-from dataclasses import dataclass
 
 import bpy
 from mathutils import Vector
 
 from .polygon import Point2, signed_turn
+from .triangle_bounds import Box, Triangle, hierarchy, triangles_from
 
 DISTANCE_EPSILON = .00001
 AREA_EPSILON = DISTANCE_EPSILON**2
-LEAF_SIZE = 8
-
-
-@dataclass(frozen=True)
-class Triangle:
-    face: int
-    points: tuple[Vector, Vector, Vector]
-    normal: Vector
-    lower: Vector
-    upper: Vector
-
-
-@dataclass
-class Box:
-    lower: Vector
-    upper: Vector
-    items: list[Triangle]
-    children: tuple["Box", "Box"] | None = None
-
-
-def combined_limits(items: list[Triangle]) -> tuple[Vector, Vector]:
-    lower = Vector(tuple(min(item.lower[axis] for item in items) for axis in range(3)))
-    upper = Vector(tuple(max(item.upper[axis] for item in items) for axis in range(3)))
-    return lower, upper
-
-
-def hierarchy(items: list[Triangle]) -> Box:
-    lower, upper = combined_limits(items)
-    if len(items) <= LEAF_SIZE:
-        return Box(lower, upper, items)
-    longest = max(range(3), key=lambda axis: upper[axis] - lower[axis])
-    items.sort(key=lambda item: item.lower[longest] + item.upper[longest])
-    middle = len(items) // 2
-    return Box(lower, upper, [], (hierarchy(items[:middle]), hierarchy(items[middle:])))
 
 
 def touches(a: Box | Triangle, b: Box | Triangle) -> bool:
@@ -115,16 +81,7 @@ def pairs(a: Box, b: Box) -> Iterator[tuple[Triangle, Triangle]]:
 
 
 def coplanar_faces(mesh: bpy.types.Mesh, coordinates: list[Vector]) -> set[int]:
-    mesh.calc_loop_triangles()
-    triangles = []
-    for face in mesh.loop_triangles:
-        points = tuple(coordinates[index] for index in face.vertices)
-        cross = (points[1] - points[0]).cross(points[2] - points[0])
-        if cross.length_squared <= AREA_EPSILON**2:
-            continue
-        lower = Vector(tuple(min(point[axis] for point in points) for axis in range(3)))
-        upper = Vector(tuple(max(point[axis] for point in points) for axis in range(3)))
-        triangles.append(Triangle(face.polygon_index, points, cross.normalized(), lower, upper))
+    triangles = triangles_from(mesh, coordinates, minimum_area=AREA_EPSILON)
     if not triangles:
         return set()
     root = hierarchy(triangles)

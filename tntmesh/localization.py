@@ -238,13 +238,10 @@ SPANISH = {
     "Assembly Direction": "Dirección del ensamblaje",
     "Use the piece's suggested separation direction": "Usa la dirección de separación sugerida",
     "Travel distance (mm)": "Recorrido (mm)",
-    "Intervals": "Intervalos",
-    "Checks discrete positions.": "Comprueba posiciones discretas.",
-    "Smaller intervals detect more obstructions.": "Usa intervalos más cortos para detectar más obstáculos.",
-    "Choose an insertion direction, travel distance and step count.":
-        "Elige la dirección, el recorrido y la cantidad de intervalos.",
+    "Choose a valid insertion direction and travel distance.":
+        "Elige una dirección y una distancia de recorrido válidas.",
     "Blocked by {name} at {distance:.2f} mm.": "Bloqueo con {name} a {distance:.2f} mm.",
-    "No overlap at {count} sampled positions.": "Sin traslapes en {count} posiciones revisadas.",
+    "No overlap found along the insertion path.": "No se detectaron traslapes durante la inserción.",
     "Piece settings": "Ajustes de pieza",
     "Preview color": "Color de vista previa",
     "Explosion (mm)": "Separación visual (mm)",

@@ -4,6 +4,7 @@
 
 - Added closed-cavity and shell-orientation classification for disjoint closed surfaces.
 - Added positive-area coplanar overlap checks alongside crossing-surface checks.
+- Improved straight insertion checks with swept triangle contacts to find obstructions between fixed positions.
 
 ## 0.3.0-alpha.4
 

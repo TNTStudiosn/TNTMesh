@@ -9,6 +9,8 @@ from mathutils import Matrix, Vector
 
 from .geometry.boolean import ExactBoolean
 from .geometry.mesh import bounds, evaluated_mm, inspect
+from .geometry.sweep import box_interval, probe_positions
+from .geometry.triangle_bounds import hierarchy, triangles_from
 from .model import (
     ASSEMBLY_DIRECTION,
     PROJECT_ID,
@@ -171,16 +173,16 @@ def overlaps(
 
 def insertion_hit(
     context: bpy.types.Context, moving: bpy.types.Object, obstacles: list[bpy.types.Object],
-    direction: Vector, distance_mm: float, steps: int,
+    direction: Vector, distance_mm: float, steps: int = 1,
 ) -> InsertionHit | None:
     if (not all(map(isfinite, (*direction, distance_mm))) or direction.length_squared == 0
             or distance_mm <= 0 or steps < 1):
-        raise MeshError("Choose an insertion direction, travel distance and step count.")
+        raise MeshError("Choose a valid insertion direction and travel distance.")
     axis = direction.normalized()
     unit = millimeters_per_unit(context.scene)
     reference = moving.matrix_world.translation.copy()
     wm = context.window_manager
-    wm.progress_begin(0, steps + 1)
+    wm.progress_begin(0, max(1, len(obstacles)))
     try:
         with GeometryTransaction() as transaction:
             moving_body = create_body(context, transaction, moving, reference, unit)
@@ -192,24 +194,32 @@ def insertion_hit(
             nearby = [body for body in bodies if candidate_pair(*swept, body)]
             if not nearby:
                 return None
+            moving_points = [vertex.co.copy() for vertex in moving_body.mesh.vertices]
+            moving_tree = hierarchy(triangles_from(moving_body.mesh, moving_points))
             probe = transaction.own_mesh(moving_body.mesh.copy())
             engine = ExactBoolean(context, transaction)
-            for index in range(steps + 1):
-                distance = distance_mm * (steps - index) / steps
-                offset = axis * distance
-                candidates = [body for body in nearby if candidate_pair(
-                    moving_body.lower + offset, moving_body.upper + offset, body,
-                )]
-                if candidates:
-                    for original, vertex in zip(moving_body.mesh.vertices, probe.vertices, strict=True):
-                        vertex.co = original.co + offset
+            found = None
+            for index, body in enumerate(nearby, start=1):
+                low = found.distance_mm if found is not None else 0
+                window = box_interval(moving_tree, body, axis, (low, distance_mm))
+                if window is None:
+                    wm.progress_update(index)
+                    continue
+                points = [vertex.co.copy() for vertex in body.mesh.vertices]
+                obstacle = hierarchy(triangles_from(body.mesh, points))
+                for distance in probe_positions(moving_tree, obstacle, axis, window, steps, distance_mm):
+                    offset = axis * distance
+                    if not candidate_pair(moving_body.lower + offset, moving_body.upper + offset, body):
+                        continue
+                    for original, vertex in zip(moving_points, probe.vertices, strict=True):
+                        vertex.co = original + offset
                     probe.update()
-                    for body in candidates:
-                        volume = measure_intersection(engine, probe, body.mesh)
-                        if volume > VOLUME_NOISE:
-                            return InsertionHit(body.obj, distance, volume)
-                wm.progress_update(index + 1)
+                    volume = measure_intersection(engine, probe, body.mesh)
+                    if volume > VOLUME_NOISE:
+                        found = InsertionHit(body.obj, distance, volume)
+                        break
+                wm.progress_update(index)
+            return found
     finally:
         wm.progress_end()
         context.view_layer.update()
-    return None

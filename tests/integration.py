@@ -1004,15 +1004,38 @@ class WorkflowTests(unittest.TestCase):
         transforms = {obj: obj.matrix_world.copy() for obj in parts}
         meshes = set(bpy.data.meshes.keys())
         self.assertEqual(assembly.overlaps(bpy.context, parts), [])
-        self.assertIsNone(assembly.insertion_hit(bpy.context, moving, parts, Vector((1, 0, 0)), 10, 1))
-        hit = assembly.insertion_hit(bpy.context, moving, parts, Vector((1, 0, 0)), 10, 2)
+        hit = assembly.insertion_hit(bpy.context, moving, parts, Vector((1, 0, 0)), 10)
         self.assertEqual(hit.obstacle, blocker)
-        self.assertAlmostEqual(hit.distance_mm, 5)
-        self.assertAlmostEqual(hit.volume_mm3, 8)
+        self.assertGreater(hit.distance_mm, 5)
+        self.assertLess(hit.distance_mm, 7)
+        self.assertGreater(hit.volume_mm3, 0)
         self.assertIsNone(assembly.insertion_hit(bpy.context, moving, parts, Vector((-1, 0, 0)), 10, 2))
         self.assertEqual(bpy.ops.tntmesh.check_insertion(axis="+X", distance=10, steps=2), {"FINISHED"})
         self.assertEqual({obj: obj.matrix_world for obj in parts}, transforms)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+
+    def test_insertion_search_finds_a_thin_diagonal_obstacle_and_ignores_tangent_contact(self):
+        direction = Vector((3, 4, 0)).normalized()
+        moving = self.cube(.35)
+        thin = self.cube(.22)
+        thin.location = direction * 6.321
+        thin.rotation_euler.z = .61
+        tangent = self.cube(1)
+        tangent.location = direction * 9
+        tangent.location.z = (.35 + 1) / 2
+        bpy.context.view_layer.update()
+        assembly = self.addon.assembly
+        self.assertIsNone(assembly.insertion_hit(bpy.context, moving, [tangent], direction, 20))
+        hit = assembly.insertion_hit(bpy.context, moving, [thin, tangent], direction, 20)
+        self.assertEqual(hit.obstacle, thin)
+        self.assertGreater(hit.distance_mm, 6.321)
+        self.assertLess(hit.distance_mm, 6.8)
+        nearer_start = self.cube(.22)
+        nearer_start.location = direction * 12.11
+        bpy.context.view_layer.update()
+        first = assembly.insertion_hit(bpy.context, moving, [thin, nearer_start], direction, 20)
+        self.assertEqual(first.obstacle, nearer_start)
+        self.assertEqual(assembly.insertion_hit(bpy.context, moving, [nearer_start, thin], direction, 20), first)
 
     def test_assembly_visibility_and_copy_are_scoped_to_the_project(self):
         source = self.cube()

@@ -199,7 +199,7 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         *((axis, axis, "") for axis in ("+X", "-X", "+Y", "-Y", "+Z", "-Z")),
     ])
     distance: FloatProperty(name="Travel distance (mm)", default=25, min=.01, max=10000, precision=2)
-    steps: IntProperty(name="Intervals", default=25, min=1, max=150)
+    steps: IntProperty(default=1, min=1, max=150, options={"HIDDEN", "SKIP_SAVE"})
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -214,11 +214,8 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         if obj is not None:
             layout.label(text=obj.name, icon="MESH_DATA", translate=False)
         layout.use_property_split = True
-        for prop in ("axis", "distance", "steps"):
+        for prop in ("axis", "distance"):
             layout.prop(self, prop)
-        layout.separator()
-        layout.label(text="Checks discrete positions.", icon="INFO")
-        layout.label(text="Smaller intervals detect more obstructions.")
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         moving = assembly.current_member(context)
@@ -241,7 +238,7 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
                 name=hit.obstacle.name, distance=hit.distance_mm,
             ))
         else:
-            self.report({"INFO"}, tr("No overlap at {count} sampled positions.").format(count=self.steps + 1))
+            self.report({"INFO"}, tr("No overlap found along the insertion path."))
         return {"FINISHED"}
 
 
