@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added face alignment for straight and symmetric cut planes.
+
 ## 0.3.0-alpha.6
 
 - Added an optional thin-wall diagnosis for closed solids with a minimum thickness in millimeters.

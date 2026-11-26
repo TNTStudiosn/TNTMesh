@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import bpy
-from bpy.props import IntProperty
+from bpy.props import BoolProperty, IntProperty
 from bpy_extras.view3d_utils import region_2d_to_location_3d, region_2d_to_vector_3d
 from mathutils import Euler, Vector
 
@@ -97,6 +97,14 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
     bl_description = "Draw a line or contour in the 3D Viewport"
     bl_options = {"UNDO"}
 
+    align_face: BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
+
+    @classmethod
+    def description(cls, context: bpy.types.Context, properties: bpy.types.OperatorProperties) -> str:
+        if properties.align_face:
+            return tr("Orient the cut using a face normal and keep the current offset")
+        return tr(cls.bl_description)
+
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
         return (context.area is not None and context.area.type == "VIEW_3D"
@@ -113,11 +121,14 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         self._source = active_mesh(context)
         settings = context.scene.tntmesh_settings
         self._shape = settings.cut_kind
+        if self.align_face and self._shape not in {"PLANAR", "SYMMETRY"}:
+            return {"CANCELLED"}
         self._snapping = None
-        if settings.draw_snap != "VIEW":
+        snap = "SURFACE" if self.align_face else settings.draw_snap
+        if snap != "VIEW":
             try:
                 evaluated = self._source.evaluated_get(context.evaluated_depsgraph_get())
-                self._snapping = SurfacePicker(evaluated, settings.draw_snap)
+                self._snapping = SurfacePicker(evaluated, snap)
             except (MeshError, RuntimeError, ValueError) as error:
                 return report_failure(self, error)
         self._is_stroke = self._shape in {"PATH", "POLYGON"}
@@ -132,6 +143,8 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             "POLYGON": "Click points or Shift-drag · Enter to close · Esc to cancel",
             "PATH": "Click points or Shift-drag · Enter to finish · Esc to cancel",
         }.get(self._shape, "Click the first point of the cut · Esc to cancel")
+        if self.align_face:
+            instruction = "Click a face to align the cut · Esc to cancel"
         self._area.header_text_set(tr(instruction))
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
@@ -171,6 +184,8 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             return {"RUNNING_MODAL"}
 
         click = self._pick(x, y)
+        if self.align_face:
+            return self._finish_alignment(context, click)
         if self._is_stroke:
             self._dragging = event.shift
             self._add_contour_point(click)
@@ -192,6 +207,17 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         settings = context.scene.tntmesh_settings
         settings.rotation = rotation
         settings.offset = offset
+        settings.axis = "FREE"
+        settings.show_plane = True
+        self.cleanup()
+        return {"FINISHED"}
+
+    def _finish_alignment(self, context: bpy.types.Context, point: CursorPoint) -> set[str]:
+        if point.normal is None or point.normal.length_squared == 0:
+            self.report({"WARNING"}, tr("Choose a face on the active mesh."))
+            return {"RUNNING_MODAL"}
+        settings = context.scene.tntmesh_settings
+        settings.rotation = stable_euler(point.normal.to_track_quat("Z", "Y").to_euler("XYZ"))
         settings.axis = "FREE"
         settings.show_plane = True
         self.cleanup()

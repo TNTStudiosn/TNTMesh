@@ -22,6 +22,8 @@ El corte recto se puede orientar con un eje, rotación numérica o una línea en
 
 En **Ajuste**, elige el plano de la vista o la superficie de la malla activa. **Vértice** y **Arista** buscan un punto cercano en la cara bajo el cursor. Cuando no hay ningún vértice o arista cerca, usan la superficie. Los puntos fuera de la malla usan el plano de la vista. El ajuste también está disponible al dibujar cortes rectos, simétricos y contornos cerrados.
 
+En **Directo** y **Cortes simétricos**, pulsa **Alinear con cara** y elige una cara de la malla activa. La normal de la cara fija la orientación del plano y el desplazamiento sigue controlando la distancia al centro del modelo.
+
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 
 En **Reparar**, activa **Corregir orientación de caras** para corregir la orientación de caras vecinas y de las superficies cerradas según su profundidad de anidamiento. La copia conserva las cavidades y los sólidos separados. La reparación se detiene si las superficies se cruzan o si el anidamiento es ambiguo.

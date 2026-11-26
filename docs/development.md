@@ -28,6 +28,8 @@ Custom connectors take two closed mesh templates with matching object origins at
 
 Set **Snap** to use the view plane or the surface of the active mesh. **Vertex** and **Edge** take a nearby point on the face under the cursor and fall back to the surface when no feature is close enough. Outside the model, points use the view plane. These options also work when drawing straight and symmetric cuts or closed contours.
 
+For **Straight** and **Symmetric Cuts**, click **Align to Face**, then click a face of the active mesh. The selected normal sets the plane orientation and the current offset still controls its distance from the model center.
+
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 
 Printer profiles are saved with the scene and can be moved between projects as schema-versioned JSON. The fit check uses world-space dimensions and subtracts the configured margin on each side of each axis. Alternative orientations permute the three axes. Split to Fit applies successive straight cuts and validates the remaining dimensions before publishing the resulting pieces.

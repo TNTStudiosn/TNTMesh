@@ -406,9 +406,26 @@ def verify_drawing_snap():
             pixel = location_3d_to_region_2d(region, view, Vector(near))
             pick = picker(evaluated, mode).pick(region, view, pixel)
             assert (pick.surface - Vector(expected)).length < .002, (mode, tuple(pick.surface))
+            assert pick.normal.dot(Vector((0, 0, 1))) > .9999
     finally:
         view.view_rotation, view.view_perspective = previous
         view.update()
+
+
+def start_face_alignment():
+    window, area, region = viewport()
+    settings = bpy.context.scene.tntmesh_settings
+    settings.offset = 2
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.draw_plane("INVOKE_DEFAULT", align_face=True) == {"RUNNING_MODAL"}
+
+
+def verify_face_alignment():
+    settings = bpy.context.scene.tntmesh_settings
+    assert settings.axis == "FREE" and settings.offset == 2 and settings.show_plane
+    screenshot("18-align-face.png")
+    settings.axis = "Z"
+    settings.offset = 0
 
 
 def open_export_browser():
@@ -455,7 +472,10 @@ path_steps = (
     lambda: contour_click(.46, .56), lambda: contour_click(.54, .48),
     finish_contour, verify_manual_path,
 ) if line_steps and os.environ.get("TNTMESH_TEST_PATH") == "1" else ()
-snap_steps = (verify_drawing_snap,) if path_steps else ()
+snap_steps = (
+    (verify_drawing_snap, start_face_alignment, lambda: contour_click(.45, .50), verify_face_alignment)
+    if path_steps else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )

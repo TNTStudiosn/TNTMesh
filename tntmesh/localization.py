@@ -78,6 +78,12 @@ SPANISH = {
     "Manual Path": "Trazo manual",
     "Split along an open path drawn in the viewport": "Divide el modelo con un trazo abierto en la Vista 3D",
     "Draw Path": "Dibujar trazo",
+    "Align to Face": "Alinear con cara",
+    "Orient the cut using a face normal and keep the current offset":
+        "Orienta el corte con la normal de una cara y conserva el desplazamiento actual",
+    "Click a face to align the cut · Esc to cancel":
+        "Haz clic en una cara para alinear el corte · Esc para cancelar",
+    "Choose a face on the active mesh.": "Elige una cara de la malla activa.",
     "Path smoothing": "Suavizado del trazo",
     "Snap": "Ajuste",
     "View Plane": "Plano de la vista",

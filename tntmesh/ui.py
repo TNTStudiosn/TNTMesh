@@ -259,6 +259,8 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 )
                 cut.prop(settings, "draw_snap")
                 cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=draw_label)
+                if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
+                    cut.operator("tntmesh.draw_plane", icon="FACESEL", text="Align to Face").align_face = True
             if settings.cut_kind != "OBJECT":
                 preview_label = {
                     "PLANAR": "Show plane", "REGION": "Highlight region", "SYMMETRY": "Show both planes",

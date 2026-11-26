@@ -20,6 +20,7 @@ SNAP_RADIUS = 12
 class CursorPoint:
     screen: Vector
     surface: Vector | None = None
+    normal: Vector | None = None
 
 
 class SurfacePicker:
@@ -27,6 +28,7 @@ class SurfacePicker:
         self.mode = mode
         self.world = obj.matrix_world.copy()
         self.inverse = self.world.inverted_safe()
+        self.normal_transform = self.inverse.to_3x3().transposed()
         self.coordinates = [vertex.co.copy() for vertex in obj.data.vertices]
         self.faces = [tuple(face.vertices) for face in obj.data.polygons]
         self.tree = BVHTree.FromPolygons(self.coordinates, self.faces)
@@ -41,10 +43,11 @@ class SurfacePicker:
         else:
             origin = region_2d_to_location_3d(region, view, pixel, self.center) - direction * self.span
         local_direction = (self.inverse.to_3x3() @ direction).normalized()
-        point, _, face, _ = self.tree.ray_cast(self.inverse @ origin, local_direction)
+        point, normal, face, _ = self.tree.ray_cast(self.inverse @ origin, local_direction)
         if point is None:
             return CursorPoint(pixel)
-        nearest = CursorPoint(pixel, self.world @ point)
+        surface_normal = (self.normal_transform @ normal).normalized()
+        nearest = CursorPoint(pixel, self.world @ point, surface_normal)
         if self.mode == "SURFACE":
             return nearest
 
@@ -67,7 +70,7 @@ class SurfacePicker:
             squared = (candidate - pixel).length_squared
             if squared < distance:
                 distance = squared
-                nearest = CursorPoint(candidate, world)
+                nearest = CursorPoint(candidate, world, surface_normal)
         return nearest
 
 
