@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.3.0-alpha.13
+## 0.3.0-alpha.14
 
 - Added tapered cylindrical, square, rectangular, triangular, octagonal, oval, D-shaped, star, cross, and tongue-and-groove profiles.
 - Added profile rotation, independent dimensions, true side offsets, and footprint-based checks for the new profiles.
 - Extended cuts, drafts, connector layouts, and calibration kits to use the same profile geometry.
+- Account for mesh-coordinate roundoff when measuring contact on assembled seams.
 
 ## 0.3.0-alpha.12
 

@@ -1986,6 +1986,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual({obj: obj.matrix_world for obj in parts}, transforms)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
 
+    def test_oblique_seam_discards_mesh_roundoff_and_reports_a_measurable_overlap(self):
+        from mathutils import Euler
+
+        first = self.cube(2)
+        second = self.cube(2)
+        angle = Euler((.39, .31, 0))
+        normal = angle.to_matrix() @ Vector((0, 0, 1))
+        for obj in (first, second):
+            obj.scale = (10, 10, 2)
+            obj.rotation_euler = angle
+        second.location = normal * (4 - .0000004)
+        bpy.context.view_layer.update()
+        assembly = self.addon.assembly
+        self.assertEqual(assembly.overlaps(bpy.context, [first, second]), [])
+        second.location = normal * (4 - .005)
+        bpy.context.view_layer.update()
+        collision, = assembly.overlaps(bpy.context, [first, second])
+        self.assertAlmostEqual(collision[2], 2, delta=.002)
+
     def test_insertion_search_finds_a_thin_diagonal_obstacle_and_ignores_tangent_contact(self):
         direction = Vector((3, 4, 0)).normalized()
         moving = self.cube(.35)

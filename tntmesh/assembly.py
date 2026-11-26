@@ -27,6 +27,7 @@ from .model import (
 )
 
 CONTACT_EPSILON = 0.001
+MESH_FLOAT_EPSILON = 2 ** -23
 MAX_ROTARY_TESTS = 2048
 
 
@@ -159,7 +160,14 @@ def measure_intersection(
 ) -> float:
     intersection = engine.run(first, second, "INTERSECT")
     try:
-        return absolute_volume(intersection)
+        volume = absolute_volume(intersection)
+        if volume <= BOOLEAN_VOLUME_NOISE:
+            return 0.0
+        scale = max(abs(coordinate) for vertex in intersection.vertices for coordinate in vertex.co)
+        # A surface displaced by one mesh-coordinate ULP can report area times
+        # that displacement as volume, even where two assembled faces touch.
+        roundoff = sum(face.area for face in intersection.polygons) * scale * MESH_FLOAT_EPSILON
+        return volume if volume > roundoff else 0.0
     finally:
         engine.transaction.remove_mesh(intersection)
 
