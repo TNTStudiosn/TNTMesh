@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.12
 
 - Added sampled insertion checks for rotation with optional translation and a configurable pivot.
+- Added sliding dovetails for straight and symmetric cuts, with measured wall and clearance checks and automatic or editable rail placement.
+- Added dovetail settings to drafts and clipboard transfer, an exit arrow in the cut preview, and slide guidance for assembly checks.
 
 ## 0.3.0-alpha.11
 

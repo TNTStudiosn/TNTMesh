@@ -108,6 +108,129 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result.shells, shells)
             return result.volume_mm3
 
+    def test_dovetail_rails_slide_out_and_hold_against_normal_pull(self):
+        from mathutils.bvhtree import BVHTree
+
+        context = bpy.context
+        source = self.cube(36)
+        self.settings.connector = "DOVETAIL"
+        self.settings.kerf = .2
+        for x in (-8, 8):
+            self.settings.connector_points.add().position = (x, 3)
+        original = source.data
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        male, female = self.parts()
+        self.assertEqual(source.data, original)
+        expected = 36 * 36 * 17.9 + 2 * (3 * 5 + .2 * 4) * 7
+        self.assertAlmostEqual(self.checked(male), expected, delta=.03)
+        self.assertLess(self.checked(female), 36 * 36 * 17.9 - 400)
+        socket = BVHTree.FromPolygons([v.co for v in female.data.vertices],
+                                      [tuple(p.vertices) for p in female.data.polygons])
+        start = Vector((-8, 3, 1.6))
+        point, _, _, _ = socket.ray_cast(start, Vector((1, 0, 0)))
+        self.assertAlmostEqual(point.x - start.x, 2 + 1.5 / 3 + .15 * sqrt(1 + (1 / 3)**2), places=4)
+        point, _, _, _ = socket.ray_cast(start, Vector((0, 0, 1)))
+        self.assertAlmostEqual(point.z, .1 + 3.15, places=4)
+        point, _, _, _ = socket.ray_cast(start, Vector((0, -1, 0)))
+        self.assertAlmostEqual(point.y, -.7, places=4)
+        assembly = self.addon.assembly
+        axis = assembly.slide_direction(male, context.evaluated_depsgraph_get())
+        self.assertEqual(tuple(axis), (0, 1, 0))
+        travel = assembly.slide_travel(context, male, [male, female], axis)
+        self.assertAlmostEqual(travel, 37)
+        self.assertEqual(assembly.overlaps(context, [male, female]), [])
+        self.assertIsNone(assembly.insertion_hit(context, male, [female], axis, travel))
+        hit = assembly.insertion_hit(context, male, [female], Vector((0, 0, -1)), 7)
+        self.assertIsNotNone(hit)
+        self.assertGreater(hit.volume_mm3, .00001)
+        self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(self.directory)), {"FINISHED"})
+        self.assertEqual(len(list(self.directory.glob("*.stl"))), 2)
+
+    def test_dovetail_suggestion_clipboard_and_positive_side_keep_the_exit_direction(self):
+        self.cube(34)
+        settings = self.settings
+        settings.connector = "DOVETAIL"
+        settings.dovetail_angle = tau / 4
+        settings.pin_positive = True
+        settings.loose_pins = True
+        settings.connector_count = 2
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        positions = [tuple(point.position) for point in settings.connector_points]
+        self.assertEqual(len(positions), 2)
+        ui = self.addon.connector_ui
+        design = settings.dovetail_config(len(positions))
+        payload = ui.encode(design, tuple(positions), settings.pin_positive)
+        settings.connector = "ROUND"
+        settings.dovetail_angle = 0
+        settings.connector_points.clear()
+        design, copied_positions, positive = ui.decode(payload)
+        ui.check_positions(bpy.context, settings, design, copied_positions, positive)
+        ui.apply_setup(settings, design, copied_positions, positive)
+        self.assertEqual(settings.connector, "DOVETAIL")
+        self.assertEqual([tuple(point.position) for point in settings.connector_points], positions)
+        self.assertTrue(settings.pin_positive)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        female, male = self.parts()
+        self.assertGreater(self.checked(male), 34**3 / 2 + 200)
+        self.assertLess(self.checked(female), 34**3 / 2 - 300)
+        axis = self.addon.assembly.slide_direction(male, bpy.context.evaluated_depsgraph_get())
+        self.assertAlmostEqual(axis.x, -1, places=5)
+        self.assertAlmostEqual(axis.y, 0, places=5)
+
+    def test_dovetail_draft_checks_wall_before_replacing_the_previous_build(self):
+        self.cube(24)
+        self.settings.connector = "DOVETAIL"
+        self.settings.dovetail_height = 4.2
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        plan = bpy.context.scene.tntmesh_drafts[0]
+        cut = plan.cuts[0].settings
+        self.assertAlmostEqual(cut.dovetail_height, 4.2, places=5)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        previous = self.parts()
+        meshes = tuple(bpy.data.meshes.keys())
+        cut.lateral = 2
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        cut.lateral = .15
+        cut.wall = 14
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), previous)
+        self.assertEqual(tuple(bpy.data.meshes.keys()), meshes)
+
+    def test_dovetail_symmetric_cut_preserves_both_sliding_joints(self):
+        self.cube(32)
+        self.settings.connector = "DOVETAIL"
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.axis = "X"
+        self.settings.symmetry_axis = "X"
+        self.settings.offset = -8
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        left, middle, right = self.parts()
+        self.assertAlmostEqual(self.checked(left), self.checked(right), delta=.02)
+        self.assertGreater(self.checked(left), 32 * 32 * 8)
+        self.assertLess(self.checked(middle), 32 * 32 * 16)
+        self.assertEqual(self.addon.assembly.overlaps(bpy.context, self.parts()), [])
+        for moving in (left, right):
+            axis = self.addon.assembly.slide_direction(moving, bpy.context.evaluated_depsgraph_get())
+            self.assertIsNotNone(axis)
+            self.assertIsNone(self.addon.assembly.insertion_hit(bpy.context, moving, self.parts(), axis, 33))
+
+    def test_dovetail_rejects_a_channel_that_reaches_a_disconnected_body(self):
+        source = self.cube(24)
+        obstruction = self.cube(4)
+        obstruction.location = (0, 18, 3)
+        source.select_set(True)
+        bpy.context.view_layer.objects.active = source
+        bpy.ops.object.join()
+        self.settings.connector = "DOVETAIL"
+        self.settings.kerf = .2
+        self.settings.connector_points.add().position = (0, 0)
+        meshes = tuple(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(tuple(bpy.data.meshes.keys()), meshes)
+        self.assertEqual(bpy.context.active_object.data, source.data)
+
     def test_resin_hollow_preserves_source_and_suggested_drain_exports_a_plug(self):
         scene = bpy.context.scene
         scene.unit_settings.system = "METRIC"

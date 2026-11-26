@@ -15,6 +15,7 @@ GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diame
                        "pin_template", "socket_template",
                        "magnet_shape", "magnet_width", "magnet_length", "magnet_thickness",
                        "magnet_inset", "magnet_adhesive", "magnet_angle",
+                       "dovetail_neck", "dovetail_head", "dovetail_height", "dovetail_length", "dovetail_angle",
                        "cut_kind", "cutter", "profile_size",
                        "profile_shift", "curve_controls", "curve_samples", "contour_depth", "path_smoothing",
                        "region_method", "region_depth", "region_slot", "region_attribute",

@@ -192,7 +192,8 @@ def draw_plane() -> None:
                     coordinates = [*coordinates, coordinates[0]]
                 shader.uniform_float("color", (*color, 0.9))
                 batch_for_shader(shader, "LINE_STRIP", {"pos": coordinates}).draw(shader)
-        if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET"} and settings.connector_points:
+        if (settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET", "DOVETAIL"}
+                and settings.connector_points):
             from .draw_cut import model_pivot
 
             origin = model_pivot(obj.evaluated_get(context.evaluated_depsgraph_get()))
@@ -200,6 +201,8 @@ def draw_plane() -> None:
             height = (lower.z + upper.z) / 2 + settings.offset / unit
             if settings.connector == "MAGNET":
                 outline = settings.magnet_config(1).profile()
+            elif settings.connector == "DOVETAIL":
+                outline = settings.dovetail_config(1).footprint()
             else:
                 profile = settings.standard_connector(settings.connector, 1)
                 radius = profile.socket_radius
@@ -213,6 +216,18 @@ def draw_plane() -> None:
                 ring = [frame @ Vector((center.x + (x + a) / unit, center.y + (y + b) / unit, height))
                         for a, b in outline]
                 batch_for_shader(shader, "LINE_STRIP", {"pos": [*ring, ring[0]]}).draw(shader)
+                if settings.connector == "DOVETAIL":
+                    angle = settings.dovetail_angle
+                    direction = frame @ Vector((-sin(angle), cos(angle), 0))
+                    across = frame @ Vector((cos(angle), sin(angle), 0))
+                    root = frame @ Vector((center.x + x / unit, center.y + y / unit, height))
+                    tip = root + direction * (settings.dovetail_length / 2 + 3) / unit
+                    back = tip - direction * 1.25 / unit
+                    shader.uniform_float("color", (0, 1, 1, 1))
+                    batch_for_shader(shader, "LINES", {"pos": (
+                        root, tip, tip, back + across * .75 / unit, tip, back - across * .75 / unit,
+                    )}).draw(shader)
+                    shader.uniform_float("color", (.78, .55, 1, 1))
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)

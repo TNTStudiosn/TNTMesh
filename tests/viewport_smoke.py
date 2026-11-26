@@ -122,12 +122,12 @@ def start_printer_preview():
     area.tag_redraw()
 
 
-def toggle_smoke_panel(vertical_offset):
+def toggle_smoke_panel(vertical_offset, horizontal_offset=13):
     window, area, _ = viewport()
     sidebar = next(region for region in area.regions if region.type == "UI")
     for value in ("PRESS", "RELEASE"):
         window.event_simulate(
-            type="LEFTMOUSE", value=value, x=sidebar.x + 13, y=window.height - vertical_offset,
+            type="LEFTMOUSE", value=value, x=sidebar.x + horizontal_offset, y=window.height - vertical_offset,
         )
 
 
@@ -616,6 +616,40 @@ def reset_magnet_preview():
     settings.connector_points.clear()
 
 
+def setup_dovetail_preview():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        settings.connector = "DOVETAIL"
+        settings.dovetail_angle = .35
+        settings.show_cut_handle = False
+        bpy.context.preferences.view.language = "es"
+        bpy.context.preferences.view.use_translate_interface = True
+        assert bpy.ops.tntmesh.suggest_connectors() == {"FINISHED"}
+        assert len(settings.connector_points) == 1 and settings.show_plane
+    area.tag_redraw()
+
+
+def capture_dovetail_preview():
+    screenshot("28-dovetail.png")
+    assert bpy.ops.tntmesh.connector_point(action="CLEAR") == {"FINISHED"}
+
+
+def aim_for_dovetail():
+    from bpy_extras.view3d_utils import location_3d_to_region_2d
+    from mathutils import Vector
+
+    window, area, region = viewport()
+    point = location_3d_to_region_2d(region, area.spaces.active.region_3d, Vector((4, 3, 0)))
+    window.event_simulate(type="MOUSEMOVE", value="NOTHING", x=region.x + round(point.x),
+                          y=region.y + round(point.y))
+
+
+def reset_dovetail_preview():
+    reset_magnet_preview()
+    bpy.context.scene.tntmesh_settings.show_cut_handle = True
+
+
 def prepare_resin():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -741,6 +775,13 @@ magnet_steps = (
      lambda: scroll_magnet_details(up=True), lambda: toggle_smoke_panel(570), reset_magnet_preview)
     if os.environ.get("TNTMESH_TEST_MAGNET") == "1" else ()
 )
+dovetail_steps = (
+    (setup_dovetail_preview, lambda: toggle_smoke_panel(597, 30), scroll_magnet_details,
+     capture_dovetail_preview, lambda: scroll_magnet_details(up=True),
+     lambda: toggle_smoke_panel(597, 30), start_connector_placement, aim_for_dovetail,
+     click_connector_position, verify_connector_placement, reset_dovetail_preview)
+    if line_steps and os.environ.get("TNTMESH_TEST_DOVETAIL") == "1" else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -792,7 +833,7 @@ resin_steps = (
 )
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps,
-    *magnet_steps, *phase3_steps,
+    *magnet_steps, *dovetail_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *estimate_steps, *resin_steps,

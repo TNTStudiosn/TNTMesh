@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from collections.abc import Iterator
 from contextlib import contextmanager
+from math import cos, sin
 
 import bpy
 from bpy.props import EnumProperty, FloatProperty, IntProperty
@@ -12,9 +13,16 @@ from .geometry.connector import Connector
 from .geometry.connector_auto import suggest
 from .geometry.connector_clipboard import decode, encode
 from .geometry.connector_pattern import contour_points, pattern_points
+from .geometry.dovetail import Dovetail
 from .geometry.magnet import Magnet
 from .geometry.mesh import evaluated_mm
-from .geometry.planar import PlaneSplit, axis_frame, split_plane, validate_positions
+from .geometry.planar import (
+    PlaneSplit,
+    axis_frame,
+    dovetail_positions,
+    split_plane,
+    validate_positions,
+)
 from .geometry.polygon import Point2
 from .localization import tr
 from .model import GeometryTransaction, MeshError, millimeters_per_unit
@@ -44,9 +52,11 @@ def plane_available(context: bpy.types.Context, settings: TNTMESH_PG_settings | 
     return active_mesh(context) is not None
 
 
-def connector_design(settings: TNTMESH_PG_settings, count: int) -> Connector | Magnet:
+def connector_design(settings: TNTMESH_PG_settings, count: int) -> Connector | Dovetail | Magnet:
     if settings.connector == "MAGNET":
         return settings.magnet_config(count)
+    if settings.connector == "DOVETAIL":
+        return settings.dovetail_config(count)
     return settings.standard_connector(settings.connector, count)
 
 
@@ -91,11 +101,11 @@ def set_valid_positions(
 
 
 def check_positions(
-    context: bpy.types.Context, settings: TNTMESH_PG_settings, design: Connector | Magnet,
+    context: bpy.types.Context, settings: TNTMESH_PG_settings, design: Connector | Dovetail | Magnet,
     positions: tuple[Point2, ...], positive: bool,
 ) -> None:
     with preview_split(context, settings) as (engine, cut, frame):
-        flip = positive and isinstance(design, Connector) and not design.loose
+        flip = positive and (isinstance(design, Dovetail) or (isinstance(design, Connector) and not design.loose))
         validate_positions(engine, cut, frame, settings.kerf, design, positions, flip)
 
 
@@ -117,17 +127,23 @@ class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
         try:
             with preview_split(context, settings) as (engine, plane, frame):
                 wm.progress_update(1)
-                baseline = settings.standard_connector("ROUND", 1)
-                baseline.validate()
-                result = suggest(engine, plane, frame, settings.kerf, baseline)
-            apply_setup(settings, result.connector, result.positions, result.pin_positive)
+                if settings.connector == "DOVETAIL":
+                    design = settings.dovetail_config(settings.connector_count)
+                    positive = settings.pin_positive
+                    positions = dovetail_positions(engine, plane, frame, settings.kerf, design, (), positive)
+                else:
+                    baseline = settings.standard_connector("ROUND", 1)
+                    baseline.validate()
+                    result = suggest(engine, plane, frame, settings.kerf, baseline)
+                    design, positions, positive = result.connector, result.positions, result.pin_positive
+            apply_setup(settings, design, positions, positive)
             wm.progress_update(2)
         except (MeshError, RuntimeError, ValueError) as error:
             return report_failure(self, error)
         finally:
             wm.progress_end()
         self.report({"INFO"}, tr("Suggested {count} connector(s). Review the cut settings.").format(
-            count=result.connector.count,
+            count=design.count,
         ))
         return {"FINISHED"}
 
@@ -161,7 +177,12 @@ class TNTMESH_OT_connector_point(bpy.types.Operator):
             selected = min(settings.connector_point_index, len(points) - 1)
             x, y = points[selected].position if points else (0, 0)
             if points:
-                x += 2 * connector_design(settings, 1).envelope + 1
+                design = connector_design(settings, 1)
+                if isinstance(design, Dovetail):
+                    gap = 2 * design.envelope + 1
+                    x, y = x + cos(design.angle) * gap, y + sin(design.angle) * gap
+                else:
+                    x += 2 * design.envelope + 1
             points.add().position = (x, y)
             settings.connector_point_index = len(points) - 1
         elif self.action == "REMOVE":
@@ -182,13 +203,19 @@ class TNTMESH_UL_connector_points(bpy.types.UIList):
 
 
 def apply_setup(
-    settings: TNTMESH_PG_settings, design: Connector, positions: tuple[Point2, ...], positive: bool,
+    settings: TNTMESH_PG_settings, design: Connector | Dovetail, positions: tuple[Point2, ...], positive: bool,
 ) -> None:
-    settings.connector = design.shape
-    for name in ("diameter", "insertion", "wall", "lateral", "axial"):
+    if isinstance(design, Dovetail):
+        settings.connector = "DOVETAIL"
+        for name in ("neck", "head", "height", "length", "angle"):
+            setattr(settings, f"dovetail_{name}", getattr(design, name))
+        settings.loose_pins = False
+    else:
+        settings.connector = design.shape
+        settings.diameter, settings.insertion, settings.loose_pins = design.diameter, design.insertion, design.loose
+    for name in ("wall", "lateral", "axial"):
         setattr(settings, name, getattr(design, name))
     settings.connector_count = design.count
-    settings.loose_pins = design.loose
     settings.pin_positive = positive
     set_positions(settings, positions)
 
@@ -217,9 +244,9 @@ class TNTMESH_OT_connector_transfer(bpy.types.Operator):
         settings = linear_settings(context)
         current = tuple(tuple(point.position) for point in settings.connector_points)
         if self.action == "COPY":
-            if settings.connector not in {"ROUND", "HEX"}:
+            if settings.connector not in {"ROUND", "HEX", "DOVETAIL"}:
                 return {"CANCELLED"}
-            design = settings.standard_connector(settings.connector, len(current) or settings.connector_count)
+            design = connector_design(settings, len(current) or settings.connector_count)
             context.window_manager.clipboard = encode(design, current, settings.pin_positive)
             self.report({"INFO"}, tr("Copied connector setup."))
             return {"FINISHED"}
@@ -288,7 +315,8 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
                     positions = contour_points(cut, frame, settings.kerf, self.count, self.setback, self.angle)
                     validate_positions(
                         engine, cut, frame, settings.kerf, design, positions,
-                        settings.pin_positive and isinstance(design, Connector) and not design.loose,
+                        settings.pin_positive and (isinstance(design, Dovetail)
+                                                   or (isinstance(design, Connector) and not design.loose)),
                     )
                 set_positions(settings, positions)
             else:
@@ -302,7 +330,7 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
 
 def positions(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
     points = settings.connector_points
-    if settings.connector != "MAGNET" and not settings.loose_pins:
+    if settings.connector == "DOVETAIL" or (settings.connector != "MAGNET" and not settings.loose_pins):
         layout.prop(settings, "pin_positive")
     layout.operator("tntmesh.connector_pattern", icon="MOD_ARRAY")
     if not points:

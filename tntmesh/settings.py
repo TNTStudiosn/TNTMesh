@@ -14,6 +14,7 @@ from bpy.props import (
 from .geometry.base import BaseCut, ContactOverride
 from .geometry.connector import Connector
 from .geometry.custom_connector import CustomConnector
+from .geometry.dovetail import Dovetail
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.region import RegionCut
@@ -110,6 +111,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("HEX", "Hexagonal", "Add a hexagonal pin and matching socket"),
             ("CUSTOM", "Custom Mesh", "Use a shaped pin mesh and a matching socket cutter"),
             ("MAGNET", "Magnets", "Cut pockets on both sides for purchased magnets"),
+            ("DOVETAIL", "Dovetail", "Add an integrated sliding rail and an open-ended groove"),
         ],
         default="ROUND",
     )
@@ -151,6 +153,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         default=.15, min=0, precision=2,
     )
     magnet_angle: FloatProperty(name="Magnet rotation", subtype="ANGLE", unit="ROTATION")
+    dovetail_neck: FloatProperty(name="Neck (mm)", default=4, min=.01, precision=2)
+    dovetail_head: FloatProperty(name="Head (mm)", default=6, min=.01, precision=2)
+    dovetail_height: FloatProperty(name="Rail height (mm)", default=3, min=.01, precision=2)
+    dovetail_length: FloatProperty(name="Rail length (mm)", default=7, min=.01, precision=2)
+    dovetail_angle: FloatProperty(name="Exit angle", subtype="ANGLE", unit="ROTATION",
+                                  description="Rotate the groove opening from the positive local Y axis of the cut")
     loose_pins: BoolProperty(
         name="Separate pins", description="Cut two sockets and generate removable pins",
     )
@@ -283,6 +291,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.lateral, self.magnet_inset, self.magnet_adhesive, self.wall, self.magnet_angle, count,
         )
 
+    def dovetail_config(self, count: int) -> Dovetail:
+        return Dovetail(self.dovetail_neck, self.dovetail_head, self.dovetail_height, self.dovetail_length,
+                        self.lateral, self.axial, self.wall, self.dovetail_angle, count)
+
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
         connector = None
         if self.base_pins:
@@ -314,11 +326,14 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = CustomConnector(self.pin_template, self.socket_template, self.wall)
         elif self.connector == "MAGNET":
             connector = self.magnet_config(len(positions) or self.connector_count)
+        elif self.connector == "DOVETAIL":
+            connector = self.dovetail_config(len(positions) or self.connector_count)
         elif self.connector != "NONE":
             connector = self.standard_connector(self.connector, len(positions) or self.connector_count)
         cut = PlanarCut(
             self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
-            positions, self.cut_kind == "PLANAR" and self.pin_positive and not self.loose_pins,
+            positions, self.cut_kind == "PLANAR" and self.pin_positive
+            and (self.connector == "DOVETAIL" or not self.loose_pins),
         )
         if self.cut_kind == "SYMMETRY":
             return SymmetricCut(

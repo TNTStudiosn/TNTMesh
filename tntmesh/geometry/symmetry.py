@@ -5,10 +5,11 @@ from math import isfinite
 import bpy
 from mathutils import Euler, Matrix, Vector
 
-from ..model import GeometryTransaction, MeshError
+from ..model import SLIDE_DIRECTION, GeometryTransaction, MeshError
 from .boolean import ExactBoolean
 from .connector import add_connector
 from .custom_connector import CustomConnector, add_custom_connector
+from .dovetail import Dovetail, add_dovetails
 from .magnet import Magnet, add_magnet_pockets
 from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
@@ -107,6 +108,19 @@ def split_symmetric(
         return Vector((point.x, point.y, 0))
 
     sides = (outer, middle) if middle_index else (middle, outer)
+    if isinstance(connector, Dovetail):
+        first_rails = add_dovetails(engine, *sides, frame, position, primary.kerf, connector, epsilon, None)
+        middle, outer = first_rails.meshes[middle_index], first_rails.meshes[outer_index]
+        first_slide = Vector(middle[SLIDE_DIRECTION])
+        sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
+        second_rails = add_dovetails(
+            engine, *sides, reflected, mirrored_position, primary.kerf, replace(connector, angle=-connector.angle),
+            secondary.epsilon, tuple(map(reflect_center, first_rails.centers)),
+        )
+        middle, mirrored_outer = second_rails.meshes[middle_index], second_rails.meshes[outer_index]
+        if (Vector(middle[SLIDE_DIRECTION]) - first_slide).length > 1e-5:
+            del middle[SLIDE_DIRECTION]
+        return outer, middle, mirrored_outer
     if isinstance(connector, Magnet):
         first_magnets = add_magnet_pockets(engine, *sides, frame, position, primary.kerf, connector, epsilon)
         middle, outer = first_magnets.meshes[middle_index], first_magnets.meshes[outer_index]

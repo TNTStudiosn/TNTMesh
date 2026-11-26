@@ -62,9 +62,12 @@ def cut_properties(
             layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
-        if settings.cut_kind == "PLANAR" and settings.connector in {"NONE", "ROUND", "HEX"}:
+        if settings.cut_kind == "PLANAR" and settings.connector in {"NONE", "ROUND", "HEX", "DOVETAIL"}:
             tools = layout.row(align=True)
-            tools.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
+            if settings.connector == "DOVETAIL":
+                tools.operator("tntmesh.suggest_connectors", text="Find Rail Positions", icon="CONSTRAINT")
+            else:
+                tools.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
             if settings.connector != "NONE":
                 tools.operator("tntmesh.connector_transfer", text="", icon="COPYDOWN").action = "COPY"
             tools.operator("tntmesh.connector_transfer", text="", icon="PASTEDOWN").action = "PASTE"
@@ -123,6 +126,16 @@ def cut_details(
         layout.prop(settings, "wall")
     elif settings.connector == "MAGNET":
         magnet_details(layout, settings, settings.id_data)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
+    elif settings.connector == "DOVETAIL":
+        if settings.cut_kind != "PLANAR" or not settings.connector_points:
+            layout.prop(settings, "connector_count")
+        for prop in ("dovetail_neck", "dovetail_head", "dovetail_height", "dovetail_length", "dovetail_angle"):
+            layout.prop(settings, prop)
+        layout.prop(settings, "lateral")
+        layout.prop(settings, "axial", text="Stop clearance (mm)")
+        layout.prop(settings, "wall")
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
     elif settings.connector != "NONE":
@@ -291,7 +304,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
                     body.prop(settings, "show_cut_handle")
                 cut_details(body, settings, obj)
-                if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET"}:
+                if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX", "MAGNET", "DOVETAIL"}:
                     body.operator(
                         "tntmesh.draw_plane", text="Pick Connector Position", icon="PIVOT_CURSOR",
                     ).place_connector = True

@@ -2,6 +2,24 @@
 import bpy
 
 SPANISH = {
+    "Dovetail": "Cola de milano",
+    "Add an integrated sliding rail and an open-ended groove": "Añade un riel deslizante y una ranura abierta al borde",
+    "Neck (mm)": "Cuello (mm)",
+    "Head (mm)": "Cabeza (mm)",
+    "Rail height (mm)": "Altura del riel (mm)",
+    "Rail length (mm)": "Largo del riel (mm)",
+    "Exit angle": "Ángulo de salida",
+    "Rotate the groove opening from the positive local Y axis of the cut":
+        "Gira la salida de la ranura respecto al eje Y local positivo del corte",
+    "Stop clearance (mm)": "Holgura al tope (mm)",
+    "Find Rail Positions": "Sugerir rieles",
+    "Set a dovetail head wider than its neck and check the dimensions.":
+        "La cabeza debe ser más ancha que el cuello. Revisa las dimensiones.",
+    "Reduce the side clearance or widen the dovetail head to retain the rail.":
+        "Reduce la holgura lateral o ensancha la cabeza para retener el riel.",
+    "The dovetail does not fit with a clear exit and enough surrounding material.":
+        "La cola de milano requiere una salida libre y suficiente material alrededor.",
+    "The dovetail rail and groove could not be cut cleanly.": "No se pudo generar el riel y la ranura.",
     "Test the selected piece for collisions along an insertion path":
         "Comprueba si la pieza seleccionada choca durante la inserción",
     "Starting angle": "Ángulo inicial",

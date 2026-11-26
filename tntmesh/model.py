@@ -10,6 +10,7 @@ PROJECT_ID = "tntmesh_project_id"
 SCHEMA_VERSION = "tntmesh_schema_version"
 DRAFT_ID = "tntmesh_draft_id"
 ASSEMBLY_DIRECTION = "tntmesh_assembly_direction"
+SLIDE_DIRECTION = "tntmesh_slide_direction"
 MATERIAL_SLOT = "tntmesh_material_slot"
 
 

@@ -129,7 +129,9 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         self._source = active_mesh(context)
         settings = context.scene.tntmesh_settings
         self._shape = settings.cut_kind
-        if self.place_connector and (self._shape != "PLANAR" or settings.connector not in {"ROUND", "HEX", "MAGNET"}):
+        if self.place_connector and (
+            self._shape != "PLANAR" or settings.connector not in {"ROUND", "HEX", "MAGNET", "DOVETAIL"}
+        ):
             return {"CANCELLED"}
         if self.align_face and self._shape not in {"PLANAR", "SYMMETRY"}:
             return {"CANCELLED"}

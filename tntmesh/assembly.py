@@ -20,6 +20,7 @@ from .model import (
     ASSEMBLY_DIRECTION,
     PROJECT_ID,
     ROLE,
+    SLIDE_DIRECTION,
     GeometryTransaction,
     MeshError,
     millimeters_per_unit,
@@ -74,6 +75,28 @@ def world_box(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph) -> tuple[Ve
     return bounds(evaluated.matrix_world @ Vector(corner) for corner in evaluated.bound_box)
 
 
+def slide_direction(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph) -> Vector | None:
+    slide = obj.data.get(SLIDE_DIRECTION)
+    if slide is not None and len(slide) == 3:
+        direction = obj.evaluated_get(depsgraph).matrix_world.to_3x3() @ Vector(slide)
+        if direction.length_squared > 0:
+            return direction.normalized()
+    return None
+
+
+def slide_travel(
+    context: bpy.types.Context, moving: bpy.types.Object, pieces: list[bpy.types.Object], axis: Vector,
+) -> float:
+    depsgraph = context.evaluated_depsgraph_get()
+    def projected(obj: bpy.types.Object) -> list[float]:
+        evaluated = obj.evaluated_get(depsgraph)
+        return [axis.dot(evaluated.matrix_world @ Vector(corner)) for corner in evaluated.bound_box]
+
+    start = min(projected(moving))
+    end = max(value for piece in pieces if piece != moving for value in projected(piece))
+    return max(0, (end - start) * millimeters_per_unit(context.scene)) + 1
+
+
 def explosion_offsets(
     objects: list[bpy.types.Object], depsgraph: bpy.types.Depsgraph, distance: float,
 ) -> list[tuple[bpy.types.Object, Vector, Vector]]:
@@ -86,10 +109,9 @@ def explosion_offsets(
     for obj, (low, high) in zip(objects, boxes, strict=True):
         pivot = (low + high) / 2
         hint = obj.get(ASSEMBLY_DIRECTION)
-        if hint is not None and len(hint) == 3:
-            direction = Vector(hint).normalized()
-        else:
-            direction = (pivot - center).normalized()
+        direction = slide_direction(obj, depsgraph)
+        if direction is None:
+            direction = (Vector(hint) if hint is not None and len(hint) == 3 else pivot - center).normalized()
         result.append((obj, pivot, direction * distance))
     return result
 

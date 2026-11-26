@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from dataclasses import dataclass
-from math import isfinite
+from dataclasses import dataclass, replace
+from math import isfinite, pi
 
 import bpy
 from mathutils import Euler, Matrix, Vector
@@ -9,6 +9,8 @@ from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean, half_box
 from .connector import Connector, add_connector, safe_centers
 from .custom_connector import CustomConnector, add_custom_connector
+from .dovetail import Dovetail, add_dovetails
+from .dovetail import layout as dovetail_layout
 from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
 from .polygon import Point2
@@ -19,7 +21,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | Magnet | None = None
+    connector: Connector | CustomConnector | Dovetail | Magnet | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -47,13 +49,29 @@ def connector_frame(
     return (cut.flipped(), invert_frame(frame), requested) if flip else (cut, frame, requested)
 
 
+def dovetail_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Dovetail,
+    positions: tuple[Point2, ...], flip: bool,
+) -> tuple[Point2, ...]:
+    local, work, requested = connector_frame(cut, frame, positions, flip)
+    if flip:
+        design = replace(design, angle=pi - design.angle)
+    rails, seats = dovetail_layout(engine.context, local.minus, local.plus, work, local.position, kerf,
+                                   design, local.epsilon, requested)
+    to_seam = frame.transposed() @ rails.seam
+    return tuple(tuple((to_seam @ seat.center).xy) for seat in seats)
+
+
 def validate_positions(
-    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector | Magnet,
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector | Dovetail | Magnet,
     positions: tuple[Point2, ...], flip: bool,
 ) -> None:
     if isinstance(design, Magnet):
         _, _, requested = connector_frame(cut, frame, positions, False)
         magnet_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
+        return
+    if isinstance(design, Dovetail):
+        dovetail_positions(engine, cut, frame, kerf, design, positions, flip)
         return
     design.validate()
     cut, frame, requested = connector_frame(cut, frame, positions, flip)
@@ -135,9 +153,15 @@ def split(
         ).meshes
     if config.connector is not None:
         cut, frame, requested = connector_frame(cut, frame, config.connector_positions, config.pin_positive)
-        first, second, *pins = add_connector(
-            engine, cut.minus, cut.plus, frame, cut.position, config.kerf, config.connector,
-            cut.epsilon, requested=requested,
-        ).meshes
+        design = config.connector
+        if isinstance(design, Dovetail):
+            if config.pin_positive:
+                design = replace(design, angle=pi - design.angle)
+            result = add_dovetails(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
+                                   design, cut.epsilon, requested)
+        else:
+            result = add_connector(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
+                                   design, cut.epsilon, requested=requested)
+        first, second, *pins = result.meshes
         return (second, first, *pins) if config.pin_positive else (first, second, *pins)
     return minus, plus

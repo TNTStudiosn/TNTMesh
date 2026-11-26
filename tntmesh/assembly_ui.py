@@ -225,6 +225,11 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         return context.mode == "OBJECT" and len(assembly.members(context)) > 1
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
+        moving = assembly.current_member(context)
+        if moving is not None and self.axis == "AUTO" and not self.properties.is_property_set("distance"):
+            direction = assembly.slide_direction(moving, context.evaluated_depsgraph_get())
+            if direction is not None:
+                self.distance = assembly.slide_travel(context, moving, assembly.members(context), direction)
         return context.window_manager.invoke_props_dialog(self, width=345)
 
     def draw(self, context: bpy.types.Context) -> None:

@@ -21,6 +21,8 @@ Use the **Printer** panel to choose a profile, set safety margins and preview th
 
 In **Assembly → Check Insertion Path**, set the travel distance and optional starting angle. A rotating path can use the piece center, object origin or 3D cursor as its pivot. The report gives the travel and angle at a tested collision. Reduce the sample travel to check smaller features along a rotating path.
 
+Select **Dovetail** on a straight or symmetric cut to make a sliding rail and an open-ended groove. In **Cut settings**, set the neck, head, height, length, exit angle and clearances. On straight cuts, **Find Rail Positions** fits the current dimensions and shows the exit arrow. The cut checks for material around the seated rail and stop. In **Assembly**, use **Assembly Direction** to check the slide path. The dialog proposes a travel distance.
+
 The current validation checks closure, winding, degenerate faces and enclosed volume. Check the final orientation, supports and print settings in your slicer. Print a sample to verify the fit for your material and printer.
 
 For a resin print, open **Resin Preparation**, set the wall thickness and voxel size, then choose **Create Hollow Copy**. Use a separate closed mesh overlapping the model wall to keep a region solid or reinforce a joint. Choose **Place Drain** and click the exterior, or place a suggested circular drain along the configured print direction. A circular drain can produce a separate plug. For an irregular hole, position a closed cutter across the wall and select **Custom mesh** before placing the drain. **Mesh Diagnostics** can show any cavities that remain closed.
