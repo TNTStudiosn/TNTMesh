@@ -544,6 +544,22 @@ def verify_connector_placement():
     assert bpy.ops.tntmesh.connector_point(action="CLEAR") == {"FINISHED"}
 
 
+def setup_material_estimate():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_estimate
+        settings.scope = "SELECTED"
+        settings.currency = "MXN"
+        settings.price = 460
+        settings.extra = 10
+        assert bpy.ops.tntmesh.estimate_material() == {"FINISHED"}
+    area.tag_redraw()
+
+
+def capture_material_estimate():
+    screenshot("22-material-estimate.png")
+
+
 def open_export_browser():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -642,10 +658,16 @@ repair_steps = (
     (show_repair_panel, lambda: toggle_smoke_panel(218), lambda: screenshot("16-repair.png"))
     if os.environ.get("TNTMESH_TEST_REPAIR") == "1" else ()
 )
+estimate_steps = (
+    (setup_material_estimate, lambda: toggle_smoke_panel(93), lambda: toggle_smoke_panel(173),
+     capture_material_estimate, lambda: toggle_smoke_panel(173), lambda: toggle_smoke_panel(93))
+    if os.environ.get("TNTMESH_TEST_ESTIMATE") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
+    *estimate_steps,
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
     *base_steps, draft_panel, *diagnostics_steps, finish, *repair_steps,
 ))

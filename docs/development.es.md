@@ -70,6 +70,12 @@ La exportación 3MF guarda mallas en milímetros como objetos independientes en 
 
 En Windows se exportó un cubo de 24 mm dividido en dos mitades dentro de un solo 3MF. OrcaSlicer y Bambu Studio abrieron y reexportaron el archivo. En ambos se comprobó que se conservaron dos objetos de 24 × 24 × 12 mm. [CLI de Bambu Studio](https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage)
 
+## Material y costo
+
+Abre **Material y costo** y elige la malla activa, las mallas seleccionadas o el ensamblaje actual. Puedes ingresar densidad, precio por kilogramo y moneda. **Usar material de impresora** copia la tecnología, densidad, precio y grosor desde el perfil seleccionado. El cálculo muestra los valores por pieza y el total, con los pasadores independientes incluidos cuando pertenecen al ensamblaje. Usa la escala evaluada de la escena y requiere sólidos cerrados.
+
+Para FDM, TNTMesh multiplica el área superficial por el grosor de pared, limita el resultado al volumen del modelo y aplica al resto el porcentaje de relleno. Para resina, usa el volumen de la malla. La revisión opcional de cavidades estima el ahorro comparando el volumen real con el de las superficies exteriores macizas. Si las superficies se cruzan o el anidamiento es ambiguo, el ahorro puede quedar sin calcular. El porcentaje de material extra añade al peso y costo una reserva para consumos como los soportes. Comprueba los valores finales en tu laminador.
+
 ## Verificación y publicación
 
 Las pruebas de integración se ejecutan en Blender e incluyen exportación y reimportación, dimensiones de conectores, mallas huecas, cambios de escala, restauración de borradores y limpieza ante fallos. Para comprobar la interfaz, ejecuta `tests/viewport_smoke.py` en una instancia gráfica con un perfil aislado y define `TNTMESH_SMOKE_OUTPUT` como carpeta de salida. Para probar el dibujo y la cancelación, define `TNTMESH_TEST_EVENTS=1` y utiliza `--enable-event-simulate`. Define `TNTMESH_TEST_CONTOUR=1` para probar el contorno a mano alzada y `TNTMESH_TEST_PRINTER=1` para capturar el panel de impresora y el volumen útil.

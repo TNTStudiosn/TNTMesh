@@ -70,6 +70,12 @@ The 3MF writer uses Core 3MF with millimeter units and independent build items. 
 
 The Windows round-trip check exported a 24 mm cube split into two halves as one 3MF, opened and re-exported it using OrcaSlicer and Bambu Studio, then inspected the resulting build items and model geometry. Both preserved two objects measuring 24 × 24 × 12 mm. [Bambu Studio CLI](https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage)
 
+## Material and cost
+
+Open **Material & Cost** and choose the active mesh, selected meshes or current assembly. Enter density, price per kilogram and currency. Use **Use Printer Material** to copy density, price, technology and wall thickness from the selected printer profile. The report shows totals and the individual values for each piece, including any separate pins in the assembly. It uses the geometry at its evaluated scene scale and requires closed solids.
+
+With FDM, the estimate multiplies surface area by wall thickness, caps that result at the model volume and applies the infill percentage to the remaining volume. With resin, the printed volume comes from the mesh. The optional cavity check compares closed shells with the enclosed volume of their exterior surfaces to estimate resin saved by cavities. Cavity savings can be unavailable for ambiguous or intersecting shells. The extra material percentage adds an allowance for consumables such as supports to the weight and cost. Check the final values in your slicer.
+
 ## Draft projects
 
 The scene stores draft plans and references the original mesh object. Each cut consumes the source or one of the pieces from an earlier cut. The resulting piece IDs derive from the plan and cut identifiers, so moving or renaming an operation keeps its identity. An operation whose upstream input is missing or already consumed blocks the rebuild and identifies the affected cut.

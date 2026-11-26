@@ -627,6 +627,83 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(bpy.ops.tntmesh.printer_import(filepath=str(path)), {"CANCELLED"})
         self.assertEqual(len(profiles), 3)
 
+    def test_fdm_estimate_uses_scene_units_and_invalidation(self):
+        source = self.cube(1)
+        units = bpy.context.scene.unit_settings
+        units.system = "METRIC"
+        units.scale_length = .01
+        settings = bpy.context.scene.tntmesh_estimate
+        settings.density = 1.25
+        settings.price = 200
+        settings.currency = "MXN"
+        settings.wall_mm = .5
+        settings.infill = 25
+        settings.extra = 10
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.estimate_material(), {"FINISHED"})
+        result = self.addon.estimate_ui.current(bpy.context)
+        self.assertEqual(len(result.entries), 1)
+        self.assertAlmostEqual(result.total.model_ml, 1)
+        self.assertAlmostEqual(result.total.printed_ml, .475)
+        self.assertAlmostEqual(result.total.extra_ml, .0475)
+        self.assertAlmostEqual(result.total.grams, .653125)
+        self.assertAlmostEqual(result.total.cost, .130625)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+        settings.infill = 100
+        self.assertIsNone(self.addon.estimate_ui.current(bpy.context))
+        self.assertEqual(bpy.ops.tntmesh.estimate_material(), {"FINISHED"})
+        self.assertAlmostEqual(self.addon.estimate_ui.current(bpy.context).total.printed_ml, 1)
+        source.scale.x = 2
+        bpy.context.view_layer.update()
+        self.assertIsNone(self.addon.estimate_ui.current(bpy.context))
+
+    def test_resin_assembly_estimate_reports_per_piece_cost_and_cavity_savings(self):
+        outside = self.cube(20)
+        inside = self.cube(10)
+        inside.data.flip_normals()
+        outside.select_set(True)
+        bpy.context.view_layer.objects.active = outside
+        bpy.ops.object.join()
+        pin = self.cube(10)
+        pin.location.x = 27
+        unrelated = self.cube(80)
+        for piece in (outside, pin):
+            self.addon.model.identify_part(piece, "estimate-fixture")
+        bpy.context.scene.tntmesh_assembly.project = "estimate-fixture"
+        pin.hide_set(True)
+        self.assertEqual(bpy.ops.tntmesh.printer_add(preset="MARS5"), {"FINISHED"})
+        printer = bpy.context.scene.tntmesh_printers[0]
+        printer.density_g_cm3 = 1.25
+        printer.price_per_kg = 200
+        self.assertEqual(bpy.ops.tntmesh.use_estimate_profile(), {"FINISHED"})
+        settings = bpy.context.scene.tntmesh_estimate
+        self.assertEqual(settings.technology, "RESIN")
+        settings.scope = "ASSEMBLY"
+        settings.extra = 20
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.estimate_material(), {"FINISHED"})
+        report = self.addon.estimate_ui.current(bpy.context)
+        self.assertEqual({piece.name for piece in report.entries}, {outside.name, pin.name})
+        self.assertNotIn(unrelated.name, {piece.name for piece in report.entries})
+        self.assertAlmostEqual(report.total.model_ml, 8)
+        self.assertAlmostEqual(report.total.printed_ml, 8)
+        self.assertAlmostEqual(report.total.extra_ml, 1.6)
+        self.assertAlmostEqual(report.total.grams, 12)
+        self.assertAlmostEqual(report.total.cost, 2.4)
+        self.assertAlmostEqual(report.total.saved_ml, 1)
+        self.assertAlmostEqual(sum(piece.cost for piece in report.entries), report.total.cost)
+        self.assertTrue(pin.hide_get())
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+
+    def test_estimate_rejects_an_open_mesh_and_clears_old_totals(self):
+        self.cube()
+        self.assertEqual(bpy.ops.tntmesh.estimate_material(), {"FINISHED"})
+        bpy.ops.mesh.primitive_plane_add(size=5)
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.estimate_material(), {"CANCELLED"})
+        self.assertIsNone(self.addon.estimate_ui.current(bpy.context))
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+
     def test_printer_fit_checks_margins_and_alternate_orientation(self):
         printing = self.addon.printer_ui
         profile = printing.PrinterProfile("", "Test", "FDM", (50, 30, 20), (1, 1, 1))

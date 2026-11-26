@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added per-piece and assembly material, weight and cost estimates for FDM and resin.
+
 ## 0.3.0-alpha.8
 
 - Removed near-coincident vertices around zero-area faces produced by surface-region extraction.
