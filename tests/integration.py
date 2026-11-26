@@ -201,6 +201,99 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), [])
         self.assertFalse(bpy.data.node_groups)
 
+    def resin_cup(self, vent_z=None):
+        addon, context = self.addon, bpy.context
+        volume = importlib.import_module(f"{addon.__name__}.geometry.volume")
+        boolean = importlib.import_module(f"{addon.__name__}.geometry.boolean")
+        original = self.cube()
+        with addon.operators.GeometryTransaction() as transaction:
+            engine = boolean.ExactBoolean(context, transaction)
+            frame = addon.operators.Matrix.Identity(3)
+            pocket = volume.extruded_volume(transaction, frame, Vector((0, 0, 4)),
+                                           volume.outline("RECTANGLE", 18, 18), 24)
+            body = engine.run(original.data, pocket, "DIFFERENCE")
+            if vent_z is not None:
+                vent = volume.extruded_volume(transaction, frame, Vector((10.5, 0, vent_z)),
+                                             volume.outline("RECTANGLE", 7, 4), 5)
+                body = engine.run(body, vent, "DIFFERENCE")
+            result = transaction.object(context.scene.collection, "Cup fixture", body)
+            transaction.publish(result)
+        original.hide_set(True)
+        context.view_layer.update()
+        addon.operators.select_results(context, [result])
+        return result
+
+    def test_resin_suction_depends_on_layer_order_and_world_orientation(self):
+        from mathutils import Euler
+
+        part = self.resin_cup()
+        part.location = (10, -4, 8)
+        part.rotation_euler = Euler((0, .41, 0))
+        bpy.context.view_layer.update()
+        settings = bpy.context.scene.tntmesh_resin
+        direction = part.rotation_euler.to_matrix() @ Vector((0, 0, 1))
+        settings.print_axis = direction
+        ui = self.addon.diagnostics_ui
+        original = part.data
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        report = ui.current(bpy.context).result
+        self.assertEqual(report.suction.count, 1)
+        self.assertEqual(report.suction.uncertain_rows, 0)
+        self.assertNotIn("CAVITY", {finding.kind for finding in report.findings})
+        self.assertAlmostEqual(report.suction.pockets[0].area_mm2, 18**2, delta=25)
+        point, _ = ui.current(bpy.context).marks["SUCTION"][0]
+        local = part.matrix_world.inverted() @ point
+        self.assertTrue(abs(local.x) < 9 and abs(local.y) < 9 and -8 < local.z < 12)
+        settings.print_axis = -direction
+        self.assertIsNone(ui.current(bpy.context))
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        self.assertEqual(ui.current(bpy.context).result.suction.count, 0)
+        self.assertEqual(part.data, original)
+
+    def test_resin_suction_distinguishes_an_early_vent_from_a_late_opening(self):
+        late = self.resin_cup(vent_z=0)
+        ui = self.addon.diagnostics_ui
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        pocket, = ui.current(bpy.context).result.suction.pockets
+        self.assertLess(pocket.center.z, -2)
+        self.assertNotIn("CAVITY", {item.kind for item in ui.current(bpy.context).result.findings})
+        late.hide_set(True)
+        self.resin_cup(vent_z=-8.5)
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        self.assertEqual(ui.current(bpy.context).result.suction.count, 0)
+
+    def test_resin_trap_scan_detects_closed_cavity_and_handles_invalid_input(self):
+        self.cube()
+        self.assertEqual(bpy.ops.tntmesh.hollow_resin(), {"FINISHED"})
+        ui = self.addon.diagnostics_ui
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        results = ui.current(bpy.context).result
+        self.assertEqual({item.kind: item.count for item in results.findings if item.kind in {"CAVITY", "SUCTION"}},
+                         {"CAVITY": 1, "SUCTION": 1})
+        settings = bpy.context.scene.tntmesh_resin
+        settings.print_axis = (0, 0, 0)
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"CANCELLED"})
+        self.assertIsNone(ui.current(bpy.context))
+        settings.print_axis = (0, 0, 1)
+        bpy.ops.mesh.primitive_plane_add(size=24)
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        invalid = ui.current(bpy.context).result
+        self.assertIsNone(invalid.suction)
+        self.assertIn("OPEN", {item.kind for item in invalid.findings})
+
+    def test_resin_suction_keeps_independent_cups_separate(self):
+        first = self.resin_cup()
+        second = self.resin_cup()
+        first.location.x, second.location.x = -16, 16
+        first.select_set(True)
+        bpy.context.view_layer.update()
+        bpy.ops.object.join()
+        self.assertEqual(bpy.ops.tntmesh.check_resin(), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result.suction
+        self.assertEqual(result.count, 2)
+        self.assertEqual(len(result.pockets), 2)
+        self.assertAlmostEqual(abs(result.pockets[0].center.x - result.pockets[1].center.x), 32, delta=.6)
+
     def test_stl_split_connector_export_round_trip(self):
         bpy.context.scene.unit_settings.system = "METRIC"
         bpy.context.scene.unit_settings.scale_length = 0.01

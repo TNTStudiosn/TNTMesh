@@ -616,6 +616,17 @@ def prepare_resin():
     area.tag_redraw()
 
 
+def check_resin_preview():
+    addon = importlib.import_module(PACKAGE)
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.check_resin() == {"FINISHED"}
+        preview = addon.diagnostics_ui.current(bpy.context)
+        assert preview.result.suction.count == 1 and "CAVITY" in preview.marks
+        assert bpy.ops.tntmesh.diagnostic_view(kind="SUCTION") == {"FINISHED"}
+    area.tag_redraw()
+
+
 def place_resin_drain():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -761,7 +772,8 @@ estimate_steps = (
 )
 resin_steps = (
     (prepare_resin, lambda: toggle_smoke_panel(93), lambda: toggle_smoke_panel(200),
-     lambda: screenshot("24-resin-panel.png"), place_resin_drain, cancel_line, place_resin_drain,
+     check_resin_preview, lambda: screenshot("26-resin-traps.png"),
+     place_resin_drain, cancel_line, place_resin_drain,
      lambda: contour_click(.50, .50), verify_resin_drain,
      lambda: toggle_smoke_panel(200), lambda: toggle_smoke_panel(93), reset_resin_preview)
     if line_steps and os.environ.get("TNTMESH_TEST_RESIN") == "1" else ()

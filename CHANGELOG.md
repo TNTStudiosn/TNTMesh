@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.11
 
 - Added a viewport thickness map and thin-wall markers for areas around sockets and other printed features.
+- Added resin trap analysis with closed-cavity counts, orientation-dependent suction estimates and viewport markers.
 
 ## 0.3.0-alpha.10
 

@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from collections.abc import Callable
 from dataclasses import dataclass
+from math import isfinite
 
 import bpy
 import numpy as np
@@ -23,6 +25,7 @@ LABELS = {
     "CAVITY": "Closed cavities", "INTERNAL": "Miswound internal shells",
     "INVERTED": "Inverted shells",
     "COPLANAR": "Overlapping coplanar faces", "THIN_WALL": "Thin wall faces",
+    "SUCTION": "Possible suction regions",
 }
 INFORMATIONAL = {"SHELLS", "CAVITY"}
 FINDINGS = [("ALL", "All Findings", "")] + [
@@ -76,6 +79,7 @@ class Preview:
     overlay: WallOverlay | None = None
     show_wall_map: bool = False
     kind: str = "ALL"
+    resin_input: tuple[tuple[float, float, float], float] | None = None
 
 
 _preview: Preview | None = None
@@ -105,14 +109,50 @@ def invalidate(_scene: bpy.types.Scene, depsgraph: bpy.types.Depsgraph) -> None:
         clear()
 
 
+def resin_input(scene: bpy.types.Scene) -> tuple[tuple[float, float, float], float]:
+    settings = scene.tntmesh_resin
+    return tuple(settings.print_axis), settings.suction_step_mm
+
+
 def current(context: bpy.types.Context) -> Preview | None:
     obj = active_mesh(context)
     if (_preview is not None and obj is not None and context.scene.as_pointer() == _preview.scene
             and obj.as_pointer() == _preview.object and obj.data.as_pointer() == _preview.mesh
             and obj.matrix_world == _preview.matrix
-            and millimeters_per_unit(context.scene) == _preview.unit):
+            and millimeters_per_unit(context.scene) == _preview.unit
+            and (_preview.resin_input is None or _preview.resin_input == resin_input(context.scene))):
         return _preview
     return None
+
+
+def capture(
+    context: bpy.types.Context, analyze: Callable[[bpy.types.Mesh], Diagnostics],
+    orientation: tuple[tuple[float, float, float], float] | None = None,
+) -> Preview:
+    global _preview
+    clear()
+    obj, scene = active_mesh(context), context.scene
+    unit = millimeters_per_unit(scene)
+    wm = context.window_manager
+    wm.progress_begin(0, 100)
+    try:
+        with GeometryTransaction() as transaction:
+            mesh, origin = evaluated_mm(context, obj, transaction, unit)
+            wm.progress_update(10)
+            report = analyze(mesh)
+            markers = {item.kind: [(origin + a / unit, origin + b / unit) for a, b in item.marks]
+                       for item in report.findings if item.marks}
+            overlay = wall_overlay(mesh, report, origin, unit)
+        context.view_layer.update()
+        _preview = Preview(
+            scene.as_pointer(), obj.as_pointer(), obj.data.as_pointer(), obj.matrix_world.copy(),
+            unit, report, markers, overlay, overlay is not None, resin_input=orientation,
+        )
+        wm.progress_update(100)
+        return _preview
+    finally:
+        wm.progress_end()
+        redraw(wm)
 
 
 class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
@@ -143,35 +183,13 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
             self.layout.prop(self, name)
 
     def execute(self, context: bpy.types.Context) -> set[str]:
-        global _preview
-        clear()
-        obj = active_mesh(context)
-        scene = context.scene
-        unit = millimeters_per_unit(scene)
-        wm = context.window_manager
-        wm.progress_begin(0, 2)
         try:
-            with GeometryTransaction() as transaction:
-                mesh, origin = evaluated_mm(context, obj, transaction, unit)
-                wm.progress_update(1)
-                report = scan(
-                    mesh, self.weld_mm, self.fragment_mm3, intersections=self.intersections, wall_mm=self.wall_mm,
-                    wall_map=self.wall_map,
-                )
-                markers = {item.kind: [(origin + a / unit, origin + b / unit) for a, b in item.marks]
-                           for item in report.findings if item.marks}
-                overlay = wall_overlay(mesh, report, origin, unit)
-            context.view_layer.update()
-            _preview = Preview(
-                scene.as_pointer(), obj.as_pointer(), obj.data.as_pointer(), obj.matrix_world.copy(),
-                unit, report, markers, overlay, overlay is not None,
-            )
-            wm.progress_update(2)
+            report = capture(context, lambda mesh: scan(
+                mesh, self.weld_mm, self.fragment_mm3, intersections=self.intersections, wall_mm=self.wall_mm,
+                wall_map=self.wall_map,
+            )).result
         except (MeshError, RuntimeError, ValueError) as error:
             return report_failure(self, error)
-        finally:
-            wm.progress_end()
-            redraw(wm)
         issues = sum(item.kind not in INFORMATIONAL for item in report.findings)
         if issues:
             self.report({"WARNING"}, tr("Mesh scan found {count} issue categories.").format(
@@ -181,6 +199,33 @@ class TNTMESH_OT_diagnose(bpy.types.Operator, MeshOperator):
             self.report({"INFO"}, tr("Review the shells and cavities in Mesh Diagnostics."))
         else:
             self.report({"INFO"}, tr("No issues found in the enabled checks."))
+        return {"FINISHED"}
+
+
+class TNTMESH_OT_check_resin(bpy.types.Operator, MeshOperator):
+    bl_idname = "tntmesh.check_resin"
+    bl_label = "Check Resin Traps"
+    bl_description = "Find closed cavities and estimate suction as layers build along the print direction"
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        source = resin_input(context.scene)
+        axis, step = source
+        if not all(map(isfinite, axis)) or Vector(axis).length < 1e-8:
+            return report_failure(self, MeshError("Enter a nonzero print direction."))
+        try:
+            report = capture(context, lambda mesh: scan(
+                mesh, 0, 0, intersections=True, print_direction=Vector(axis), suction_step_mm=step,
+                suction_progress=lambda ratio: context.window_manager.progress_update(20 + 75 * ratio),
+            ), orientation=source).result
+        except (MeshError, RuntimeError, ValueError) as error:
+            return report_failure(self, error)
+        closed = next((item.count for item in report.findings if item.kind == "CAVITY"), 0)
+        if report.suction is None:
+            self.report({"WARNING"}, tr("Suction analysis needs a closed solid with consistent faces."))
+        elif closed or report.suction.count or report.suction.uncertain_rows:
+            self.report({"WARNING"}, tr("Review resin trap results in Resin Preparation."))
+        else:
+            self.report({"INFO"}, tr("No resin traps found at this sampling step."))
         return {"FINISHED"}
 
 
@@ -342,4 +387,4 @@ def unregister() -> None:
     clear()
 
 
-CLASSES = (TNTMESH_OT_diagnose, TNTMESH_OT_diagnostic_view)
+CLASSES = (TNTMESH_OT_diagnose, TNTMESH_OT_check_resin, TNTMESH_OT_diagnostic_view)

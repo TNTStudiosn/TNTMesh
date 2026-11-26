@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from array import array
 from collections import defaultdict, deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from math import isfinite
 
@@ -14,6 +14,8 @@ from mathutils.kdtree import KDTree
 from ..model import MeshError
 from .coplanar import coplanar_faces
 from .mesh import VOLUME_EPSILON, bounds
+from .suction import Suction
+from .suction import estimate as estimate_suction
 from .wall import wall_samples
 
 MAX_MARKS = 256
@@ -37,6 +39,7 @@ class Diagnostics:
     checked_walls: bool = False
     thinnest_wall_mm: float | None = None
     wall_map_mm: array | None = None
+    suction: Suction | None = None
 
 
 @dataclass(frozen=True)
@@ -154,10 +157,12 @@ def closed_shell(faces: list[bmesh.types.BMFace], volume: float) -> ClosedShell:
 
 def scan(
     mesh: bpy.types.Mesh, weld_mm: float, fragment_mm3: float, *, intersections: bool, wall_mm: float = 0,
-    wall_map: bool = False,
+    wall_map: bool = False, print_direction: Vector | None = None, suction_step_mm: float = .6,
+    suction_progress: Callable[[float], None] | None = None,
 ) -> Diagnostics:
     if not all(isfinite(number) and number >= 0 for number in (weld_mm, fragment_mm3, wall_mm)):
         raise MeshError("Choose nonnegative mesh tolerances.")
+    intersections = intersections or print_direction is not None
     if not mesh.polygons:
         return Diagnostics((Finding("EMPTY", 1, ()),), 0, None, False, wall_mm)
     if any(not all(map(isfinite, vertex.co)) for vertex in mesh.vertices):
@@ -278,5 +283,12 @@ def scan(
                 thin_faces.add(sample.face)
                 mark("THIN_WALL", sample.start, sample.end)
 
+    report = None
+    if print_direction is not None and wall_geometry_ok:
+        report = estimate_suction(mesh, print_direction, suction_step_mm, MAX_MARKS, suction_progress)
+        for pocket in report.pockets:
+            mark("SUCTION", pocket.center)
+        if report.count:
+            counts["SUCTION"] = report.count
     findings = tuple(Finding(kind, count, tuple(markers[kind])) for kind, count in counts.items())
-    return Diagnostics(findings, shell_count, volume, intersections, wall_mm, checked_walls, thinnest, measures)
+    return Diagnostics(findings, shell_count, volume, intersections, wall_mm, checked_walls, thinnest, measures, report)

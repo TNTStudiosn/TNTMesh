@@ -2,6 +2,29 @@
 import bpy
 
 SPANISH = {
+    "Possible suction regions": "Posibles zonas de succión",
+    "Resin Traps": "Trampas de resina",
+    "Check Resin Traps": "Revisar trampas de resina",
+    "Find closed cavities and estimate suction as layers build along the print direction":
+        "Encuentra cavidades cerradas y estima la succión según el orden de las capas",
+    "World direction from the first printed layer to the last":
+        "Dirección global desde la primera capa impresa hasta la última",
+    "Sampling (mm)": "Muestreo (mm)",
+    "Smaller sampling steps capture smaller vents and may take longer":
+        "Un paso menor detecta aberturas más pequeñas y puede tardar más",
+    "Set a print direction and a sampling step of at least 0.05 mm.":
+        "Indica una dirección de impresión y un paso de muestreo de al menos 0.05 mm.",
+    "Enter a nonzero print direction.": "Indica una dirección de impresión distinta de cero.",
+    "Suction analysis needs a closed solid with consistent faces.":
+        "El análisis de succión necesita un sólido cerrado con caras orientadas correctamente.",
+    "Review resin trap results in Resin Preparation.": "Consulta los resultados en Preparación para resina.",
+    "No resin traps found at this sampling step.": "No se encontraron trampas de resina con este paso de muestreo.",
+    "Largest section · {area:.1f} mm²": "Sección mayor · {area:.1f} mm²",
+    "Sample step · {size:.2f} mm": "Paso de muestreo · {size:.2f} mm",
+    "Requires a closed solid.": "Se requiere un sólido cerrado.",
+    "Ambiguous samples present.": "Se encontraron muestras ambiguas.",
+    "Geometric estimate": "Estimación geométrica",
+    "Confirm in your slicer.": "Confirma en tu slicer.",
     "Wall Thickness Map": "Mapa de grosor",
     "Color the surface by sampled wall thickness": "Colorea la superficie según las muestras de grosor",
     "No reliable wall samples.": "No se obtuvieron muestras de grosor confiables.",

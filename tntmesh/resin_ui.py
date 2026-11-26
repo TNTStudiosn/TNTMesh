@@ -9,6 +9,7 @@ from bpy.props import (
 )
 from mathutils import Matrix, Vector
 
+from . import diagnostics_ui
 from .draw_snapping import SurfacePicker
 from .geometry import resin
 from .geometry.mesh import evaluated_mm
@@ -38,7 +39,14 @@ class TNTMESH_PG_resin(bpy.types.PropertyGroup):
     depth_mm: FloatProperty(name="Depth (mm)", default=8, min=.1, precision=2)
     use_face_normal: BoolProperty(name="Use surface normal", default=True)
     direction: FloatVectorProperty(name="Inward direction", default=(0, 0, 1), precision=2)
-    print_axis: FloatVectorProperty(name="Print direction", default=(0, 0, 1), precision=2)
+    print_axis: FloatVectorProperty(
+        name="Print direction", default=(0, 0, 1), precision=2,
+        description="World direction from the first printed layer to the last",
+    )
+    suction_step_mm: FloatProperty(
+        name="Sampling (mm)", min=.05, default=.6, precision=2,
+        description="Smaller sampling steps capture smaller vents and may take longer",
+    )
     make_plug: BoolProperty(name="Generate plug", default=False)
     clearance_mm: FloatProperty(name="Radial clearance (mm)", default=.15, min=.01, precision=2)
     cutter: PointerProperty(name="Drain cutter", type=bpy.types.Object, poll=mesh_only)
@@ -195,6 +203,34 @@ class TNTMESH_OT_drain_resin(bpy.types.Operator, MeshOperator):
         return {"FINISHED"}
 
 
+def draw_resin_results(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
+    preview = diagnostics_ui.current(context)
+    if preview is None or preview.resin_input is None:
+        return
+    result = preview.result
+    stats = layout.box()
+    if result.suction is None:
+        stats.label(text="Requires a closed solid.", icon="ERROR")
+        return
+    counts = {item.kind: item.count for item in result.findings}
+    for key in ("CAVITY", "SUCTION"):
+        count = counts.get(key, 0)
+        label = f"{tr(diagnostics_ui.LABELS[key])} · {count}"
+        if key in preview.marks:
+            op = stats.operator("tntmesh.diagnostic_view", text=label, icon="VIEWZOOM", translate=False,
+                                depress=preview.kind == key)
+            op.kind, op.focus = key, True
+        else:
+            stats.label(text=label, icon="CHECKMARK", translate=False)
+    if result.suction.pockets:
+        area = tr("Largest section · {area:.1f} mm²").format(area=result.suction.pockets[0].area_mm2)
+        stats.label(text=area, translate=False)
+    step = tr("Sample step · {size:.2f} mm").format(size=result.suction.step_mm)
+    stats.label(text=step, translate=False)
+    if result.suction.uncertain_rows:
+        stats.label(text="Ambiguous samples present.", icon="ERROR")
+
+
 class TNTMESH_PT_resin(bpy.types.Panel):
     bl_label = "Resin Preparation"
     bl_space_type = "VIEW_3D"
@@ -208,37 +244,56 @@ class TNTMESH_PT_resin(bpy.types.Panel):
 
     def draw(self, context: bpy.types.Context) -> None:
         settings = context.scene.tntmesh_resin
-        hollow = self.layout.column(align=True)
-        hollow.label(text="Hollow")
-        for name in ("wall_mm", "minimum_mm", "voxel_mm"):
-            hollow.prop(settings, name)
-        hollow.label(text="Solid region")
-        hollow.prop(settings, "protection", text="")
-        if settings.protection:
-            hollow.prop(settings, "reinforcement_mm")
-        hollow.operator("tntmesh.hollow_resin", icon="MOD_SOLIDIFY")
+        header, body = self.layout.panel("tntmesh_hollow", default_closed=False)
+        header.label(text="Hollow", icon="MOD_SOLIDIFY")
+        if body:
+            hollow = body.column(align=True)
+            for name in ("wall_mm", "minimum_mm", "voxel_mm"):
+                hollow.prop(settings, name)
+            hollow.label(text="Solid region")
+            hollow.prop(settings, "protection", text="")
+            if settings.protection:
+                hollow.prop(settings, "reinforcement_mm")
+            hollow.operator("tntmesh.hollow_resin")
+
+        settings_row = self.layout.column(align=True)
+        settings_row.label(text="Print direction")
+        axis_row = settings_row.row(align=True)
+        for index, axis in enumerate("XYZ"):
+            axis_row.prop(settings, "print_axis", index=index, text=axis)
         self.layout.separator()
-        drain = self.layout.column(align=True)
-        drain.label(text="Drain Holes")
-        drain.prop(settings, "shape", text="")
-        if settings.shape == "ROUND":
-            drain.prop(settings, "diameter_mm")
-            drain.prop(settings, "depth_mm")
-            drain.prop(settings, "make_plug")
-            if settings.make_plug:
-                drain.prop(settings, "clearance_mm")
-        else:
-            drain.label(text="Drain cutter")
-            drain.prop(settings, "cutter", text="")
-        drain.prop(settings, "use_face_normal")
-        if not settings.use_face_normal:
-            drain.label(text="Inward direction")
-            drain.row(align=True).prop(settings, "direction", text="", expand=True)
-        drain.operator("tntmesh.drain_resin", icon="EYEDROPPER")
-        if settings.shape == "ROUND":
-            drain.label(text="Print direction")
-            drain.row(align=True).prop(settings, "print_axis", text="", expand=True)
-            drain.operator("tntmesh.drain_resin", text="Place Suggested Drain", icon="MOD_BOOLEAN").suggested = True
+
+        header, body = self.layout.panel("tntmesh_resin_drains", default_closed=True)
+        header.label(text="Drain Holes", icon="MOD_BOOLEAN")
+        if body:
+            drain = body.column(align=True)
+            drain.prop(settings, "shape", text="")
+            if settings.shape == "ROUND":
+                drain.prop(settings, "diameter_mm")
+                drain.prop(settings, "depth_mm")
+                drain.prop(settings, "make_plug")
+                if settings.make_plug:
+                    drain.prop(settings, "clearance_mm")
+            else:
+                drain.label(text="Drain cutter")
+                drain.prop(settings, "cutter", text="")
+            drain.prop(settings, "use_face_normal")
+            if not settings.use_face_normal:
+                drain.label(text="Inward direction")
+                drain.row(align=True).prop(settings, "direction", text="", expand=True)
+            drain.operator("tntmesh.drain_resin", icon="EYEDROPPER")
+            if settings.shape == "ROUND":
+                drain.operator("tntmesh.drain_resin", text="Place Suggested Drain", icon="MOD_BOOLEAN").suggested = True
+
+        header, body = self.layout.panel("tntmesh_resin_traps", default_closed=False)
+        header.label(text="Resin Traps", icon="VIEWZOOM")
+        if body:
+            check = body.column(align=True)
+            check.prop(settings, "suction_step_mm")
+            check.operator("tntmesh.check_resin")
+            check.label(text="Geometric estimate", icon="INFO")
+            check.label(text="Confirm in your slicer.")
+            draw_resin_results(body, context)
 
 
 CLASSES = (TNTMESH_PG_resin, TNTMESH_OT_hollow_resin, TNTMESH_OT_drain_resin, TNTMESH_PT_resin)
