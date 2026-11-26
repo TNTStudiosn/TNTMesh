@@ -9,6 +9,7 @@ PART_ID = "tntmesh_part_id"
 PROJECT_ID = "tntmesh_project_id"
 SCHEMA_VERSION = "tntmesh_schema_version"
 DRAFT_ID = "tntmesh_draft_id"
+ASSEMBLY_DIRECTION = "tntmesh_assembly_direction"
 
 
 class MeshError(Exception):
@@ -24,7 +25,11 @@ def owned_collection(scene: bpy.types.Scene, role: str) -> bpy.types.Collection:
     for collection in scene.collection.children:
         if collection.get(ROLE) == role and collection.library is None:
             return collection
-    name = {"source": "TNTMesh · Imported models", "part": "TNTMesh · Parts"}[role]
+    name = {
+        "source": "TNTMesh · Imported models",
+        "part": "TNTMesh · Parts",
+        "calibration": "TNTMesh · Calibration Models",
+    }[role]
     collection = bpy.data.collections.new(name)
     collection[ROLE] = role
     scene.collection.children.link(collection)

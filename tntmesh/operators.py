@@ -12,10 +12,12 @@ from mathutils import Matrix, Vector
 from . import draft, exporters, stl
 from .geometry.grid import fit_grid
 from .geometry.mesh import bounds, evaluated_mm, inspect
+from .geometry.planar import PlanarCut, axis_frame
 from .geometry.repair import repair_copy
-from .geometry.volume import apply_cut
+from .geometry.volume import apply_cut, structural_parts
 from .localization import tr
 from .model import (
+    ASSEMBLY_DIRECTION,
     PART_ID,
     PROJECT_ID,
     ROLE,
@@ -55,7 +57,8 @@ def managed_parts(context: bpy.types.Context, scope: str) -> list[bpy.types.Obje
 
 def publish_parts(
     context: bpy.types.Context, transaction: GeometryTransaction, source: bpy.types.Object,
-    meshes: Sequence[bpy.types.Mesh], origin: Vector, unit: float, *, loose_pins: bool = False,
+    meshes: Sequence[bpy.types.Mesh], origin: Vector, unit: float, *, bodies: int | None = None,
+    direction: Vector | None = None,
 ) -> list[bpy.types.Object]:
     project_id = source.get(PROJECT_ID) or uuid4().hex
     collection = owned_collection(context.scene, "part")
@@ -63,11 +66,15 @@ def publish_parts(
     for index, mesh in enumerate(meshes, 1):
         mesh.transform(Matrix.Scale(1.0 / unit, 4))
         mesh.update()
-        label = tr("Pin {number}").format(number=index - 2) if loose_pins and index > 2 else f"{index:02d}"
+        label = (tr("Pin {number}").format(number=index - bodies)
+                 if bodies is not None and index > bodies else f"{index:02d}")
         obj = transaction.object(collection, f"{source.name} · {label}", mesh)
         obj.location = origin
         identify_part(obj, project_id)
         obj["tntmesh_parent_part_id"] = source.get(PART_ID, "")
+        if direction is not None and index in (1, 2):
+            inherited = Vector(source.get(ASSEMBLY_DIRECTION, (0, 0, 0)))
+            obj[ASSEMBLY_DIRECTION] = tuple(inherited + (direction if index == 2 else -direction))
         parts.append(obj)
     for obj in parts:
         transaction.publish(obj)
@@ -195,10 +202,14 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
             with GeometryTransaction() as transaction:
                 mesh, origin = evaluated_mm(context, source, transaction, unit)
                 wm.progress_update(1)
-                meshes = apply_cut(context, transaction, mesh, settings.config(), origin, unit, source)
+                config = settings.config()
+                meshes = apply_cut(context, transaction, mesh, config, origin, unit, source)
                 wm.progress_update(2)
                 parts = publish_parts(
-                    context, transaction, source, meshes, origin, unit, loose_pins=len(meshes) > 2
+                    context, transaction, source, meshes, origin, unit,
+                    bodies=structural_parts(settings.cut_kind),
+                    direction=axis_frame(config.axis, config.rotation).col[2]
+                    if isinstance(config, PlanarCut) else None,
                 )
             select_new_parts(context, source, parts)
             wm.progress_update(3)

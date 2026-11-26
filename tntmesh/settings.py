@@ -8,12 +8,15 @@ from bpy.props import (
     FloatVectorProperty,
     IntProperty,
     PointerProperty,
+    StringProperty,
 )
 
 from .geometry.connector import Connector
 from .geometry.custom_connector import CustomConnector
 from .geometry.planar import PlanarCut
-from .geometry.volume import VolumeCut
+from .geometry.region import RegionCut
+from .geometry.symmetry import SymmetricCut
+from .geometry.volume import Cut, VolumeCut
 
 
 def is_mesh(self, obj: bpy.types.Object) -> bool:
@@ -40,6 +43,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("ELLIPSE", "Ellipse", "Extract an elliptical region"),
             ("POLYGON", "Contour", "Extract a drawn or freehand contour"),
             ("OBJECT", "Cutter Object", "Extract the region inside a closed mesh"),
+            ("REGION", "Surface Region", "Extract a solid piece from matching faces"),
+            ("SYMMETRY", "Symmetric Cuts", "Reflect a straight cut across a symmetry plane"),
         ],
         default="PLANAR",
     )
@@ -126,9 +131,47 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     contour_depth: FloatProperty(name="Depth (mm)", default=10.0, min=0.01, precision=2)
     contour: CollectionProperty(type=TNTMESH_PG_contour_point)
     contour_index: IntProperty(min=0)
+    region_method: EnumProperty(name="Region source", items=[
+        ("MATERIAL", "Material Slot", "Use faces assigned to a material slot"),
+        ("SELECTION", "Selected Faces", "Use the face selection saved on the mesh"),
+        ("FACE_MASK", "Face Mask", "Use a Boolean attribute on the face domain"),
+        ("VERTEX_GROUP", "Vertex Group", "Use faces whose vertices reach the group weight"),
+        ("COLOR", "Color Attribute", "Match all face colors within the given RGB tolerance"),
+    ])
+    region_depth: FloatProperty(name="Depth (mm)", default=2, min=.01, precision=3)
+    region_slot: IntProperty(name="Material Slot", default=1, min=1)
+    region_attribute: StringProperty(name="Name")
+    region_color: FloatVectorProperty(
+        name="Target color", default=(1.0, 0.0, 0.0), min=0, max=1, size=3, subtype="COLOR",
+    )
+    region_tolerance: FloatProperty(name="RGB tolerance", default=.05, min=0, max=1, precision=3)
+    region_weight: FloatProperty(name="Minimum weight", default=.5, min=.001, max=1, precision=3)
+    region_grow: IntProperty(
+        name="Grow / shrink", description="Add or remove rings of edge-adjacent faces",
+        default=0, min=-50, max=50,
+    )
+    symmetry_axis: EnumProperty(
+        name="Symmetry axis", items=[(name, name, "") for name in "XYZ"], default="X",
+    )
+    symmetry_center: FloatProperty(
+        name="Center shift (mm)", description="Shift the symmetry plane from the model center",
+        precision=3,
+    )
+    symmetry_secondary: FloatProperty(
+        name="Second cut shift (mm)", description="Shift the reflected cut along its own normal",
+        precision=3,
+    )
 
-    def config(self) -> PlanarCut | VolumeCut:
-        if self.cut_kind != "PLANAR":
+    def region_config(self) -> RegionCut:
+        return RegionCut(
+            self.region_method, self.region_depth, self.region_slot, self.region_attribute,
+            tuple(self.region_color), self.region_tolerance, self.region_weight, self.region_grow,
+        )
+
+    def config(self) -> Cut:
+        if self.cut_kind == "REGION":
+            return self.region_config()
+        if self.cut_kind not in {"PLANAR", "SYMMETRY"}:
             size = (1.0, 1.0, self.contour_depth) if self.cut_kind == "POLYGON" else tuple(self.profile_size)
             return VolumeCut(
                 self.cut_kind, self.axis, tuple(self.rotation), self.offset,
@@ -143,4 +186,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
                 self.connector, self.diameter, self.insertion, self.lateral, self.axial, self.wall,
                 self.connector_count, self.loose_pins,
             )
-        return PlanarCut(self.axis, self.offset, self.kerf, connector, tuple(self.rotation))
+        cut = PlanarCut(self.axis, self.offset, self.kerf, connector, tuple(self.rotation))
+        if self.cut_kind == "SYMMETRY":
+            return SymmetricCut(cut, self.symmetry_axis, self.symmetry_center, self.symmetry_secondary)
+        return cut

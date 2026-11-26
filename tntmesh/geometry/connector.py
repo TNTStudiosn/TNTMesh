@@ -38,6 +38,12 @@ class Connector:
             raise MeshError("Check the connector dimensions and clearances.")
 
 
+@dataclass(frozen=True)
+class ConnectorResult:
+    meshes: tuple[bpy.types.Mesh, ...]
+    centers: tuple[Vector, ...]
+
+
 def prism(
     transaction: GeometryTransaction,
     frame: Matrix,
@@ -93,11 +99,13 @@ def safe_centers(
     epsilon: float,
     inset: float,
     count: int,
+    requested: tuple[Vector, ...] | None = None,
 ) -> list[Vector]:
     low, high = planes
     probes = ((minus, low - depths[0], low - inset), (plus, high + inset, high + depths[1]))
     centers = []
-    for center in candidates(minus, frame, low, epsilon * 2):
+    search = requested if requested is not None else candidates(minus, frame, low, epsilon * 2)
+    for center in search:
         if any((center - other).length < 2 * envelope for other in centers):
             continue
         with GeometryTransaction() as temporary:
@@ -112,8 +120,12 @@ def safe_centers(
                 if len(centers) == count:
                     break
     if not centers:
+        if requested is not None:
+            raise MeshError("The mirrored connector does not fit at its reflected position.")
         raise MeshError("No safe connector position. Reduce its size or move the cut.")
     if len(centers) < count:
+        if requested is not None:
+            raise MeshError("The mirrored connector does not fit at its reflected position.")
         raise MeshError("Not enough safe positions. Reduce the connector count or size.")
     return centers
 
@@ -127,7 +139,8 @@ def add_connector(
     kerf: float,
     config: Connector,
     epsilon: float,
-) -> tuple[bpy.types.Mesh, ...]:
+    requested: tuple[Vector, ...] | None = None,
+) -> ConnectorResult:
     config.validate()
     low = position - kerf / 2
     high = position + kerf / 2
@@ -139,7 +152,7 @@ def add_connector(
     centers = safe_centers(
         engine, minus, plus, frame, (low, high),
         (minus_depth + config.wall, config.insertion + config.axial + config.wall),
-        envelope, config.sides, epsilon, inset, config.count,
+        envelope, config.sides, epsilon, inset, config.count, requested,
     )
 
     polygon_factor = config.sides * sin(tau / config.sides) / 2
@@ -188,4 +201,4 @@ def add_connector(
             or any(abs(actual - expected) > max(VOLUME_EPSILON, abs(expected) * .01)
                    for actual, expected in deltas)):
         raise MeshError("The connector could not be joined or the socket could not be cut.")
-    return minus, plus, *separate_pins
+    return ConnectorResult((minus, plus, *separate_pins), tuple(centers))

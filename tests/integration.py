@@ -465,6 +465,248 @@ class WorkflowTests(unittest.TestCase):
         for part in self.parts():
             self.assertFalse(self.addon.printer_ui.fit(tuple(part.dimensions), profile.data()).exceeded)
 
+    def test_calibration_produces_engraved_printable_socket_range(self):
+        source = self.cube()
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .01
+        self.assertEqual(bpy.ops.tntmesh.calibrate_connectors(material="PLA"), {"FINISHED"})
+        model = self.addon.calibration_ui
+        pin, = [obj for obj in self.parts() if obj.get(model.CALIBRATION) == "PIN"]
+        sockets = [obj for obj in self.parts() if obj.get(model.CALIBRATION) == "SOCKET"]
+        self.assertEqual([obj[model.CLEARANCE] for obj in sockets],
+                         [.05, .10, .15, .20, .25, .30, .35, .40])
+        self.assertFalse(source.hide_get())
+        self.assertEqual(len(source.data.polygons), 6)
+        self.assertEqual(len({(obj.location.x, obj.location.y) for obj in [pin, *sockets]}), 9)
+        self.assertAlmostEqual(pin.dimensions.z * 10, 5.4, places=5)
+        for obj in sockets:
+            self.checked(obj)
+            self.assertEqual(obj[model.MATERIAL], "PLA")
+            points = [v.co * 10 for v in obj.data.vertices]
+            floor_x = [p.x for p in points if abs(p.z - 1.4) < 1e-5]
+            expected = model.Connector(lateral=obj[model.CLEARANCE]).socket_radius * 2
+            self.assertAlmostEqual(max(floor_x) - min(floor_x), expected, places=4)
+            self.assertTrue(any(abs(p.z - (5.6 - .45)) < 1e-5 for p in points))
+        self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(self.directory)), {"FINISHED"})
+        self.assertEqual(len(list(self.directory.glob("*.stl"))), 9)
+        self.assertEqual(bpy.ops.tntmesh.printer_add(preset="A1"), {"FINISHED"})
+        self.addon.operators.select_results(bpy.context, [sockets[4]])
+        self.assertEqual(bpy.ops.tntmesh.save_calibrated_clearance(), {"FINISHED"})
+        self.assertAlmostEqual(scene.tntmesh_printers[0].lateral_mm, .25)
+
+    def test_calibration_count_and_bad_range_leave_no_temporary_data(self):
+        model = self.addon.calibration_ui
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.calibrate_connectors(start=.2, end=.1), {"CANCELLED"})
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(bpy.ops.tntmesh.calibrate_connectors(
+            sampling="COUNT", count=3, start=.05, end=.24, shape="HEX", engraved=False,
+        ), {"FINISHED"})
+        sockets = [obj for obj in self.parts() if obj.get(model.CALIBRATION) == "SOCKET"]
+        self.assertEqual([obj[model.CLEARANCE] for obj in sockets], [.05, .145, .24])
+        for obj in sockets:
+            self.checked(obj)
+
+    def test_material_region_is_a_closed_solid_and_keeps_the_source(self):
+        source = self.cube()
+        mesh = source.data
+        mesh.materials.append(bpy.data.materials.new("Body"))
+        mesh.materials.append(bpy.data.materials.new("Top"))
+        top = max(mesh.polygons, key=lambda face: face.normal.z)
+        top.material_index = 1
+        mesh.update()
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "MATERIAL"
+        self.settings.region_slot = 2
+        self.settings.region_depth = 3.0
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        remainder, extract = self.parts()
+        self.assertAlmostEqual(extract.dimensions.z, 3, places=5)
+        self.assertAlmostEqual(self.checked(extract), 24 * 24 * 3, places=3)
+        self.assertAlmostEqual(self.checked(remainder) + self.checked(extract), 24**3, places=3)
+        self.assertEqual(len(mesh.polygons), 6)
+        self.assertEqual(top.material_index, 1)
+
+    def test_region_wraps_two_adjacent_faces_without_leaving_an_open_corner(self):
+        source = self.cube()
+        for face in source.data.polygons:
+            face.select = max(face.normal.x, face.normal.z) > .9
+        source.data.update()
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "SELECTION"
+        self.settings.region_depth = 2
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        remainder, extract = self.parts()
+        self.assertAlmostEqual(self.checked(extract), 2 * 24 * 24 * 2 - 2 * 2 * 24,
+                               places=3)
+        self.assertAlmostEqual(self.checked(remainder) + self.checked(extract), 24**3, places=3)
+
+    def test_color_selection_and_vertex_groups_share_the_same_closed_output(self):
+        for method in ("COLOR", "VERTEX_GROUP", "FACE_MASK", "SELECTION"):
+            with self.subTest(method=method):
+                source = self.cube()
+                mesh = source.data
+                top = max(mesh.polygons, key=lambda face: face.normal.z)
+                for face in mesh.polygons:
+                    face.select = face.index == top.index
+                mask = mesh.attributes.new(name="Top mask", type="BOOLEAN", domain="FACE")
+                mask.data[top.index].value = True
+                colors = mesh.color_attributes.new(name="Colors", type="FLOAT_COLOR", domain="CORNER")
+                for i in range(len(colors.data)):
+                    colors.data[i].color = (1, 0, 0, 1) if i in top.loop_indices else (0, 0, 1, 1)
+                source.vertex_groups.new(name="Top region").add(tuple(top.vertices), 1, "REPLACE")
+                mesh.update()
+                self.settings.cut_kind = "REGION"
+                self.settings.region_method = method
+                self.settings.region_attribute = {
+                    "COLOR": "Colors", "VERTEX_GROUP": "Top region", "FACE_MASK": "Top mask",
+                }.get(method, "")
+                previous = set(self.parts())
+                self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+                parts = sorted(set(self.parts()) - previous, key=lambda obj: obj.name)
+                self.assertAlmostEqual(self.checked(parts[1]), 24 * 24 * 2, places=3)
+
+    def test_region_in_a_draft_can_rebuild_and_reject_a_fully_selected_patch(self):
+        source = self.cube()
+        mesh = source.data
+        mask = mesh.attributes.new(name="Top mask", type="BOOLEAN", domain="FACE")
+        top = max(mesh.polygons, key=lambda face: face.normal.z)
+        mask.data[top.index].value = True
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "FACE_MASK"
+        self.settings.region_attribute = "Top mask"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        parts = set(self.parts())
+        before = set(bpy.data.meshes.keys())
+        for value in mask.data:
+            value.value = True
+        mesh.update()
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(set(self.parts()), parts)
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+
+    def test_symmetric_cuts_place_separate_pins_at_reflected_coordinates(self):
+        source = self.cube(48)
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.axis = "X"
+        self.settings.offset = 11
+        self.settings.symmetry_axis = "X"
+        self.settings.symmetry_center = 2
+        self.settings.connector = "HEX"
+        self.settings.loose_pins = True
+        self.settings.connector_count = 2
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        bodies, pins = self.parts()[:3], self.parts()[3:]
+        self.assertEqual(len(pins), 4)
+        self.assertTrue(all("Pin " in obj.name for obj in pins))
+        self.assertTrue(all("Pin " not in obj.name for obj in bodies))
+        for obj in [*bodies, *pins]:
+            self.checked(obj)
+        centers = [sum((vertex.co for vertex in obj.data.vertices), Vector()) /
+                   len(obj.data.vertices) for obj in pins]
+        for primary, mirrored in zip(centers[:2], centers[2:], strict=True):
+            self.assertAlmostEqual(primary.x + mirrored.x, 4, places=5)
+            self.assertAlmostEqual(primary.y, mirrored.y, places=5)
+            self.assertAlmostEqual(primary.z, mirrored.z, places=5)
+        self.assertTrue(source.hide_get())
+        self.assertEqual(len(source.data.polygons), 6)
+
+    def test_symmetric_draft_exposes_the_third_piece_and_can_shift_the_second_cut(self):
+        self.cube(48)
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.axis = "X"
+        self.settings.offset = 10
+        self.settings.symmetry_secondary = 2
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        plan = self.addon.draft.active_plan(bpy.context.scene)
+        keys = self.addon.draft.cut_outputs(plan.cuts[0])
+        self.assertEqual(len(keys), 3)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 3)
+        self.assertAlmostEqual(self.parts()[0].dimensions.x, 14)
+        self.assertAlmostEqual(self.parts()[1].dimensions.x, 22)
+        self.assertAlmostEqual(self.parts()[2].dimensions.x, 12)
+        self.assertAlmostEqual(sum(self.checked(part) for part in self.parts()), 48**3)
+
+    def test_coincident_symmetric_cuts_leave_no_parts(self):
+        source = self.cube()
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.axis = "Z"
+        self.settings.offset = 5
+        self.settings.symmetry_axis = "X"
+        self.settings.connector = "NONE"
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(self.parts(), [])
+        self.assertFalse(source.hide_get())
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+
+    def test_exploded_preview_does_not_change_original_transforms_or_exports(self):
+        self.cube()
+        self.settings.axis = "X"
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.assembly_project(), {"FINISHED"})
+        pieces = self.parts()
+        transforms = {obj: obj.matrix_world.copy() for obj in pieces}
+        baseline = self.directory / "baseline"
+        expanded = self.directory / "expanded"
+        baseline.mkdir()
+        expanded.mkdir()
+        self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(baseline)), {"FINISHED"})
+        state = bpy.context.scene.tntmesh_assembly
+        state.distance = 8
+        offsets = self.addon.assembly_view.offsets(bpy.context)
+        self.assertEqual([tuple(offset) for _, _, offset in offsets], [(-8, 0, 0), (8, 0, 0)])
+        self.assertEqual(bpy.ops.tntmesh.export_stl(directory=str(expanded)), {"FINISHED"})
+        self.assertEqual({path.name: path.read_bytes() for path in baseline.glob("*.stl")},
+                         {path.name: path.read_bytes() for path in expanded.glob("*.stl")})
+        self.assertEqual({obj: obj.matrix_world for obj in pieces}, transforms)
+        self.assertEqual(bpy.ops.tntmesh.assembly_action(action="RESET"), {"FINISHED"})
+        self.assertEqual(state.distance, 0)
+
+    def test_static_assembly_check_distinguishes_contact_from_interpenetration(self):
+        self.cube()
+        self.settings.axis = "X"
+        self.settings.connector = "ROUND"
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        first, second = self.parts()
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(self.addon.assembly.overlaps(bpy.context, [first, second]), [])
+        first.location.x += 1
+        bpy.context.view_layer.update()
+        conflict, = self.addon.assembly.overlaps(bpy.context, [first, second])
+        self.assertEqual(set(conflict[:2]), {first, second})
+        self.assertGreater(conflict[2], 540)
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+
+    def test_assembly_visibility_and_copy_are_scoped_to_the_project(self):
+        source = self.cube()
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        original = self.parts()
+        self.assertEqual(bpy.ops.tntmesh.assembly_project(), {"FINISHED"})
+        outside = self.cube(10)
+        self.assertEqual(bpy.ops.tntmesh.assembly_action(action="ISOLATE"), {"FINISHED"})
+        self.assertEqual(sum(obj.hide_get() for obj in original), 1)
+        self.assertFalse(outside.hide_get())
+        self.assertEqual(bpy.ops.tntmesh.assembly_action(action="SHOW_ALL"), {"FINISHED"})
+        self.assertFalse(any(obj.hide_get() for obj in original))
+        self.assertEqual(bpy.ops.tntmesh.assembly_action(action="DUPLICATE"), {"FINISHED"})
+        copied, = set(self.parts()) - set(original)
+        self.assertEqual(len({obj.get("tntmesh_part_id") for obj in self.parts()}), 3)
+        self.assertTrue(all(copied.data != obj.data for obj in original))
+        self.assertEqual(bpy.ops.tntmesh.assembly_action(action="DELETE"), {"FINISHED"})
+        self.assertEqual(self.parts(), original)
+        self.assertIn(source, bpy.data.objects.values())
+        self.assertIn(outside, bpy.data.objects.values())
+
     def test_open_model_is_rejected(self):
         bpy.ops.mesh.primitive_plane_add(size=24)
         self.assertEqual(bpy.ops.tntmesh.validate(), {"CANCELLED"})

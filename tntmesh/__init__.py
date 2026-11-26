@@ -3,6 +3,10 @@ import bpy
 from bpy.props import CollectionProperty, IntProperty, PointerProperty
 
 from . import (
+    assembly,
+    assembly_ui,
+    assembly_view,
+    calibration_ui,
     draft,
     draft_operators,
     draw_cut,
@@ -17,9 +21,11 @@ from .settings import TNTMESH_PG_contour_point, TNTMESH_PG_settings
 
 _CLASSES = (
     TNTMESH_PG_contour_point, TNTMESH_PG_settings, TNTMESH_PG_printer, *draft.CLASSES,
+    assembly.TNTMESH_PG_assembly,
     *operators.CLASSES,
     *draft_operators.CLASSES,
-    draw_cut.TNTMESH_OT_draw_plane, *ui.CLASSES, *printer_ui.CLASSES,
+    draw_cut.TNTMESH_OT_draw_plane, *ui.CLASSES, *printer_ui.CLASSES, *calibration_ui.CLASSES,
+    *assembly_ui.CLASSES,
 )
 _registered: list[type] = []
 
@@ -37,7 +43,9 @@ def register() -> None:
         bpy.types.Scene.tntmesh_draft_index = IntProperty(min=0)
         bpy.types.Scene.tntmesh_printers = CollectionProperty(type=TNTMESH_PG_printer)
         bpy.types.Scene.tntmesh_printer_index = IntProperty(min=0)
+        bpy.types.Scene.tntmesh_assembly = PointerProperty(type=assembly.TNTMESH_PG_assembly)
         viewport.register()
+        assembly_view.register()
     except Exception:
         unregister()
         raise
@@ -45,8 +53,9 @@ def register() -> None:
 
 def unregister() -> None:
     draw_cut.cancel_sessions()
+    assembly_view.unregister()
     viewport.unregister()
-    for name in ("tntmesh_printer_index", "tntmesh_printers", "tntmesh_draft_index",
+    for name in ("tntmesh_assembly", "tntmesh_printer_index", "tntmesh_printers", "tntmesh_draft_index",
                  "tntmesh_drafts", "tntmesh_settings"):
         if hasattr(bpy.types.Scene, name):
             delattr(bpy.types.Scene, name)

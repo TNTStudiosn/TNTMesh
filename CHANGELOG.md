@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0-alpha.2
+
+- Added connector calibration kits with an engraved clearance sweep and a reusable pin. A selected socket can set a printer profile's per-side clearance.
+- Added solid surface-region extraction by material slot, color, vertex group, face mask or face selection in Easy and Draft.
+- Added symmetric two-plane cuts with an adjustable center and mirrored cylindrical or hexagonal connectors.
+- Added a project piece panel, exploded preview, and static volume-overlap checks in the assembled position.
+
 ## 0.3.0-alpha.1
 
 - Added eight editable FDM and resin printer profiles, JSON import and export, and tolerance transfer.

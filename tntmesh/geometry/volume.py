@@ -12,6 +12,8 @@ from .custom_connector import CustomConnector
 from .mesh import bounds, evaluated_mm, inspect, primitive
 from .planar import PlanarCut, axis_frame, split
 from .polygon import Point2, closed_outline
+from .region import RegionCut, cutter_for_region
+from .symmetry import SymmetricCut, split_symmetric
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,13 @@ class VolumeCut:
     resolution: int
     cutter: bpy.types.Object | None
     points: tuple[Point2, ...]
+
+
+Cut = PlanarCut | RegionCut | SymmetricCut | VolumeCut
+
+
+def structural_parts(kind: str) -> int:
+    return 3 if kind == "SYMMETRY" else 2
 
 
 def bezier_path(
@@ -125,8 +134,10 @@ def cutter_mesh(
 
 def apply_cut(
     context: bpy.types.Context, transaction: GeometryTransaction, mesh: bpy.types.Mesh,
-    config: PlanarCut | VolumeCut, origin: Vector, unit: float, source: bpy.types.Object,
+    config: Cut, origin: Vector, unit: float, source: bpy.types.Object,
 ) -> tuple[bpy.types.Mesh, ...]:
+    if isinstance(config, SymmetricCut):
+        return split_symmetric(context, transaction, mesh, config)
     if isinstance(config, PlanarCut):
         if isinstance(config.connector, CustomConnector) and source in (
             config.connector.pin, config.connector.socket
@@ -134,8 +145,11 @@ def apply_cut(
             raise MeshError("Use connector templates separate from the input model.")
         return split(context, transaction, mesh, config)
     original_volume = inspect(mesh).volume_mm3
-    cutter = cutter_mesh(context, transaction, mesh, config, origin, unit, source)
-    inspect(cutter)
+    if isinstance(config, RegionCut):
+        cutter = cutter_for_region(transaction, mesh, source, config)
+    else:
+        cutter = cutter_mesh(context, transaction, mesh, config, origin, unit, source)
+        inspect(cutter)
     engine = ExactBoolean(context, transaction)
     outside = engine.run(mesh, cutter, "DIFFERENCE")
     inside = engine.run(mesh, cutter, "INTERSECT")

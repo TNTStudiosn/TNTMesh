@@ -17,4 +17,6 @@ STL y OBJ guardan coordenadas en milímetros y conservan la posición de ensambl
 
 En **Impresora**, selecciona un perfil, establece los márgenes y previsualiza el volumen útil. **Dividir para que quepa** corta modelos que superen el perfil con su orientación actual. [Perfiles y especificaciones](docs/printer-profiles.md)
 
+**Calibrar conectores** genera un pin reutilizable y cavidades grabadas. Después de imprimir, selecciona la cavidad que ajustó mejor y guarda la holgura en el perfil. **Región de superficie** extrae una capa sólida por material, color o selección. **Cortes simétricos** refleja un corte recto junto con sus conectores. En **Ensamblaje** puedes revisar las piezas y separarlas visualmente conservando sus posiciones de exportación.
+
 La validación comprueba el cierre, la orientación de las caras, las caras degeneradas y el volumen interior. Revisa la orientación, los soportes y la preparación final en tu slicer. Imprime una muestra para comprobar el ajuste con tu material y equipo.

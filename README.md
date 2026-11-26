@@ -17,4 +17,6 @@ STL and OBJ store millimeter coordinates and preserve assembly positions. FBX wr
 
 Use the **Printer** panel to choose a profile, set safety margins and preview the usable volume. **Split to Fit** divides models that exceed the selected profile in their current orientation. [Printer presets and specifications](docs/printer-profiles.md)
 
+**Calibrate Connectors** makes a reusable pin and engraved socket samples. After printing, select the socket that fits and save its clearance to the printer profile. **Surface Region** extracts a solid layer from faces matched by material, color or selection. **Symmetric Cuts** reflects a straight cut and its connector positions. Open **Assembly** to inspect project pieces and preview separation while retaining their export positions.
+
 The current validation checks closure, winding, degenerate faces and enclosed volume. Check the final orientation, supports and print settings in your slicer. Print a sample to verify the fit for your material and printer.

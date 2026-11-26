@@ -14,7 +14,10 @@ GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diame
                        "lateral", "axial", "wall", "connector_count", "loose_pins",
                        "pin_template", "socket_template",
                        "cut_kind", "cutter", "profile_size",
-                       "profile_shift", "curve_controls", "curve_samples", "contour_depth")
+                       "profile_shift", "curve_controls", "curve_samples", "contour_depth",
+                       "region_method", "region_depth", "region_slot", "region_attribute",
+                       "region_color", "region_tolerance", "region_weight", "region_grow",
+                       "symmetry_axis", "symmetry_center", "symmetry_secondary")
 
 
 def copy_settings(source: TNTMESH_PG_settings, destination: TNTMESH_PG_settings) -> None:

@@ -134,6 +134,64 @@ def printer_screenshot():
     bpy.context.scene.tntmesh_settings.show_build_volume = False
 
 
+def open_calibration_dialog():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.calibrate_connectors("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
+
+
+def capture_calibration():
+    screenshot("07-calibration.png")
+    cancel_line()
+
+
+def set_region_preview():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        obj = bpy.context.active_object
+        top = max(obj.data.polygons, key=lambda face: face.normal.z)
+        for face in obj.data.polygons:
+            face.select = face.index == top.index
+        obj.data.update()
+        settings = bpy.context.scene.tntmesh_settings
+        settings.cut_kind = "REGION"
+        settings.region_method = "SELECTION"
+        settings.show_plane = True
+    area.tag_redraw()
+
+
+def set_symmetry_preview():
+    screenshot("08-region.png")
+    settings = bpy.context.scene.tntmesh_settings
+    settings.cut_kind = "SYMMETRY"
+    settings.axis = "X"
+    settings.offset = 6.0
+    settings.symmetry_axis = "X"
+    viewport()[1].tag_redraw()
+
+
+def reset_cut_preview():
+    screenshot("09-symmetry.png")
+    settings = bpy.context.scene.tntmesh_settings
+    settings.cut_kind = "PLANAR"
+    settings.axis = "Z"
+    settings.offset = 0
+    viewport()[1].tag_redraw()
+
+
+def start_exploded_preview():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.assembly_project() == {"FINISHED"}
+        bpy.context.scene.tntmesh_assembly.distance = 11
+    area.tag_redraw()
+
+
+def capture_assembly():
+    screenshot("10-assembly.png")
+    assert bpy.ops.tntmesh.assembly_action(action="RESET") == {"FINISHED"}
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -251,10 +309,20 @@ printer_steps = (
      lambda: toggle_smoke_panel(120), lambda: toggle_smoke_panel(93))
     if os.environ.get("TNTMESH_TEST_PRINTER") == "1" else ()
 )
+phase3_steps = (
+    (set_region_preview, set_symmetry_preview, reset_cut_preview)
+    if line_steps and os.environ.get("TNTMESH_TEST_PHASE3") == "1" else ()
+)
+assembly_steps = (
+    (open_calibration_dialog, capture_calibration, start_exploded_preview,
+     lambda: toggle_smoke_panel(93), lambda: toggle_smoke_panel(146),
+     capture_assembly, lambda: toggle_smoke_panel(146), lambda: toggle_smoke_panel(93))
+    if phase3_steps else ()
+)
 steps = iter((
-    setup, panel, *line_steps, *contour_steps, split, undo, redo, spanish, panel,
+    setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
-    *export_steps, *printer_steps, draft_panel, finish,
+    *export_steps, *printer_steps, *assembly_steps, draft_panel, finish,
 ))
 
 

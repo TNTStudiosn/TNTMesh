@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.1.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.2.zip
 ```
 
 ## Geometría y borradores
@@ -26,6 +26,14 @@ Cada borrador guarda la referencia a la fuente y los identificadores de las oper
 
 Los perfiles de impresora se guardan en la escena y se pueden transferir entre proyectos por JSON. La comprobación de dimensiones descuenta el margen en ambos lados de cada eje. Las orientaciones alternativas prueban permutaciones de los tres ejes. **Dividir para que quepa** valida las medidas de cada pieza antes de mostrar los resultados.
 
+**Calibrar conectores** usa los mismos perfiles cilíndricos y hexagonales de los cortes rectos. La muestra predeterminada va de 0.05 a 0.40 mm de holgura por lado en pasos de 0.05 mm. También puedes elegir la cantidad de muestras. Exporta el kit e imprímelo con el material y los ajustes que quieres calibrar. Voltea el pin de prueba para probar las cavidades y selecciona en Blender la que mejor ajustó. **Guardar holgura en el perfil** registra ese valor en la impresora seleccionada. Usa los ajustes del perfil para transferir la holgura a cortes futuros.
+
+**Región de superficie** admite ranuras de material, caras seleccionadas, atributos booleanos de caras, grupos de vértices y color RGB lineal. En grupos y colores deben coincidir todos los vértices o muestras de la cara. Puedes ampliar o reducir la selección por anillos de caras vecinas. El cortador se cierra por los bordes y penetra la malla a la profundidad elegida. El motor comprueba cruces en el cortador y valida el cierre y volumen de las dos piezas. Los borradores leen los atributos del modelo al reconstruirse.
+
+**Cortes simétricos** refleja un plano recto respecto al eje y centro elegidos. Separa el primer plano del centro para obtener dos piezas exteriores y una central. Puedes desplazar el segundo plano sobre su normal. Los conectores cilíndricos o hexagonales conservan sus posiciones reflejadas y ambas uniones deben pasar la comprobación de espacio. En Borrador puedes usar cada una de las tres piezas como entrada de cortes posteriores.
+
+**Ensamblaje** agrupa las piezas por proyecto y permite seleccionarlas, encuadrarlas, ocultarlas, duplicarlas y medirlas. El deslizador separa la geometría solo en la vista previa. Las posiciones de exportación se conservan. Las piezas densas se muestran con su caja envolvente. **Revisar ensamblaje** busca traslapes de volumen en la posición actual. La simulación de inserción queda pendiente.
+
 La exportación 3MF guarda mallas en milímetros como objetos independientes en posición de ensamblaje. Incluye geometría y deja los ajustes de impresión, soportes y materiales al slicer. [Especificación 3MF Core](https://github.com/3MFConsortium/spec_core)
 
 En Windows se exportó un cubo de 24 mm dividido en dos mitades dentro de un solo 3MF. OrcaSlicer y Bambu Studio abrieron y reexportaron el archivo. En ambos se comprobó que se conservaron dos objetos de 24 × 24 × 12 mm. [CLI de Bambu Studio](https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage)
@@ -33,6 +41,8 @@ En Windows se exportó un cubo de 24 mm dividido en dos mitades dentro de un sol
 ## Verificación y publicación
 
 Las pruebas de integración se ejecutan en Blender e incluyen exportación y reimportación, dimensiones de conectores, mallas huecas, cambios de escala, restauración de borradores y limpieza ante fallos. Para comprobar la interfaz, ejecuta `tests/viewport_smoke.py` en una instancia gráfica con un perfil aislado y define `TNTMESH_SMOKE_OUTPUT` como carpeta de salida. Para probar el dibujo y la cancelación, define `TNTMESH_TEST_EVENTS=1` y utiliza `--enable-event-simulate`. Define `TNTMESH_TEST_CONTOUR=1` para probar el contorno a mano alzada y `TNTMESH_TEST_PRINTER=1` para capturar el panel de impresora y el volumen útil.
+
+Define `TNTMESH_TEST_PHASE3=1` para capturar la calibración, el resaltado de regiones, los planos simétricos y la vista de ensamblaje en la ventana de prueba de 1024 × 745.
 
 GitHub Actions compara el tag con el manifiesto, prueba el ZIP instalado y genera la suma SHA-256 antes de publicar. Las versiones alfa, beta y candidatas se marcan como experimentales.
 

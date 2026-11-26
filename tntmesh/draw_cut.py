@@ -82,7 +82,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         return (context.area is not None and context.area.type == "VIEW_3D"
                 and not context.space_data.region_quadviews and MeshOperator.poll(context)
                 and context.scene.tntmesh_settings.mode == "EASY"
-                and context.scene.tntmesh_settings.cut_kind in {"PLANAR", "POLYGON"})
+                and context.scene.tntmesh_settings.cut_kind in {"PLANAR", "POLYGON", "SYMMETRY"})
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         if _sessions:

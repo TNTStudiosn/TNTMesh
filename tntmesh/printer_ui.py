@@ -7,6 +7,7 @@ from bpy.props import EnumProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Matrix
 
+from .calibration_ui import chosen_clearance
 from .localization import tr
 from .model import MeshError, millimeters_per_unit
 from .operators import active_mesh, report_failure
@@ -173,6 +174,7 @@ class TNTMESH_PT_print(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("tntmesh.printer_import", text="Import", icon="IMPORT")
         row.operator("tntmesh.printer_export", text="Export", icon="EXPORT")
+        layout.operator("tntmesh.calibrate_connectors", icon="MOD_BOOLEAN")
         profile = selected_printer(scene)
         if profile is None:
             return
@@ -182,6 +184,11 @@ class TNTMESH_PT_print(bpy.types.Panel):
                 scene, "tntmesh_printer_index", rows=3,
             )
         layout.label(text=profile.data().name, translate=False, icon="FILE_3D")
+        clearance = chosen_clearance(context)
+        if clearance is not None:
+            layout.label(text=tr("Socket {clearance:.3f} mm").format(clearance=clearance),
+                         translate=False, icon="SNAP_FACE")
+            layout.operator("tntmesh.save_calibrated_clearance", icon="CHECKMARK")
         draw_fit(layout, context, profile)
         header, body = layout.panel("tntmesh_printer_edit", default_closed=True)
         header.label(text="Profile settings")

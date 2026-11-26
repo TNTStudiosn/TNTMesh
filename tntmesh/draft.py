@@ -3,12 +3,14 @@ from uuid import UUID, uuid5
 
 import bpy
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty, StringProperty
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from .geometry.mesh import evaluated_mm
-from .geometry.volume import apply_cut
+from .geometry.planar import PlanarCut, axis_frame
+from .geometry.volume import apply_cut, structural_parts
 from .localization import tr
 from .model import (
+    ASSEMBLY_DIRECTION,
     DRAFT_ID,
     PART_ID,
     ROLE,
@@ -59,8 +61,9 @@ def active_cut(plan: TNTMESH_PG_draft_plan) -> TNTMESH_PG_draft_cut | None:
     return plan.cuts[plan.cut_index] if plan.cut_index < len(plan.cuts) else None
 
 
-def cut_outputs(cut: TNTMESH_PG_draft_cut) -> tuple[str, str]:
-    return cut.uid + ":1", cut.uid + ":2"
+def cut_outputs(cut: TNTMESH_PG_draft_cut) -> tuple[str, ...]:
+    quantity = structural_parts(cut.settings.cut_kind)
+    return tuple(f"{cut.uid}:{number}" for number in range(1, quantity + 1))
 
 
 def target_label(plan: TNTMESH_PG_draft_plan, key: str) -> str:
@@ -162,21 +165,31 @@ def rebuild(
                 if was_hidden:
                     source.hide_set(True)
             leaves = {SOURCE: mesh}
+            directions = {SOURCE: Vector((0, 0, 0))}
             pins = {}
             for index, operation in enumerate(operations, 1):
                 target = leaves.pop(operation.target)
+                inherited = directions.pop(operation.target)
+                config = operation.settings.config()
                 try:
                     pieces = apply_cut(
-                        context, transaction, target, operation.settings.config(), origin, unit,
-                        source,
+                        context, transaction, target, config, origin, unit, source,
                     )
                 except MeshError as error:
                     raise DraftError(operation.name, str(error)) from error
                 transaction.remove_mesh(target)
-                leaves.update(zip(cut_outputs(operation), pieces[:2], strict=True))
+                keys = cut_outputs(operation)
+                leaves.update(zip(keys, pieces[:len(keys)], strict=True))
+                if isinstance(config, PlanarCut):
+                    normal = axis_frame(config.axis, config.rotation).col[2]
+                    directions[keys[0]] = inherited - normal
+                    directions[keys[1]] = inherited + normal
+                else:
+                    for key in keys:
+                        directions[key] = inherited.copy()
                 pins.update(
                     (f"{operation.uid}:pin:{number}", pin)
-                    for number, pin in enumerate(pieces[2:], 1)
+                    for number, pin in enumerate(pieces[len(keys):], 1)
                 )
                 wm.progress_update(index)
 
@@ -191,6 +204,8 @@ def rebuild(
                 obj.location = origin
                 identify_part(obj, plan.uid, part_id)
                 obj[DRAFT_ID] = plan.uid
+                if key in directions and directions[key].length_squared:
+                    obj[ASSEMBLY_DIRECTION] = tuple(directions[key])
                 created.append((obj, name))
             for obj, _ in created:
                 transaction.publish(obj)

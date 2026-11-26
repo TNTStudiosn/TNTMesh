@@ -5,6 +5,8 @@ from mathutils import Matrix, Vector
 
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
+from .geometry.region import RegionCut, region_faces
+from .geometry.symmetry import reflection
 from .geometry.volume import bezier_path, outline
 from .model import MeshError, millimeters_per_unit
 from .operators import active_mesh
@@ -14,11 +16,13 @@ from .settings import TNTMESH_PG_settings
 
 _handles = []
 _preview_bounds: dict[tuple[int, int, tuple], tuple[Vector, Vector]] = {}
+_region_preview: dict[tuple[int, int, RegionCut], list[Vector]] = {}
 
 
 @persistent
 def invalidate_bounds(*_args: object) -> None:
     _preview_bounds.clear()
+    _region_preview.clear()
 
 
 def project_bounds(
@@ -86,6 +90,9 @@ def draw_plane() -> None:
         return
     if settings.cut_kind == "OBJECT":
         return
+    if settings.cut_kind == "REGION":
+        draw_region(context, obj, settings.region_config())
+        return
     frame = axis_frame(settings.axis, tuple(settings.rotation))
     extents = project_bounds(obj, context.evaluated_depsgraph_get(), frame)
     if extents is None:
@@ -100,13 +107,67 @@ def draw_plane() -> None:
     try:
         for points, fill in cutter_paths(settings, lower, upper, unit):
             vertices = [frame @ Vector(point) for point in points]
-            shader.bind()
-            if fill:
-                shader.uniform_float("color", (0.0, 1.0, 1.0, 0.16))
-                batch_for_shader(shader, "TRI_FAN", {"pos": vertices}).draw(shader)
-                vertices.append(vertices[0])
-            shader.uniform_float("color", (0.0, 1.0, 1.0, 0.9))
-            batch_for_shader(shader, "LINE_STRIP", {"pos": vertices}).draw(shader)
+            overlays = [(vertices, (0.0, 1.0, 1.0))]
+            if settings.cut_kind == "SYMMETRY":
+                axis = "XYZ".index(settings.symmetry_axis)
+                limits = project_bounds(obj, context.evaluated_depsgraph_get(), Matrix.Identity(3))
+                if limits is not None:
+                    center = (limits[0][axis] + limits[1][axis]) / 2 + settings.symmetry_center / unit
+                    mirror, translation = reflection(settings.symmetry_axis, center)
+                    translation += (mirror @ frame.col[2]) * (settings.symmetry_secondary / unit)
+                    overlays.append(([mirror @ point + translation for point in vertices],
+                                     (0.68, 0.48, 1.0)))
+            for coordinates, color in overlays:
+                shader.bind()
+                if fill:
+                    shader.uniform_float("color", (*color, 0.16))
+                    batch_for_shader(shader, "TRI_FAN", {"pos": coordinates}).draw(shader)
+                    coordinates = [*coordinates, coordinates[0]]
+                shader.uniform_float("color", (*color, 0.9))
+                batch_for_shader(shader, "LINE_STRIP", {"pos": coordinates}).draw(shader)
+    finally:
+        gpu.state.depth_test_set(previous_depth)
+        gpu.state.blend_set(previous_blend)
+
+
+def draw_region(context: bpy.types.Context, obj: bpy.types.Object, config: RegionCut) -> None:
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+
+    depsgraph = context.evaluated_depsgraph_get()
+    key = (depsgraph.as_pointer(), obj.as_pointer(), config)
+    if key not in _region_preview:
+        _region_preview.clear()
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.data
+        world = evaluated.matrix_world
+        normal_matrix = world.to_3x3().inverted_safe().transposed()
+        offset = .01 / millimeters_per_unit(context.scene)
+        try:
+            selected = region_faces(mesh, obj, config)
+        except MeshError:
+            selected = set()
+        if selected:
+            mesh.calc_loop_triangles()
+        positions = []
+        for triangle in mesh.loop_triangles if selected else ():
+            if triangle.polygon_index in selected:
+                lift = (normal_matrix @ mesh.polygons[triangle.polygon_index].normal).normalized()
+                positions.extend(world @ mesh.vertices[index].co + lift * offset
+                                 for index in triangle.vertices)
+        _region_preview[key] = positions
+    positions = _region_preview[key]
+    if not positions:
+        return
+    shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+    previous_blend = gpu.state.blend_get()
+    previous_depth = gpu.state.depth_test_get()
+    gpu.state.blend_set("ALPHA")
+    gpu.state.depth_test_set("LESS_EQUAL")
+    try:
+        shader.bind()
+        shader.uniform_float("color", (0.0, 1.0, 1.0, 0.38))
+        batch_for_shader(shader, "TRIS", {"pos": positions}).draw(shader)
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)

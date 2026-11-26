@@ -6,17 +6,46 @@ from .operators import active_mesh, managed_parts
 from .settings import TNTMESH_PG_settings
 
 
-def cut_properties(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+def cut_properties(
+    layout: bpy.types.UILayout, settings: TNTMESH_PG_settings, source: bpy.types.Object | None,
+) -> None:
     layout.label(text="Cut type")
     layout.prop(settings, "cut_kind", text="")
     if settings.cut_kind == "OBJECT":
         layout.prop(settings, "cutter")
         return
+    if settings.cut_kind == "REGION":
+        layout.prop(settings, "region_method", text="")
+        method = settings.region_method
+        if method == "MATERIAL":
+            layout.prop(settings, "region_slot")
+            if source is not None and settings.region_slot <= len(source.material_slots):
+                layout.label(text=source.material_slots[settings.region_slot - 1].name,
+                             translate=False, icon="MATERIAL")
+        elif method == "SELECTION":
+            layout.label(text="Uses saved face selection.", icon="FACESEL")
+        else:
+            if source is None or source.type != "MESH":
+                layout.prop(settings, "region_attribute")
+            elif method == "VERTEX_GROUP":
+                layout.prop_search(settings, "region_attribute", source, "vertex_groups")
+            elif method == "COLOR":
+                layout.prop_search(settings, "region_attribute", source.data, "color_attributes")
+            else:
+                layout.prop_search(settings, "region_attribute", source.data, "attributes")
+        if method == "COLOR":
+            layout.prop(settings, "region_color")
+        layout.prop(settings, "region_depth")
+        return
     layout.row(align=True).prop(settings, "axis", expand=True)
     if settings.axis == "FREE":
         layout.column(align=True).prop(settings, "rotation")
     layout.prop(settings, "offset")
-    if settings.cut_kind == "PLANAR":
+    if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
+        if settings.cut_kind == "SYMMETRY":
+            layout.label(text="Symmetry axis")
+            layout.row(align=True).prop(settings, "symmetry_axis", expand=True)
+            layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
         if settings.connector == "CUSTOM":
@@ -31,6 +60,13 @@ def cut_properties(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) ->
 
 
 def cut_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    if settings.cut_kind == "REGION":
+        layout.prop(settings, "region_grow")
+        if settings.region_method == "COLOR":
+            layout.prop(settings, "region_tolerance")
+        elif settings.region_method == "VERTEX_GROUP":
+            layout.prop(settings, "region_weight")
+        return
     if settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_samples")
         return
@@ -41,8 +77,10 @@ def cut_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> No
                 "TNTMESH_UL_contour", "", settings, "contour", settings, "contour_index", rows=3,
             )
         return
-    if settings.cut_kind != "PLANAR":
+    if settings.cut_kind not in {"PLANAR", "SYMMETRY"}:
         return
+    if settings.cut_kind == "SYMMETRY":
+        layout.prop(settings, "symmetry_secondary")
     layout.prop(settings, "kerf")
     if settings.connector == "CUSTOM":
         layout.prop(settings, "wall")
@@ -122,7 +160,7 @@ def draw_draft(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
         )
         if operation.enabled and operation.target not in draft.free_targets(plan, plan.cut_index):
             layout.label(text="Choose an available input piece.", icon="ERROR")
-        cut_properties(layout.box(), operation.settings)
+        cut_properties(layout.box(), operation.settings, plan.source)
         if operation.settings.cut_kind != "OBJECT":
             header, body = layout.panel("tntmesh_draft_cut_settings", default_closed=True)
             header.label(text="Cut settings")
@@ -176,15 +214,16 @@ class TNTMESH_PT_main(bpy.types.Panel):
             layout.separator()
             cut = layout.box()
             cut.label(text="Split", icon="MOD_BOOLEAN")
-            cut_properties(cut, settings)
-            if settings.cut_kind in {"PLANAR", "POLYGON"}:
+            cut_properties(cut, settings, obj)
+            if settings.cut_kind in {"PLANAR", "POLYGON", "SYMMETRY"}:
                 cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=(
-                    "Draw Cut Line" if settings.cut_kind == "PLANAR" else "Draw Contour"
+                    "Draw Contour" if settings.cut_kind == "POLYGON" else "Draw Cut Line"
                 ))
             if settings.cut_kind != "OBJECT":
-                cut.prop(settings, "show_plane", text=(
-                    "Show plane" if settings.cut_kind == "PLANAR" else "Show cutter"
-                ))
+                preview_label = {
+                    "PLANAR": "Show plane", "REGION": "Highlight region", "SYMMETRY": "Show both planes",
+                }.get(settings.cut_kind, "Show cutter")
+                cut.prop(settings, "show_plane", text=preview_label)
 
             header, body = layout.panel("tntmesh_cut_settings", default_closed=True)
             header.label(text="Cut settings")
@@ -194,7 +233,8 @@ class TNTMESH_PT_main(bpy.types.Panel):
 
             action = layout.row()
             action.scale_y = 1.45
-            action.operator("tntmesh.split", icon="CHECKMARK")
+            action.operator("tntmesh.split", icon="CHECKMARK",
+                            text="Extract Region" if settings.cut_kind == "REGION" else "Split Model")
             layout.operator("tntmesh.validate", icon="VIEWZOOM")
 
         if managed_parts(context, "ALL"):
