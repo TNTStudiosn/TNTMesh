@@ -240,6 +240,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 body.prop(settings, "repair_holes")
                 if settings.repair_holes:
                     body.prop(settings, "repair_hole_edges")
+                body.prop(settings, "repair_orientation")
                 body.operator("tntmesh.repair")
 
             layout.separator()

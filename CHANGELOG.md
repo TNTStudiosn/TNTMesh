@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added an optional thin-wall diagnosis for closed solids with a minimum thickness in millimeters.
+- Added optional face-orientation repair for closed solids and nested cavities.
+- Added Blender 5.3.0 to the source and ZIP verification matrix.
 
 ## 0.3.0-alpha.5
 

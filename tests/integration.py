@@ -98,14 +98,15 @@ class WorkflowTests(unittest.TestCase):
         bpy.ops.mesh.primitive_cube_add(size=size)
         return bpy.context.active_object
 
-    def checked(self, obj):
+    def checked(self, obj, *, shells=1):
         model = self.addon.operators
         with model.GeometryTransaction() as transaction:
             mesh, _ = model.evaluated_mm(
                 bpy.context, obj, transaction, model.millimeters_per_unit(bpy.context.scene)
             )
-            self.assertEqual(model.inspect(mesh).shells, 1)
-            return model.inspect(mesh).volume_mm3
+            result = model.inspect(mesh)
+            self.assertEqual(result.shells, shells)
+            return result.volume_mm3
 
     def test_stl_split_connector_export_round_trip(self):
         bpy.context.scene.unit_settings.system = "METRIC"
@@ -1166,6 +1167,56 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(result, source)
         self.assertEqual(len(source.data.polygons), 5)
         self.assertAlmostEqual(self.checked(result), 24**3, places=3)
+
+    def test_repair_corrects_mixed_winding_and_preserves_nested_cavities(self):
+        source = self.cube(24)
+        cavity = self.cube(12)
+        cavity.data.flip_normals()
+        island = self.cube(4)
+        island.data.flip_normals()
+        other = self.cube(3)
+        other.location.x = 19
+        other.data.flip_normals()
+        for obj in (source, cavity, island, other):
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = source
+        bpy.ops.object.join()
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(source.data)
+            face = next(face for face in bm.faces if face.calc_center_median().x < -11)
+            bmesh.ops.reverse_faces(bm, faces=[face])
+            bm.to_mesh(source.data)
+        finally:
+            bm.free()
+        source.data.update()
+        original = [tuple(face.vertices) for face in source.data.polygons]
+        self.assertEqual(bpy.ops.tntmesh.repair(), {"CANCELLED"})
+        self.settings.repair_orientation = True
+        self.assertEqual(bpy.ops.tntmesh.repair(), {"FINISHED"})
+        result = bpy.context.active_object
+        self.assertNotEqual(source.data, result.data)
+        self.assertEqual([tuple(face.vertices) for face in source.data.polygons], original)
+        self.assertAlmostEqual(self.checked(result, shells=4), 24**3 - 12**3 + 4**3 + 3**3, places=3)
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        findings = {item.kind: item.count for item in self.addon.diagnostics_ui.current(bpy.context).result.findings}
+        self.assertEqual(findings, {"SHELLS": 4, "CAVITY": 1})
+
+    def test_repair_rejects_intersecting_shells_without_publishing_a_copy(self):
+        source = self.cube(20)
+        other = self.cube(9)
+        other.location.x = 8
+        other.rotation_euler.z = .2
+        source.select_set(True)
+        bpy.context.view_layer.objects.active = source
+        bpy.ops.object.join()
+        self.settings.repair_orientation = True
+        objects = set(bpy.data.objects.keys())
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.repair(), {"CANCELLED"})
+        self.assertEqual(set(bpy.data.objects.keys()), objects)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+        self.assertFalse(source.hide_get())
 
     def test_dependent_draft_saves_and_preserves_identity_on_rebuild(self):
         source = self.cube()

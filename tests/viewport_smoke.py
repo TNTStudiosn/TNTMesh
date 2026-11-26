@@ -288,6 +288,13 @@ def capture_wall_check():
     assert bpy.ops.tntmesh.diagnostic_view(kind="CLEAR") == {"FINISHED"}
 
 
+def show_repair_panel():
+    settings = bpy.context.scene.tntmesh_settings
+    settings.mode = "EASY"
+    settings.repair_orientation = True
+    viewport()[1].tag_redraw()
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -428,11 +435,15 @@ diagnostics_steps = (
     (start_diagnostics, capture_diagnostics, start_wall_check, capture_wall_check)
     if os.environ.get("TNTMESH_TEST_DIAGNOSTICS") == "1" else ()
 )
+repair_steps = (
+    (show_repair_panel, lambda: toggle_smoke_panel(218), lambda: screenshot("16-repair.png"))
+    if os.environ.get("TNTMESH_TEST_REPAIR") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
-    *base_steps, draft_panel, *diagnostics_steps, finish,
+    *base_steps, draft_panel, *diagnostics_steps, finish, *repair_steps,
 ))
 
 

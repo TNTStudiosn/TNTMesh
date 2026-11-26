@@ -24,7 +24,7 @@ Straight cuts take a world axis or an Euler rotation. Drawing a line sets the cu
 
 Custom connectors take two closed mesh templates with matching object origins at the seam. Each template crosses its origin's XY plane. Positive Z is the pin's insertion direction and negative Z anchors the pin on the first piece or opens the socket cutter past the seam. Template translation is ignored. Rotation and scale are carried through. The socket template supplies the intended clearance. TNTMesh checks that it contains the protruding pin by volume. Custom templates currently require straight cuts with zero kerf.
 
-Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. The repaired copy must pass the mesh checks before it appears. Review filled regions because caps add geometry.
+Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 
 Printer profiles are saved with the scene and can be moved between projects as schema-versioned JSON. The fit check uses world-space dimensions and subtracts the configured margin on each side of each axis. Alternative orientations permute the three axes. Split to Fit applies successive straight cuts and validates the remaining dimensions before publishing the resulting pieces.
 
@@ -62,7 +62,7 @@ Rebuild runs all enabled operations in memory before replacing the previous gene
 
 ## Verification
 
-The core integration suite ran on Windows x64 and Linux x64 with Blender 4.5.17 LTS, 5.1.2 and 5.2.4 LTS, and on macOS arm64 with Blender 4.5.17 LTS. It covers STL round trips, connector dimensions, closure, volume, kerf, transformed meshes, repeated operations, scale copies, torus and hollow cross sections, and rejection of an oversized connector and damaged input. The source also passed on Windows with 4.2.23 LTS. The extension manifest still requires 4.5 because packaged and viewport coverage targets 4.5 and newer.
+The core integration suite ran on Windows x64 and Linux x64 with Blender 4.5.17 LTS, 5.1.2, 5.2.4 LTS and 5.3.0, and on macOS arm64 with Blender 4.5.17 LTS. It covers STL round trips, connector dimensions, closure, volume, kerf, transformed meshes, repeated operations, scale copies, torus and hollow cross sections, and rejection of an oversized connector and damaged input. The source also passed on Windows with 4.2.23 LTS. The extension manifest still requires 4.5 because packaged and viewport coverage targets 4.5 and newer.
 
 The graphical smoke test uses a separate Blender profile and runs `tests/viewport_smoke.py` with `TNTMESH_SMOKE_OUTPUT` set to a writable destination. It captures the viewport and checks the Spanish catalog and the undo stack. Set `TNTMESH_TEST_EVENTS=1` and launch with Blender's `--enable-event-simulate` to test viewport actions and export dialog cancellation. Set `TNTMESH_TEST_CONTOUR=1` to include the freehand drawing test, and `TNTMESH_TEST_PRINTER=1` to capture the printer panel and volume preview.
 

@@ -23,9 +23,16 @@ SPANISH = {
     "Attempt to cap simple boundary loops on the copy":
         "Intenta cerrar los contornos abiertos simples en la copia",
     "Max. hole edges": "Aristas máx. por agujero",
+    "Correct face orientation": "Corregir orientación de caras",
+    "Orient closed shells and preserve enclosed cavities on the copy":
+        "Orienta las superficies cerradas y conserva las cavidades en la copia",
+    "Close the mesh before correcting its face orientation.":
+        "Cierra la malla antes de corregir la orientación de sus caras.",
+    "Fix intersecting surfaces before correcting face orientation.":
+        "Corrige las superficies que se cruzan antes de orientar las caras.",
+    "The mesh has ambiguous shell nesting.": "El anidamiento de las superficies es ambiguo.",
     "Create Repaired Copy": "Crear copia reparada",
-    "Weld close vertices and optionally fill simple holes on a new copy":
-        "Une vértices cercanos y permite cerrar agujeros simples en una copia nueva",
+    "Apply the selected mesh repairs to a new copy": "Aplica las correcciones seleccionadas a una copia",
     "Check the repair limits.": "Revisa los límites de reparación.",
     "{name} · Repaired": "{name} · Reparado",
     "Created a closed repaired copy. The input mesh was kept.":

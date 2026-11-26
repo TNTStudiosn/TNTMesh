@@ -144,6 +144,12 @@ def shell_volume(faces: list[bmesh.types.BMFace]) -> float:
     return volume / 6
 
 
+def closed_shell(faces: list[bmesh.types.BMFace], volume: float) -> ClosedShell:
+    lower, upper = bounds(vertex.co for face in faces for vertex in face.verts)
+    return ClosedShell(tuple(face.index for face in faces), faces[0].calc_center_median(),
+                       lower, upper, volume)
+
+
 def scan(
     mesh: bpy.types.Mesh, weld_mm: float, fragment_mm3: float, *, intersections: bool, wall_mm: float = 0,
 ) -> Diagnostics:
@@ -199,10 +205,7 @@ def scan(
                 if topology_ok and 0 < volumes[index] < fragment_mm3:
                     mark("FRAGMENT", center)
                 if topology_ok and intersections:
-                    points = (vertex.co for face in shell for vertex in face.verts)
-                    lower, upper = bounds(points)
-                    closed_shells.append(ClosedShell(tuple(face.index for face in shell),
-                                                      center, lower, upper, volumes[index]))
+                    closed_shells.append(closed_shell(shell, volumes[index]))
     finally:
         bm.free()
 

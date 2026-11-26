@@ -130,6 +130,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Fill small holes", description="Attempt to cap simple boundary loops on the copy",
     )
     repair_hole_edges: IntProperty(name="Max. hole edges", min=3, max=64, default=8)
+    repair_orientation: BoolProperty(
+        name="Correct face orientation",
+        description="Orient closed shells and preserve enclosed cavities on the copy",
+    )
     profile_size: FloatVectorProperty(
         name="Size (mm)", description="Width, height and depth of the extraction volume",
         default=(10.0, 10.0, 10.0), min=0.01, precision=2, size=3, subtype="XYZ",

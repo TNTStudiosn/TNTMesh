@@ -20,6 +20,8 @@ El corte recto se puede orientar con un eje, rotación numérica o una línea en
 
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 
+En **Reparar**, activa **Corregir orientación de caras** para corregir la orientación de caras vecinas y de las superficies cerradas según su profundidad de anidamiento. La copia conserva las cavidades y los sólidos separados. La reparación se detiene si las superficies se cruzan o si el anidamiento es ambiguo.
+
 Un conector personalizado utiliza dos plantillas cerradas con el origen de cada objeto en el centro de la unión. Ambas cruzan el plano XY de su origen. Z positiva es la dirección de inserción y Z negativa ancla el pin o abre el cortador de la cavidad. TNTMesh conserva la escala y la rotación, ignora la posición en la escena y comprueba que la parte saliente quepa en la cavidad. Diseña la holgura en la propia plantilla de cavidad. Estas plantillas se usan con cortes rectos sin separación.
 
 Cada borrador guarda la referencia a la fuente y los identificadores de las operaciones en el archivo `.blend`. Un corte puede consumir una pieza de un corte anterior. Si la cadena falla, la última generación de piezas se conserva. La reconstrucción actual recalcula todos los cortes activos.
@@ -62,7 +64,7 @@ Define `TNTMESH_TEST_BASE=1` para capturar los apoyos detectados en la base de d
 
 GitHub Actions compara el tag con el manifiesto, prueba el ZIP instalado y genera la suma SHA-256 antes de publicar. Las versiones alfa, beta y candidatas se marcan como experimentales.
 
-Las pruebas pasaron en Windows y Linux con Blender 4.5.17 LTS, 5.1.2 y 5.2.4 LTS, y en macOS arm64 con 4.5.17 LTS. El código fuente también pasó con 4.2.23 LTS en Windows. El mínimo declarado para el ZIP es Blender 4.5.
+Las pruebas pasaron en Windows y Linux con Blender 4.5.17 LTS, 5.1.2, 5.2.4 LTS y 5.3.0, y en macOS arm64 con 4.5.17 LTS. El código fuente también pasó con 4.2.23 LTS en Windows. El mínimo declarado para el ZIP es Blender 4.5.
 
 ## Actualizaciones
 

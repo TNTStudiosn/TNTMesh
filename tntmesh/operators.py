@@ -378,7 +378,7 @@ class TNTMESH_OT_validate(bpy.types.Operator, MeshOperator):
 class TNTMESH_OT_repair(bpy.types.Operator, MeshOperator):
     bl_idname = "tntmesh.repair"
     bl_label = "Create Repaired Copy"
-    bl_description = "Weld close vertices and optionally fill simple holes on a new copy"
+    bl_description = "Apply the selected mesh repairs to a new copy"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context: bpy.types.Context) -> set[str]:
@@ -388,8 +388,10 @@ class TNTMESH_OT_repair(bpy.types.Operator, MeshOperator):
         try:
             with GeometryTransaction() as transaction:
                 mesh, origin = evaluated_mm(context, source, transaction, unit)
-                repair_copy(mesh, settings.repair_weld,
-                            settings.repair_hole_edges if settings.repair_holes else 0)
+                repair_copy(
+                    mesh, settings.repair_weld, settings.repair_hole_edges if settings.repair_holes else 0,
+                    correct_orientation=settings.repair_orientation,
+                )
                 mesh.transform(Matrix.Scale(1.0 / unit, 4))
                 mesh.update()
                 collection = owned_collection(context.scene, "source")
