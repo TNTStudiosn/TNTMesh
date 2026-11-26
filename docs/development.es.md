@@ -36,6 +36,8 @@ Las pruebas de integración se ejecutan en Blender e incluyen exportación y rei
 
 GitHub Actions compara el tag con el manifiesto, prueba el ZIP instalado y genera la suma SHA-256 antes de publicar. Las versiones alfa, beta y candidatas se marcan como experimentales.
 
+Las pruebas pasaron en Windows y Linux con Blender 4.5.17 LTS, 5.1.2 y 5.2.4 LTS, y en macOS arm64 con 4.5.17 LTS. El código fuente también pasó con 4.2.23 LTS en Windows. El mínimo declarado para el ZIP es Blender 4.5.
+
 ## Actualizaciones
 
 En Preferencias → Obtener extensiones → Repositorios → Añadir repositorio remoto, introduce la URL de un solo canal. El [índice experimental](https://tntstudiosn.github.io/TNTMesh/experimental/index.json) contiene las versiones preliminares. El [índice estable](https://tntstudiosn.github.io/TNTMesh/stable/index.json) se poblará tras la primera publicación estable.

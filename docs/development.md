@@ -40,11 +40,11 @@ Rebuild runs all enabled operations in memory before replacing the previous gene
 
 ## Verification
 
-The core integration suite ran on Windows x64 with Blender 4.5.17 LTS, 5.1.2 and 5.2.4 LTS. It covers the STL round trip, connector dimensions, closure, volume, kerf, transformed meshes, repeated operations, scale copies, torus and hollow cross sections, and rejection of an oversized connector and damaged input. The source also passed on 4.2.23 LTS. The extension manifest still requires 4.5 because packaged and viewport coverage targets 4.5 and newer.
+The core integration suite ran on Windows x64 and Linux x64 with Blender 4.5.17 LTS, 5.1.2 and 5.2.4 LTS, and on macOS arm64 with Blender 4.5.17 LTS. It covers STL round trips, connector dimensions, closure, volume, kerf, transformed meshes, repeated operations, scale copies, torus and hollow cross sections, and rejection of an oversized connector and damaged input. The source also passed on Windows with 4.2.23 LTS. The extension manifest still requires 4.5 because packaged and viewport coverage targets 4.5 and newer.
 
 The graphical smoke test uses a separate Blender profile and runs `tests/viewport_smoke.py` with `TNTMESH_SMOKE_OUTPUT` set to a writable destination. It captures the viewport and checks the Spanish catalog and the undo stack. Set `TNTMESH_TEST_EVENTS=1` and launch with Blender's `--enable-event-simulate` to test viewport actions and export dialog cancellation. Set `TNTMESH_TEST_CONTOUR=1` to include the freehand drawing test, and `TNTMESH_TEST_PRINTER=1` to capture the printer panel and volume preview.
 
-GitHub Actions validates the source and the installed ZIP on Linux. Release tags must match the manifest version. Release automation adds a SHA-256 checksum and flags alpha, beta and release candidates as prereleases.
+GitHub Actions validates the source and installed ZIP on Linux, and the installed ZIP on macOS arm64. Release tags must match the manifest version. Release automation adds a SHA-256 checksum and flags alpha, beta and release candidates as prereleases.
 
 ## Native extension repository
 
