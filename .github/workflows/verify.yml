@@ -47,3 +47,29 @@ jobs:
         with:
           name: TNTMesh-Blender-${{ matrix.version }}
           path: dist/*.zip
+  macos:
+    runs-on: macos-15
+    env:
+      TNTMESH_BLENDER_VERSION: '4.5.17'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mount verified Blender release
+        run: |
+          dmg="blender-${TNTMESH_BLENDER_VERSION}-macos-arm64.dmg"
+          url="https://download.blender.org/release/Blender4.5"
+          curl -fsSL --retry 3 "$url/$dmg" -o "$dmg"
+          curl -fsSL --retry 3 "$url/blender-${TNTMESH_BLENDER_VERSION}.sha256" -o blender.sha256
+          grep -F " $dmg" blender.sha256 | shasum -a 256 --check -
+          mount="$RUNNER_TEMP/tntmesh-blender"
+          mkdir -p "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          echo "TNTMESH_BLENDER=$mount/Blender.app/Contents/MacOS/Blender" >> "$GITHUB_ENV"
+      - name: Test installed ZIP
+        run: |
+          mkdir dist
+          export BLENDER_USER_RESOURCES="$RUNNER_TEMP/tntmesh-profile"
+          "$TNTMESH_BLENDER" --factory-startup --command extension build --source-dir tntmesh --output-dir dist
+          "$TNTMESH_BLENDER" --factory-startup --command extension validate dist/*.zip
+          "$TNTMESH_BLENDER" --factory-startup --command extension install-file -r user_default -e dist/*.zip
+          TNTMESH_TEST_PACKAGE=bl_ext.user_default.tntmesh \
+            "$TNTMESH_BLENDER" --background --factory-startup --python-exit-code 1 --python tests/integration.py

@@ -62,6 +62,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         min=0.0, precision=3, step=5,
     )
     show_plane: BoolProperty(name="Show plane", default=True)
+    show_build_volume: BoolProperty(name="Show print volume")
     connector: EnumProperty(
         name="Connector",
         items=[

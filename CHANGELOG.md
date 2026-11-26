@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0-alpha.1
+
+- Added eight editable FDM and resin printer profiles, JSON import and export, and tolerance transfer.
+- Added printable volume previews, margin-aware fit checks, alternate axis suggestions and geometry splitting by available volume.
+- Added 3MF export for one model per file or a multi-object package.
+
 ## 0.2.0-alpha.2
 
 - Added editable concave contours with point-by-point and freehand viewport drawing.

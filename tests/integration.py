@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from math import sin, tau
 from pathlib import Path
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import addon_utils
 import bmesh
@@ -328,6 +330,40 @@ class WorkflowTests(unittest.TestCase):
                     self.assertEqual(len(bpy.context.scene.objects), count + 1)
                     self.assertAlmostEqual(self.checked(bpy.context.active_object), 24**3 / 2, places=2)
 
+    def test_3mf_preserves_multiple_build_objects_and_dimensions(self):
+        self.cube()
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.parts()[0].name = "Pieza & <01>"
+        self.assertEqual(bpy.ops.tntmesh.export_stl(
+            directory=str(self.directory), file_format="3MF", grouped_3mf=True,
+        ), {"FINISHED"})
+        path, = list(self.directory.glob("*.3mf"))
+        package_format = self.addon.operators.exporters
+        model_io = importlib.import_module(f"{self.addon.__name__}.three_mf")
+        with ZipFile(path) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("[Content_Types].xml", archive.namelist())
+            self.assertIn(b"/3D/3dmodel.model", archive.read("_rels/.rels"))
+            doc = ElementTree.fromstring(archive.read(model_io.MODEL_PATH))
+        ns = {"m": model_io.CORE}
+        self.assertEqual(doc.attrib["unit"], "millimeter")
+        resources = doc.findall("m:resources/m:object", ns)
+        self.assertEqual(len(resources), 2)
+        self.assertTrue(any(obj.attrib["name"].startswith("Pieza &") for obj in resources))
+        build = doc.findall("m:build/m:item", ns)
+        self.assertEqual({obj.attrib["id"] for obj in resources},
+                         {item.attrib["objectid"] for item in build})
+        for index, obj in enumerate(resources):
+            vertices = obj.findall(".//m:vertex", ns)
+            triangles = obj.findall(".//m:triangle", ns)
+            points = [tuple(float(v.get(axis)) for axis in "xyz") for v in vertices]
+            faces = [tuple(int(t.get(key)) for key in ("v1", "v2", "v3")) for t in triangles]
+            with package_format.GeometryTransaction() as transaction:
+                mesh = transaction.own_mesh(bpy.data.meshes.new(f"3MF fixture {index}"))
+                mesh.from_pydata(points, [], faces)
+                self.assertAlmostEqual(package_format.inspect(mesh).volume_mm3, 24**3 / 2)
+
     def test_unsafe_connector_and_tangent_leave_no_geometry(self):
         source = self.cube()
         before_objects = set(bpy.data.objects.keys())
@@ -375,6 +411,59 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(resized.data, source.data)
         self.assertAlmostEqual(resized.dimensions.x, 36.0, places=5)
         self.assertAlmostEqual(source.dimensions.x, 24.0, places=5)
+
+    def test_printer_profile_json_and_tolerance_copy(self):
+        self.assertEqual(bpy.ops.tntmesh.printer_add(preset="MARS5"), {"FINISHED"})
+        profiles = bpy.context.scene.tntmesh_printers
+        entry = profiles[0]
+        self.assertAlmostEqual(entry.build_mm.x, 153.36, places=3)
+        self.assertEqual(entry.technology, "RESIN")
+        entry.margin_mm = (1.5, 2.5, 3.5)
+        entry.material = "Resina ABS-Like"
+        entry.lateral_mm = 0.3
+        self.assertEqual(bpy.ops.tntmesh.printer_edit(action="USE_TOLERANCE"), {"FINISHED"})
+        self.assertAlmostEqual(self.settings.lateral, 0.3, places=5)
+        path = self.directory / "profile.json"
+        self.assertEqual(bpy.ops.tntmesh.printer_export(filepath=str(path)), {"FINISHED"})
+        original = path.read_bytes()
+        self.assertEqual(bpy.ops.tntmesh.printer_export(filepath=str(path)), {"CANCELLED"})
+        self.assertEqual(original, path.read_bytes())
+        self.assertEqual(bpy.ops.tntmesh.printer_import(filepath=str(path)), {"FINISHED"})
+        self.assertEqual(profiles[1].data(), profiles[0].data())
+        self.assertEqual(bpy.ops.tntmesh.printer_edit(action="DUPLICATE"), {"FINISHED"})
+        self.assertEqual(len(profiles), 3)
+        path.write_text('{"schema":1,"profile":{"build_mm":[0,0,0]}}', encoding="utf-8")
+        self.assertEqual(bpy.ops.tntmesh.printer_import(filepath=str(path)), {"CANCELLED"})
+        self.assertEqual(len(profiles), 3)
+
+    def test_printer_fit_checks_margins_and_alternate_orientation(self):
+        printing = self.addon.printer_ui
+        profile = printing.PrinterProfile("", "Test", "FDM", (50, 30, 20), (1, 1, 1))
+        fit = printing.fit
+        self.assertEqual(fit((42, 27, 17), profile).exceeded, ())
+        result = fit((26, 43, 16), profile)
+        self.assertEqual(result.exceeded, ("Y",))
+        self.assertEqual(result.alternative, "YXZ")
+        self.assertIsNone(fit((51, 28, 19), profile).alternative)
+
+    def test_split_to_fit_validates_each_piece_and_rolls_back_at_limit(self):
+        source = self.cube(36)
+        source.scale = (1.0, 20 / 36, 16 / 36)
+        self.assertEqual(bpy.ops.tntmesh.printer_add(), {"FINISHED"})
+        profile = bpy.context.scene.tntmesh_printers[0]
+        profile.build_mm = (20, 15, 20)
+        profile.margin_mm = (1, 1, 1)
+        previous_meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.fit_grid(max_pieces=3), {"CANCELLED"})
+        self.assertEqual(set(bpy.data.meshes.keys()), previous_meshes)
+        self.assertFalse(source.hide_get())
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(bpy.ops.tntmesh.fit_grid(max_pieces=4), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 4)
+        self.assertTrue(source.hide_get())
+        self.assertAlmostEqual(sum(self.checked(part) for part in self.parts()), 36 * 20 * 16, places=2)
+        for part in self.parts():
+            self.assertFalse(self.addon.printer_ui.fit(tuple(part.dimensions), profile.data()).exceeded)
 
     def test_open_model_is_rejected(self):
         bpy.ops.mesh.primitive_plane_add(size=24)

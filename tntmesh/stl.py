@@ -4,7 +4,6 @@ from math import isfinite
 from pathlib import Path
 from typing import BinaryIO
 
-import bmesh
 import bpy
 
 from .model import MeshError, millimeters_per_unit
@@ -52,14 +51,3 @@ def write_binary(mesh: bpy.types.Mesh, output: BinaryIO) -> None:
         points = [mesh.vertices[index].co for index in triangle.vertices]
         normal = (points[1] - points[0]).cross(points[2] - points[0]).normalized()
         output.write(_TRIANGLE.pack(*normal, *points[0], *points[1], *points[2], 0))
-
-
-def triangulate_for_stl(mesh: bpy.types.Mesh) -> None:
-    bm = bmesh.new()
-    try:
-        bm.from_mesh(mesh)
-        bmesh.ops.triangulate(bm, faces=list(bm.faces), quad_method="BEAUTY", ngon_method="BEAUTY")
-        bm.to_mesh(mesh)
-    finally:
-        bm.free()
-    mesh.update()

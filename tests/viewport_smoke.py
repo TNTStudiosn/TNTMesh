@@ -111,6 +111,29 @@ def finish():
     (output / "status.txt").write_text("PASS\n", encoding="utf-8")
 
 
+def start_printer_preview():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.printer_add() == {"FINISHED"}
+        bpy.context.scene.tntmesh_printers[0].build_mm = (38, 30, 34)
+        bpy.context.scene.tntmesh_settings.show_build_volume = True
+    area.tag_redraw()
+
+
+def toggle_smoke_panel(vertical_offset):
+    window, area, _ = viewport()
+    sidebar = next(region for region in area.regions if region.type == "UI")
+    for value in ("PRESS", "RELEASE"):
+        window.event_simulate(
+            type="LEFTMOUSE", value=value, x=sidebar.x + 13, y=window.height - vertical_offset,
+        )
+
+
+def printer_screenshot():
+    screenshot("06-printer.png")
+    bpy.context.scene.tntmesh_settings.show_build_volume = False
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -222,10 +245,16 @@ contour_steps = (
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
+printer_steps = (
+    (start_printer_preview, lambda: toggle_smoke_panel(93),
+     lambda: toggle_smoke_panel(120), printer_screenshot,
+     lambda: toggle_smoke_panel(120), lambda: toggle_smoke_panel(93))
+    if os.environ.get("TNTMESH_TEST_PRINTER") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
-    *export_steps, draft_panel, finish,
+    *export_steps, *printer_steps, draft_panel, finish,
 ))
 
 

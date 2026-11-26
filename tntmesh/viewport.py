@@ -6,11 +6,13 @@ from mathutils import Matrix, Vector
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
 from .geometry.volume import bezier_path, outline
-from .model import millimeters_per_unit
+from .model import MeshError, millimeters_per_unit
 from .operators import active_mesh
+from .printer_props import selected_printer
+from .printing import fit
 from .settings import TNTMESH_PG_settings
 
-_handle = None
+_handles = []
 _preview_bounds: dict[tuple[int, int, tuple], tuple[Vector, Vector]] = {}
 
 
@@ -111,18 +113,65 @@ def draw_plane() -> None:
 
 
 def register() -> None:
-    global _handle
     if not bpy.app.background:
-        _handle = bpy.types.SpaceView3D.draw_handler_add(draw_plane, (), "WINDOW", "POST_VIEW")
+        for draw in (draw_plane, draw_print_volume):
+            _handles.append(bpy.types.SpaceView3D.draw_handler_add(draw, (), "WINDOW", "POST_VIEW"))
         bpy.app.handlers.load_post.append(invalidate_bounds)
         bpy.app.handlers.depsgraph_update_post.append(invalidate_bounds)
 
 
 def unregister() -> None:
-    global _handle
-    if _handle is not None:
-        bpy.types.SpaceView3D.draw_handler_remove(_handle, "WINDOW")
-        _handle = None
-        bpy.app.handlers.depsgraph_update_post.remove(invalidate_bounds)
-        bpy.app.handlers.load_post.remove(invalidate_bounds)
+    while _handles:
+        bpy.types.SpaceView3D.draw_handler_remove(_handles.pop(), "WINDOW")
+    for handlers in (bpy.app.handlers.depsgraph_update_post, bpy.app.handlers.load_post):
+        if invalidate_bounds in handlers:
+            handlers.remove(invalidate_bounds)
     invalidate_bounds()
+
+
+def draw_print_volume() -> None:
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+
+    context = bpy.context
+    scene = context.scene
+    if context.mode != "OBJECT" or not scene.tntmesh_settings.show_build_volume:
+        return
+    selected = selected_printer(scene)
+    obj = active_mesh(context)
+    if selected is None or obj is None:
+        return
+    extents = project_bounds(obj, context.evaluated_depsgraph_get(), Matrix.Identity(3))
+    if extents is None:
+        return
+    lower, upper = extents
+    unit = millimeters_per_unit(scene)
+    profile = selected.data()
+    try:
+        result = fit(tuple((upper - lower) * unit), profile)
+    except MeshError:
+        return
+    center = (lower + upper) / 2
+    x, y, height = (span / unit for span in profile.limits)
+    outline = (
+        (center.x - x / 2, center.y - y / 2), (center.x + x / 2, center.y - y / 2),
+        (center.x + x / 2, center.y + y / 2), (center.x - x / 2, center.y + y / 2),
+    )
+    vertices = [(a, b, z) for z in (lower.z, lower.z + height) for a, b in outline]
+    lines = [(i, (i + 1) % 4) for i in range(4)]
+    lines += [(a + 4, b + 4) for a, b in lines] + [(i, i + 4) for i in range(4)]
+    shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+    blend = gpu.state.blend_get()
+    depth = gpu.state.depth_test_get()
+    gpu.state.blend_set("ALPHA")
+    gpu.state.depth_test_set("LESS_EQUAL")
+    try:
+        color = (1.0, 0.52, 0.30) if result.exceeded else (0.0, 1.0, 1.0)
+        shader.bind()
+        shader.uniform_float("color", (*color, 0.9))
+        batch_for_shader(shader, "LINES", {"pos": vertices}, indices=lines).draw(shader)
+        shader.uniform_float("color", (*color, 0.10))
+        batch_for_shader(shader, "TRI_FAN", {"pos": vertices[:4]}).draw(shader)
+    finally:
+        gpu.state.depth_test_set(depth)
+        gpu.state.blend_set(blend)

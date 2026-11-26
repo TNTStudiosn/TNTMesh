@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import re
+from collections.abc import Iterator
+from contextlib import closing
 from pathlib import Path
 from shutil import copyfileobj
 from tempfile import TemporaryDirectory
@@ -8,8 +10,9 @@ from typing import BinaryIO
 import bpy
 
 from . import stl
-from .geometry.mesh import evaluated_mm, inspect
+from .geometry.mesh import evaluated_mm, inspect, triangulate
 from .model import GeometryTransaction, MeshError, millimeters_per_unit
+from .three_mf import write_3mf
 
 _INVALID_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -54,35 +57,37 @@ def write_fbx(
 
 
 def export_parts(
-    context: bpy.types.Context, parts: list[bpy.types.Object], directory: Path, format_id: str
+    context: bpy.types.Context, parts: list[bpy.types.Object], directory: Path, format_id: str,
+    *, grouped: bool = False,
 ) -> list[Path]:
     extension = format_id.lower()
-    if extension not in {"stl", "obj", "fbx"}:
-        raise MeshError("Choose STL, OBJ or FBX for export.")
+    if extension not in {"stl", "obj", "fbx", "3mf"}:
+        raise MeshError("Choose STL, OBJ, FBX or 3MF for export.")
     created: list[Path] = []
+    combined = grouped and extension == "3mf"
+    groups = [parts] if combined else [[part] for part in parts]
     try:
-        for index, obj in enumerate(parts, 1):
-            name = _INVALID_FILENAME.sub("_", obj.name).strip(" .")[:80].rstrip(" .")
-            stem = f"{index:02d}_{name or 'Part'}"
-            with GeometryTransaction() as transaction:
-                mesh, _ = evaluated_mm(
-                    context, obj, transaction, millimeters_per_unit(context.scene), centered=False
-                )
-                if extension == "stl":
-                    stl.triangulate_for_stl(mesh)
-                inspect(mesh)
-                suffix = 1
-                while True:
-                    variant = stem if suffix == 1 else f"{stem}_{suffix}"
-                    path = directory / f"{variant}.{extension}"
-                    try:
-                        output = path.open("xb")
-                    except FileExistsError:
-                        suffix += 1
-                    else:
-                        break
-                created.append(path)
-                with output:
+        for index, group in enumerate(groups, 1):
+            name = _INVALID_FILENAME.sub("_", group[0].name).strip(" .")[:80].rstrip(" .")
+            stem = "TNTMesh_Assembly" if combined else f"{index:02d}_{name or 'Part'}"
+            suffix = 1
+            while True:
+                variant = stem if suffix == 1 else f"{stem}_{suffix}"
+                path = directory / f"{variant}.{extension}"
+                try:
+                    output = path.open("xb")
+                except FileExistsError:
+                    suffix += 1
+                else:
+                    break
+            created.append(path)
+            with output:
+                if extension == "3mf":
+                    with closing(three_mf_parts(context, group)) as packets:
+                        write_3mf(packets, output)
+                    continue
+                with GeometryTransaction() as transaction:
+                    mesh = prepared_mesh(context, transaction, group[0], extension == "stl")
                     if extension == "stl":
                         stl.write_binary(mesh, output)
                     elif extension == "obj":
@@ -94,3 +99,25 @@ def export_parts(
             path.unlink(missing_ok=True)
         raise
     return created
+
+
+def prepared_mesh(
+    context: bpy.types.Context, transaction: GeometryTransaction, obj: bpy.types.Object,
+    triangles: bool,
+) -> bpy.types.Mesh:
+    mesh, _ = evaluated_mm(
+        context, obj, transaction, millimeters_per_unit(context.scene), centered=False
+    )
+    if triangles:
+        triangulate(mesh)
+    inspect(mesh)
+    return mesh
+
+
+def three_mf_parts(
+    context: bpy.types.Context, parts: list[bpy.types.Object],
+) -> Iterator[tuple[str, bpy.types.Mesh]]:
+    for obj in parts:
+        with GeometryTransaction() as transaction:
+            mesh = prepared_mesh(context, transaction, obj, triangles=True)
+            yield _INVALID_FILENAME.sub("_", obj.name), mesh

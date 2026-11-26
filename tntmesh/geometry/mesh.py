@@ -106,3 +106,14 @@ def primitive(
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
     return mesh
+
+
+def triangulate(mesh: bpy.types.Mesh) -> None:
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(mesh)
+        bmesh.ops.triangulate(bm, faces=list(bm.faces), quad_method="BEAUTY", ngon_method="BEAUTY")
+        bm.to_mesh(mesh)
+    finally:
+        bm.free()
+    mesh.update()
