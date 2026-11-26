@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased · 0.2.0-alpha.1
+
+- Added a persistent Draft mode for dependent planar cuts, with stable part IDs and transactional rebuilding.
+- Added stable and experimental indices for Blender's native extension manager, served through GitHub Pages.
+
 ## 0.1.0-alpha.1
 
 - Added the Blender Extensions package, viewport sidebar registration, translation catalog and build checks.

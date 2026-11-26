@@ -7,6 +7,12 @@ from .geometry.planar import PlanarCut
 
 
 class TNTMESH_PG_settings(bpy.types.PropertyGroup):
+    mode: EnumProperty(
+        name="Mode",
+        items=[("EASY", "Easy", "Cut the selected model now"),
+               ("DRAFT", "Draft", "Plan multiple cuts before generating pieces")],
+        default="EASY",
+    )
     axis: EnumProperty(
         name="Axis", description="World axis perpendicular to the cutting plane",
         items=[(name, name, "") for name in "XYZ"], default="Z",

@@ -1,0 +1,39 @@
+name: Blender repository
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: tntmesh-blender-repository
+  cancel-in-progress: false
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: ./.github/actions/setup-blender
+        with:
+          series: '4.5'
+          version: '4.5.17'
+      - name: Generate native Blender indices from published releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/extension_index.py blender pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+  deploy:
+    needs: index
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deploy

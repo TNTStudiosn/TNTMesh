@@ -39,7 +39,7 @@ def draw_plane() -> None:
     context = bpy.context
     settings = context.scene.tntmesh_settings
     obj = active_mesh(context)
-    if context.mode != "OBJECT" or not settings.show_plane or obj is None:
+    if context.mode != "OBJECT" or settings.mode != "EASY" or not settings.show_plane or obj is None:
         return
     frame = axis_frame(settings.axis)
     extents = project_bounds(obj, context.evaluated_depsgraph_get(), settings.axis, frame)

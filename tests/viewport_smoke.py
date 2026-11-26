@@ -91,12 +91,30 @@ def spanish():
     assert translate("Split Model", bpy.app.translations.contexts.operator_default) == "Dividir modelo"
 
 
+def draft_panel():
+    if not hasattr(bpy.types.Scene, "tntmesh_drafts"):
+        return
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        settings.mode = "DRAFT"
+        settings.connector = "NONE"
+        assert bpy.ops.tntmesh.draft_create() == {"FINISHED"}
+        assert bpy.ops.tntmesh.draft_action(action="ADD") == {"FINISHED"}
+        assert bpy.ops.tntmesh.draft_action(action="ADD") == {"FINISHED"}
+    area.tag_redraw()
+
+
 def finish():
-    screenshot("03-spanish.png")
+    if hasattr(bpy.types.Scene, "tntmesh_drafts"):
+        screenshot("04-draft.png")
     (output / "status.txt").write_text("PASS\n", encoding="utf-8")
 
 
-steps = iter((setup, panel, split, undo, redo, spanish, panel, finish))
+steps = iter((
+    setup, panel, split, undo, redo, spanish, panel, lambda: screenshot("03-spanish.png"),
+    draft_panel, finish,
+))
 
 
 def tick():

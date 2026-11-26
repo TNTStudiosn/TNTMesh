@@ -8,6 +8,7 @@ ROLE = "tntmesh_role"
 PART_ID = "tntmesh_part_id"
 PROJECT_ID = "tntmesh_project_id"
 SCHEMA_VERSION = "tntmesh_schema_version"
+DRAFT_ID = "tntmesh_draft_id"
 
 
 class MeshError(Exception):
@@ -56,6 +57,11 @@ class GeometryTransaction(AbstractContextManager):
         self.objects.remove(obj)
         bpy.data.objects.remove(obj, do_unlink=True)
 
+    def remove_mesh(self, mesh: bpy.types.Mesh) -> None:
+        if mesh.users == 0:
+            self.meshes.remove(mesh)
+            bpy.data.meshes.remove(mesh)
+
     def __exit__(self, *exc: object) -> None:
         for obj in reversed(self.objects):
             bpy.data.objects.remove(obj, do_unlink=True)
@@ -64,8 +70,8 @@ class GeometryTransaction(AbstractContextManager):
                 bpy.data.meshes.remove(mesh)
 
 
-def identify_part(obj: bpy.types.Object, project_id: str) -> None:
+def identify_part(obj: bpy.types.Object, project_id: str, part_id: str | None = None) -> None:
     obj[ROLE] = "part"
-    obj[PART_ID] = uuid4().hex
+    obj[PART_ID] = part_id or uuid4().hex
     obj[PROJECT_ID] = project_id
     obj[SCHEMA_VERSION] = 1

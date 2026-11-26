@@ -13,6 +13,8 @@ from .geometry.mesh import bounds, evaluated_mm, inspect
 from .geometry.planar import split
 from .localization import tr
 from .model import (
+    DRAFT_ID,
+    PART_ID,
     PROJECT_ID,
     ROLE,
     GeometryTransaction,
@@ -43,7 +45,7 @@ def select_results(context: bpy.types.Context, objects: list[bpy.types.Object]) 
 def managed_parts(context: bpy.types.Context, scope: str) -> list[bpy.types.Object]:
     objects = context.selected_objects if scope == "SELECTED" else context.view_layer.objects
     return sorted(
-        (obj for obj in objects if obj.type == "MESH" and obj.get(ROLE) == "part"),
+        (obj for obj in objects if obj is not None and obj.type == "MESH" and obj.get(ROLE) == "part"),
         key=lambda obj: obj.name.casefold(),
     )
 
@@ -166,7 +168,9 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
                     obj = transaction.object(collection, f"{source.name} · {index:02d}", result)
                     obj.location = origin
                     identify_part(obj, project_id)
-                    obj["tntmesh_parent_part_id"] = source.get("tntmesh_part_id", "")
+                    obj["tntmesh_parent_part_id"] = source.get(PART_ID, "")
+                    if source.get(DRAFT_ID):
+                        obj[DRAFT_ID] = source[DRAFT_ID]
                     parts.append(obj)
                 for obj in parts:
                     transaction.publish(obj)
@@ -182,6 +186,7 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
             return report_failure(self, error)
         finally:
             wm.progress_end()
+            context.view_layer.update()
         self.report({"INFO"}, tr("Created two pieces. The input mesh was kept."))
         return {"FINISHED"}
 

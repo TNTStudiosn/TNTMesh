@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | 0 · Infrastructure | Implemented | Extension package, sidebar, translation, Blender tests and CI |
 | 1 · Core workflow | Experimental | STL, scale, axis-aligned straight cut, cylindrical and hexagonal connectors, validation, per-part STL |
-| 2 · Planning | Planned | Persistent draft operations, curved and freehand cuts, polygons, custom and loose connectors, OBJ/FBX, repair and updates |
+| 2 · Planning | In development | Planar draft operations and native repository indices implemented. Curved and freehand cuts, polygons, custom and loose connectors, OBJ/FBX and repair are pending |
 | 3 · Print preparation | Planned | Printer profiles, fit checks, base and color separation, symmetry, regions, placement, calibrations, exploded view, 3MF |
 | 4 · Professional tools | Planned | Magnets, dovetails, snap-fits, articulations, glue features, hollowing, drains, thickness, costs and assembly guides |
 | 5 · Automation | Planned | Smart Split, seam suggestions, orientation, bed layout, segmentation and stress testing |

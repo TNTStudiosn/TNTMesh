@@ -96,6 +96,40 @@ SPANISH = {
     "Move the cut inside the model or reduce the separation.":
         "Mueve el corte hacia el interior del modelo o reduce la separación.",
     "The split did not preserve the expected volume.": "El corte no conservó el volumen esperado.",
+    "Mode": "Modo",
+    "Easy": "Fácil",
+    "Draft": "Borrador",
+    "Cut the selected model now": "Aplica el corte al modelo seleccionado",
+    "Plan multiple cuts before generating pieces": "Planea varios cortes antes de generar piezas",
+    "New Draft": "Nuevo borrador",
+    "Create a non-destructive plan for the active mesh": "Crea un plan de corte para la malla activa",
+    "Select a mesh and create a draft.": "Selecciona una malla y crea un borrador.",
+    "Run this cut": "Aplicar este corte",
+    "Add Cut": "Añadir corte",
+    "Duplicate Cut": "Duplicar corte",
+    "Remove Cut": "Quitar corte",
+    "Move Cut Up": "Subir corte",
+    "Move Cut Down": "Bajar corte",
+    "Source model": "Modelo original",
+    "Missing target": "Pieza faltante",
+    "Cut “{name}” · {reason}": "Corte «{name}» · {reason}",
+    "Cut {number}": "Corte {number}",
+    "{name} · Copy": "{name} · Copia",
+    "The draft contains invalid cut identifiers.": "El borrador contiene identificadores inválidos.",
+    "Choose an available input piece from an earlier cut.":
+        "Elige una pieza disponible de un corte anterior.",
+    "Choose an available input piece.": "Elige una pieza disponible.",
+    "Enable at least one cut in the draft.": "Activa al menos un corte del borrador.",
+    "This draft uses an unsupported project schema.": "El formato de este borrador es incompatible.",
+    "The draft source is missing from this view layer.":
+        "El modelo original del borrador no está en esta capa de vista.",
+    "Select the original model for a new draft.": "Selecciona el modelo original para un nuevo borrador.",
+    "Input Piece": "Pieza de entrada",
+    "Choose Input Piece": "Elegir pieza de entrada",
+    "Build Draft": "Generar piezas",
+    "Apply enabled cuts and replace this draft's previously generated pieces":
+        "Aplica los cortes activos y reemplaza las piezas generadas por este borrador",
+    "Built {count} draft pieces.": "Se generaron {count} piezas del borrador.",
 }
 CATALOG = {
     locale: {

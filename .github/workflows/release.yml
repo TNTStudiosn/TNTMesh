@@ -38,3 +38,10 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" "$zip" SHA256SUMS \
             --verify-tag --title "TNTMesh $version" --generate-notes "${flags[@]}"
+  update-index:
+    needs: publish
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

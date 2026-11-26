@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import bpy
-from bpy.props import PointerProperty
+from bpy.props import CollectionProperty, IntProperty, PointerProperty
 
-from . import localization, operators, ui, viewport
+from . import draft, draft_operators, localization, operators, ui, viewport
 from .settings import TNTMESH_PG_settings
 
-_CLASSES = (TNTMESH_PG_settings, *operators.CLASSES, *ui.CLASSES)
+_CLASSES = (
+    TNTMESH_PG_settings, *draft.CLASSES, *operators.CLASSES, *draft_operators.CLASSES, *ui.CLASSES,
+)
 _registered: list[type] = []
 
 
@@ -18,6 +20,8 @@ def register() -> None:
             bpy.utils.register_class(cls)
             _registered.append(cls)
         bpy.types.Scene.tntmesh_settings = PointerProperty(type=TNTMESH_PG_settings)
+        bpy.types.Scene.tntmesh_drafts = CollectionProperty(type=draft.TNTMESH_PG_draft_plan)
+        bpy.types.Scene.tntmesh_draft_index = IntProperty(min=0)
         viewport.register()
     except Exception:
         unregister()
@@ -26,8 +30,9 @@ def register() -> None:
 
 def unregister() -> None:
     viewport.unregister()
-    if hasattr(bpy.types.Scene, "tntmesh_settings"):
-        del bpy.types.Scene.tntmesh_settings
+    for name in ("tntmesh_draft_index", "tntmesh_drafts", "tntmesh_settings"):
+        if hasattr(bpy.types.Scene, name):
+            delattr(bpy.types.Scene, name)
     while _registered:
         bpy.utils.unregister_class(_registered.pop())
     localization.unregister()

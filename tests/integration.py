@@ -205,6 +205,64 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
         self.assertEqual(self.parts(), [])
 
+    def test_dependent_draft_saves_and_preserves_identity_on_rebuild(self):
+        source = self.cube()
+        source_mesh = source.data
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        draft = self.addon.draft.active_plan(bpy.context.scene)
+        draft.cuts[1].settings.axis = "X"
+        draft.cuts[1].name = "Second cut"
+        cuts = [cut.uid for cut in draft.cuts]
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(source.data, source_mesh)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        first_build = {obj["tntmesh_part_id"]: obj.name for obj in self.parts()}
+        self.assertEqual(len(first_build), 3)
+        self.assertAlmostEqual(sum(self.checked(part) for part in self.parts()), 24**3)
+
+        path = self.directory / "saved-draft.blend"
+        self.assertEqual(bpy.ops.wm.save_as_mainfile(filepath=str(path)), {"FINISHED"})
+        self.assertEqual(bpy.ops.wm.open_mainfile(filepath=str(path), load_ui=False), {"FINISHED"})
+        draft = self.addon.draft.active_plan(bpy.context.scene)
+        self.assertEqual([cut.uid for cut in draft.cuts], cuts)
+        self.assertEqual(draft.cuts[1].name, "Second cut")
+        self.assertEqual(draft.cuts[1].settings.axis, "X")
+        draft.cuts[1].settings.offset = 2.5
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        self.assertEqual({obj["tntmesh_part_id"]: obj.name for obj in self.parts()}, first_build)
+        self.assertEqual(len(list(bpy.context.scene.objects)), 4)
+        self.assertAlmostEqual(self.checked(draft.source), 24**3)
+
+    def test_failed_draft_build_keeps_prior_meshes_and_selection(self):
+        source = self.cube()
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="DUPLICATE"), {"FINISHED"})
+        plan = self.addon.draft.active_plan(bpy.context.scene)
+        original, duplicate = plan.cuts
+        self.assertNotEqual(duplicate.uid, original.uid)
+        self.assertFalse(duplicate.enabled)
+        duplicate.enabled = True
+        duplicate.settings.offset = 100.0
+        prior = {obj.as_pointer(): obj.data.as_pointer() for obj in self.parts()}
+        selected = {obj.as_pointer() for obj in bpy.context.selected_objects}
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(
+            bpy.ops.tntmesh.draft_target(target=self.addon.draft.cut_outputs(original)[0]),
+            {"FINISHED"},
+        )
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual({obj.as_pointer(): obj.data.as_pointer() for obj in self.parts()}, prior)
+        self.assertEqual({obj.as_pointer() for obj in bpy.context.selected_objects}, selected)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+        self.assertTrue(source.hide_get())
+
 
 if __name__ == "__main__":
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
