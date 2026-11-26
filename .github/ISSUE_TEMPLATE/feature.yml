@@ -1,0 +1,9 @@
+name: Feature request
+description: Suggest an improvement to TNTMesh
+body:
+  - type: textarea
+    id: use_case
+    attributes:
+      label: What print preparation task would this improve?
+    validations:
+      required: true

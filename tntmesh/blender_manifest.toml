@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+id = "tntmesh"
+version = "0.1.0"
+name = "TNTMesh"
+tagline = "Prepare, split and connect models for 3D printing"
+maintainer = "TNTStudios"
+type = "add-on"
+website = "https://github.com/TNTStudiosn/TNTMesh"
+tags = ["Mesh", "Modeling", "Import-Export"]
+blender_version_min = "4.5.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Import models and write selected parts to local files"
+
+[build]
+paths_exclude_pattern = ["__pycache__/", "*.pyc", "*.pyo"]
