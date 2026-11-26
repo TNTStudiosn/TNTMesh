@@ -272,6 +272,8 @@ class TNTMESH_PT_main(bpy.types.Panel):
             header.label(text="Cut settings")
             if body:
                 body.prop(settings, "hide_source")
+                if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
+                    body.prop(settings, "show_cut_handle")
                 cut_details(body, settings, obj)
 
             action = layout.row()

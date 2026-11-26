@@ -17,6 +17,10 @@ from .viewport import project_bounds
 _sessions: list["TNTMESH_OT_draw_plane"] = []
 
 
+def drawing_active() -> bool:
+    return bool(_sessions)
+
+
 def model_pivot(obj: bpy.types.Object) -> Vector:
     center = sum(map(Vector, obj.bound_box), Vector((0, 0, 0))) / 8
     return obj.matrix_world @ center

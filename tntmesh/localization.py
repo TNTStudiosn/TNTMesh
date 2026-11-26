@@ -399,6 +399,10 @@ SPANISH = {
     "Offset (mm)": "Desplazamiento (mm)",
     "Distance from the center along the cut axis": "Distancia desde el centro sobre el eje de corte",
     "Show plane": "Mostrar plano",
+    "Move Cut Plane": "Mover plano de corte",
+    "Show drag handle": "Mostrar control de arrastre",
+    "Move the cutting plane along its normal in the viewport":
+        "Mueve el plano de corte sobre su normal desde la Vista 3D",
     "Kerf (mm)": "Separación (mm)",
     "Physical gap removed between the pieces": "Espacio físico que se retira entre las piezas",
     "Connector": "Conector",

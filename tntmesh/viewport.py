@@ -43,6 +43,64 @@ def project_bounds(
     return result
 
 
+class TNTMESH_GGT_cut_offset(bpy.types.GizmoGroup):
+    bl_idname = "TNTMESH_GGT_cut_offset"
+    bl_label = "Move Cut Plane"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "WINDOW"
+    bl_options = {"3D", "PERSISTENT"}
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        from .draw_cut import drawing_active
+
+        settings = context.scene.tntmesh_settings
+        return (context.mode == "OBJECT" and settings.mode == "EASY"
+                and settings.cut_kind in {"PLANAR", "SYMMETRY"}
+                and settings.show_plane and settings.show_cut_handle
+                and active_mesh(context) is not None and not drawing_active())
+
+    def setup(self, context: bpy.types.Context) -> None:
+        gizmo = self.gizmos.new("GIZMO_GT_arrow_3d")
+        gizmo.color = (0.0, 0.86, 0.92)
+        gizmo.alpha = .9
+        gizmo.color_highlight = (0.42, 1.0, 1.0)
+        gizmo.alpha_highlight = 1.0
+        gizmo.use_draw_modal = True
+        gizmo.scale_basis = .74
+        gizmo.line_width = 2
+        self.handle = gizmo
+        self._binding = None
+
+    def draw_prepare(self, context: bpy.types.Context) -> None:
+        settings = context.scene.tntmesh_settings
+        unit = millimeters_per_unit(context.scene)
+        frame = axis_frame(settings.axis, tuple(settings.rotation))
+        gizmo = self.handle
+        obj = active_mesh(context)
+        extents = project_bounds(obj, context.evaluated_depsgraph_get(), frame) if obj is not None else None
+        gizmo.hide = extents is None
+        if extents is None:
+            return
+        lower, upper = extents
+        matrix = frame.to_4x4()
+        matrix.translation = frame @ ((lower + upper) / 2)
+        gizmo.matrix_basis = matrix
+        binding = settings.as_pointer(), unit, settings.offset
+        if not gizmo.is_modal and self._binding != binding:
+            area = context.area
+
+            def get() -> float:
+                return settings.offset / unit
+
+            def set_offset(value: float) -> None:
+                settings.offset = value * unit
+                area.tag_redraw()
+
+            gizmo.target_set_handler("offset", get=get, set=set_offset)
+            self._binding = binding
+
+
 def cutter_paths(
     settings: TNTMESH_PG_settings, lower: Vector, upper: Vector, unit: float,
 ) -> list[tuple[list[tuple[float, float, float]], bool]]:

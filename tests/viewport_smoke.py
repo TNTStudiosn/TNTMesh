@@ -428,6 +428,61 @@ def verify_face_alignment():
     settings.offset = 0
 
 
+def set_offset_handle():
+    settings = bpy.context.scene.tntmesh_settings
+    settings.axis = "Z"
+    settings.offset = 0
+    settings.show_plane = True
+    settings.show_cut_handle = True
+    viewport()[1].tag_redraw()
+
+
+def aim_at_offset_handle():
+    from bpy_extras.view3d_utils import location_3d_to_region_2d
+    from mathutils import Vector
+
+    global handle_start, handle_end
+    window, area, region = viewport()
+    view = area.spaces.active.region_3d
+    start = location_3d_to_region_2d(region, view, Vector((0, 0, 0)))
+    direction = location_3d_to_region_2d(region, view, Vector((0, 0, 6))) - start
+    handle_start = start + direction.normalized() * 30
+    handle_end = start + direction.normalized() * 55
+    window.event_simulate(type="MOUSEMOVE", value="NOTHING",
+                          x=region.x + round(handle_start.x), y=region.y + round(handle_start.y))
+
+
+def drag_offset_handle(event, value, end=False):
+    window, _, region = viewport()
+    point = handle_end if end else handle_start
+    window.event_simulate(type=event, value=value,
+                          x=region.x + round(point.x), y=region.y + round(point.y))
+
+
+def verify_offset_handle():
+    settings = bpy.context.scene.tntmesh_settings
+    assert 1 < settings.offset < 12, settings.offset
+    screenshot("19-cut-gizmo.png")
+    settings.offset = 0
+
+
+def set_metric_offset_handle():
+    units = bpy.context.scene.unit_settings
+    units.system = "METRIC"
+    units.scale_length = .01
+    set_offset_handle()
+
+
+def verify_metric_offset():
+    offset = bpy.context.scene.tntmesh_settings.offset
+    assert 10 < offset < 120, offset
+
+
+def verify_cancelled_offset():
+    assert abs(bpy.context.scene.tntmesh_settings.offset) < .0001
+    bpy.context.scene.unit_settings.system = "NONE"
+
+
 def open_export_browser():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -476,6 +531,15 @@ snap_steps = (
     (verify_drawing_snap, start_face_alignment, lambda: contour_click(.45, .50), verify_face_alignment)
     if path_steps else ()
 )
+gizmo_steps = (
+    (set_offset_handle, aim_at_offset_handle, lambda: drag_offset_handle("LEFTMOUSE", "PRESS"),
+     lambda: drag_offset_handle("MOUSEMOVE", "NOTHING", True),
+     lambda: drag_offset_handle("LEFTMOUSE", "RELEASE", True), verify_offset_handle,
+     set_metric_offset_handle, aim_at_offset_handle, lambda: drag_offset_handle("LEFTMOUSE", "PRESS"),
+     lambda: drag_offset_handle("MOUSEMOVE", "NOTHING", True),
+     verify_metric_offset, cancel_line, verify_cancelled_offset)
+    if line_steps and os.environ.get("TNTMESH_TEST_GIZMO") == "1" else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -513,7 +577,7 @@ repair_steps = (
     if os.environ.get("TNTMESH_TEST_REPAIR") == "1" else ()
 )
 steps = iter((
-    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *phase3_steps,
+    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,

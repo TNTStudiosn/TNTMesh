@@ -9,7 +9,7 @@
 | 4 · Professional tools | Planned | Magnets, dovetails, snap-fits, articulations, glue features, hollowing, drains, a wall thickness heatmap, costs and assembly guides |
 | 5 · Automation | Planned | Smart Split, seam suggestions, orientation, bed layout, segmentation and stress testing |
 
-Straight cuts support axis selection, numeric offset, free rotation, face alignment and drawing a line in the viewport. Gizmos, the first-run assistant and manual language selection are pending.
+Straight cuts support axis selection, numeric offset, free rotation, face alignment, drawing a line and moving the plane with a viewport handle. The first-run assistant and manual language selection are pending.
 
 Freehand drawing produces closed extraction contours and open paths. The drawing tools support view-plane placement, surface projection and vertex or edge snapping. Selective invalidation of draft operations is pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps, nesting of disjoint closed shells and wall thickness sampled from triangle centers. High-density profiling is pending.
 

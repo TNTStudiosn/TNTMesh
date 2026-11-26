@@ -81,6 +81,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         min=0.0, precision=3, step=5,
     )
     show_plane: BoolProperty(name="Show plane", default=True)
+    show_cut_handle: BoolProperty(
+        name="Show drag handle", description="Move the cutting plane along its normal in the viewport",
+        default=True,
+    )
     show_build_volume: BoolProperty(name="Show print volume")
     connector: EnumProperty(
         name="Connector",

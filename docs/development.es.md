@@ -24,6 +24,8 @@ En **Ajuste**, elige el plano de la vista o la superficie de la malla activa. **
 
 En **Directo** y **Cortes simétricos**, pulsa **Alinear con cara** y elige una cara de la malla activa. La normal de la cara fija la orientación del plano y el desplazamiento sigue controlando la distancia al centro del modelo.
 
+Arrastra la flecha cian para mover el plano y actualizar **Desplazamiento (mm)**. Pulsa Esc durante el arrastre para recuperar el desplazamiento anterior. Puedes ocultar la flecha desde **Ajustes de corte**.
+
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 
 En **Reparar**, activa **Corregir orientación de caras** para corregir la orientación de caras vecinas y de las superficies cerradas según su profundidad de anidamiento. La copia conserva las cavidades y los sólidos separados. La reparación se detiene si las superficies se cruzan o si el anidamiento es ambiguo.
