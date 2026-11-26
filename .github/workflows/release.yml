@@ -1,0 +1,40 @@
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: TNTMesh-Blender-*
+          path: packages
+      - name: Verify tag, manifest and artifacts
+        run: python scripts/check_release.py "$GITHUB_REF_NAME" packages
+      - name: Publish verified package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          zip="tntmesh-$version.zip"
+          mapfile -t copies < <(find packages -type f -name "$zip" | sort)
+          cp "${copies[0]}" "$zip"
+          sha256sum "$zip" > SHA256SUMS
+          flags=()
+          if [[ "$version" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "$GITHUB_REF_NAME" "$zip" SHA256SUMS \
+            --verify-tag --title "TNTMesh $version" --generate-notes "${flags[@]}"
