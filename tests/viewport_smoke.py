@@ -365,6 +365,23 @@ def verify_contour():
     settings.axis = "Z"
 
 
+def start_manual_path():
+    settings = bpy.context.scene.tntmesh_settings
+    settings.cut_kind = "PATH"
+    settings.path_smoothing = 1
+    start_line()
+
+
+def verify_manual_path():
+    settings = bpy.context.scene.tntmesh_settings
+    assert settings.cut_kind == "PATH" and settings.axis == "FREE"
+    assert len(settings.contour) == 3 and settings.path_smoothing == 1
+    assert settings.contour_depth > 24.0
+    screenshot("17-manual-path.png")
+    settings.cut_kind = "PLANAR"
+    settings.axis = "Z"
+
+
 def open_export_browser():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -403,6 +420,11 @@ contour_steps = (
     finish_contour,
     verify_contour,
 ) if line_steps and os.environ.get("TNTMESH_TEST_CONTOUR") == "1" else ()
+path_steps = (
+    start_manual_path, lambda: contour_click(.40, .48),
+    lambda: contour_click(.46, .56), lambda: contour_click(.54, .48),
+    finish_contour, verify_manual_path,
+) if line_steps and os.environ.get("TNTMESH_TEST_PATH") == "1" else ()
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -440,7 +462,7 @@ repair_steps = (
     if os.environ.get("TNTMESH_TEST_REPAIR") == "1" else ()
 )
 steps = iter((
-    setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
+    setup, panel, *line_steps, *contour_steps, *path_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
     *base_steps, draft_panel, *diagnostics_steps, finish, *repair_steps,

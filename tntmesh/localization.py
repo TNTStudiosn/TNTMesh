@@ -75,6 +75,17 @@ SPANISH = {
     "Draw a line or contour in the 3D Viewport": "Dibuja una línea o un contorno en la Vista 3D",
     "Contour": "Contorno",
     "Draw Contour": "Dibujar contorno",
+    "Manual Path": "Trazo manual",
+    "Split along an open path drawn in the viewport": "Divide el modelo con un trazo abierto en la Vista 3D",
+    "Draw Path": "Dibujar trazo",
+    "Path smoothing": "Suavizado del trazo",
+    "Soften the interior points of the manual path": "Suaviza los puntos interiores del trazo manual",
+    "Draw a path with at least two valid points.": "Dibuja un trazo con al menos dos puntos válidos.",
+    "Choose up to 12 path smoothing passes.": "Elige hasta 12 pasos de suavizado.",
+    "The path has adjacent points that are too close.": "El trazo contiene puntos consecutivos muy cerca.",
+    "Remove Point": "Quitar punto",
+    "Click points or Shift-drag · Enter to finish · Esc to cancel":
+        "Haz clic o arrastra con Mayús · Enter para terminar · Esc para cancelar",
     "Extract a drawn or freehand contour": "Extrae una región dibujada punto a punto o a mano alzada",
     "Click points or Shift-drag · Enter to close · Esc to cancel":
         "Haz clic o arrastra con Mayús · Enter cierra · Esc cancela",

@@ -5,6 +5,7 @@ from mathutils import Matrix, Vector
 
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
+from .geometry.polygon import extended_path
 from .geometry.region import RegionCut, boundary_edges, edge_map, region_faces, smooth_boundary
 from .geometry.symmetry import reflected_plane
 from .geometry.volume import bezier_path, outline
@@ -52,6 +53,16 @@ def cutter_paths(
         left = [(x, lower.y, z) for x, z in path]
         right = [(x, upper.y, z) for x, z in path]
         return [(left + right[::-1] + left[:1], False)]
+    if settings.cut_kind == "PATH":
+        center = (lower + upper) / 2 + Vector((*settings.profile_shift, settings.offset)) / unit
+        points = [(point.position[0] / unit, point.position[1] / unit) for point in settings.contour]
+        try:
+            path, _ = extended_path(points, tuple((lower - center).xy), tuple((upper - center).xy),
+                                    settings.path_smoothing)
+        except MeshError:
+            return []
+        near, far = center.z - settings.contour_depth / unit / 2, center.z + settings.contour_depth / unit / 2
+        return [([(center.x + x, center.y + y, level) for x, y in path], False) for level in (near, far)]
     if settings.cut_kind in {"RECTANGLE", "ELLIPSE", "POLYGON"}:
         center = (lower + upper) / 2
         center += Vector((*settings.profile_shift, settings.offset)) / unit

@@ -27,7 +27,8 @@ _CLASSES = (
     assembly.TNTMESH_PG_assembly,
     *operators.CLASSES,
     *draft_operators.CLASSES,
-    draw_cut.TNTMESH_OT_draw_plane, *ui.CLASSES, *printer_ui.CLASSES, *calibration_ui.CLASSES,
+    draw_cut.TNTMESH_OT_draw_plane, draw_cut.TNTMESH_OT_remove_cut_point,
+    *ui.CLASSES, *printer_ui.CLASSES, *calibration_ui.CLASSES,
     *assembly_ui.CLASSES, *base_ui.CLASSES, *diagnostics_ui.CLASSES,
 )
 _registered: list[type] = []

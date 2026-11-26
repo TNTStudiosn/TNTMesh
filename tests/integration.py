@@ -263,6 +263,37 @@ class WorkflowTests(unittest.TestCase):
         self.assertAlmostEqual(self.checked(inside), 48 * 6, places=3)
         self.assertAlmostEqual(self.checked(outside) + self.checked(inside), 24**3, places=2)
 
+    def test_manual_path_splits_a_solid_with_a_smoothed_seam(self):
+        source = self.cube()
+        self.settings.cut_kind = "PATH"
+        self.settings.contour_depth = 30
+        self.settings.path_smoothing = 1
+        for point in ((-8, -3), (0, 5), (8, -1)):
+            self.settings.contour.add().position = point
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        first, second = self.parts()
+        self.assertAlmostEqual(self.checked(first) + self.checked(second), 24**3, delta=.025)
+        self.assertTrue(any(abs(vertex.co.x) < .0001 and abs(vertex.co.y - 1.5) < .0001
+                            for vertex in first.data.vertices))
+        self.assertEqual(len(source.data.polygons), 6)
+
+    def test_manual_path_rejects_a_crossing_and_supports_draft_point_removal(self):
+        self.cube()
+        self.settings.cut_kind = "PATH"
+        self.settings.contour_depth = 30
+        for point in ((-8, -8), (8, 8), (-8, 8), (8, -8)):
+            self.settings.contour.add().position = point
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.settings.mode = "DRAFT"
+        self.assertEqual(bpy.ops.tntmesh.remove_cut_point(point_index=1), {"FINISHED"})
+        self.assertEqual(len(self.settings.contour), 4)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        self.assertAlmostEqual(sum(map(self.checked, self.parts())), 24**3, delta=.025)
+
     def test_crossing_contour_is_rejected_before_publication(self):
         source = self.cube()
         self.settings.cut_kind = "POLYGON"

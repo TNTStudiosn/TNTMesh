@@ -65,7 +65,7 @@ def cut_properties(
             layout.prop(settings, "socket_template")
     elif settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_controls")
-    elif settings.cut_kind == "POLYGON":
+    elif settings.cut_kind in {"POLYGON", "PATH"}:
         layout.prop(settings, "contour_depth")
     else:
         layout.prop(settings, "profile_size")
@@ -96,9 +96,11 @@ def cut_details(
     if settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_samples")
         return
-    if settings.cut_kind in {"RECTANGLE", "ELLIPSE", "POLYGON"}:
+    if settings.cut_kind in {"RECTANGLE", "ELLIPSE", "POLYGON", "PATH"}:
         layout.prop(settings, "profile_shift")
-        if settings.cut_kind == "POLYGON" and settings.contour:
+        if settings.cut_kind == "PATH":
+            layout.prop(settings, "path_smoothing")
+        if settings.cut_kind in {"POLYGON", "PATH"} and settings.contour:
             layout.template_list(
                 "TNTMESH_UL_contour", "", settings, "contour", settings, "contour_index", rows=3,
             )
@@ -126,8 +128,10 @@ class TNTMESH_UL_draft_plans(bpy.types.UIList):
 
 
 class TNTMESH_UL_contour(bpy.types.UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
-        layout.row(align=True).prop(item, "position", text="")
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index=0):
+        row = layout.row(align=True)
+        row.prop(item, "position", text="")
+        row.operator("tntmesh.remove_cut_point", text="", icon="X").point_index = index
 
 
 class TNTMESH_UL_draft_cuts(bpy.types.UIList):
@@ -249,10 +253,11 @@ class TNTMESH_PT_main(bpy.types.Panel):
             cut_properties(cut, settings, obj)
             if settings.cut_kind == "BASE":
                 cut.operator("tntmesh.find_base_contacts", icon="VIEWZOOM")
-            if settings.cut_kind in {"PLANAR", "POLYGON", "SYMMETRY"}:
-                cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=(
-                    "Draw Contour" if settings.cut_kind == "POLYGON" else "Draw Cut Line"
-                ))
+            if settings.cut_kind in {"PLANAR", "POLYGON", "PATH", "SYMMETRY"}:
+                draw_label = {"POLYGON": "Draw Contour", "PATH": "Draw Path"}.get(
+                    settings.cut_kind, "Draw Cut Line",
+                )
+                cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=draw_label)
             if settings.cut_kind != "OBJECT":
                 preview_label = {
                     "PLANAR": "Show plane", "REGION": "Highlight region", "SYMMETRY": "Show both planes",

@@ -18,6 +18,8 @@ El motor evalúa la malla y sus transformaciones en un espacio centrado medido e
 
 El corte recto se puede orientar con un eje, rotación numérica o una línea en la Vista 3D. Bézier usa un perfil cúbico con resolución configurable. Rectángulo, Elipse y Contorno extraen regiones con profundidad finita. En Contorno, coloca puntos con clic o arrastra con Mayús y pulsa Enter para cerrar. Los puntos se proyectan al plano de la vista y pueden editarse desde los ajustes de corte. También puedes usar como cortador otra malla cerrada.
 
+**Trazo manual** divide la malla siguiendo un trazo abierto proyectado al plano de la vista. Coloca puntos con clic o arrastra con Mayús y pulsa Enter para terminar. TNTMesh prolonga ambos extremos más allá del modelo. Ajusta el desplazamiento, la profundidad o el suavizado, y edita o quita puntos en los ajustes del corte. Dibuja el trazo en Fácil y añade el corte actual a un borrador para reutilizarlo.
+
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 
 En **Reparar**, activa **Corregir orientación de caras** para corregir la orientación de caras vecinas y de las superficies cerradas según su profundidad de anidamiento. La copia conserva las cavidades y los sólidos separados. La reparación se detiene si las superficies se cruzan o si el anidamiento es ambiguo.

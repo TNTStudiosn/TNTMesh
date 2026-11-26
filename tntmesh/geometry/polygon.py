@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from collections.abc import Sequence
-from math import hypot, isfinite
+from math import ceil, floor, hypot, isfinite
 
 from ..model import MeshError
 
@@ -52,3 +52,65 @@ def closed_outline(points: Sequence[Point2]) -> list[Point2]:
     if abs(area_twice) <= cross_epsilon:
         raise MeshError("The contour does not enclose an area.")
     return list(points) if area_twice > 0.0 else list(reversed(points))
+
+
+def smooth_path(points: Sequence[Point2], passes: int) -> list[Point2]:
+    path = list(points)
+    for _ in range(passes):
+        path = [
+            path[0],
+            *(((before[0] + 2 * current[0] + after[0]) / 4,
+               (before[1] + 2 * current[1] + after[1]) / 4)
+              for before, current, after in zip(path[:-2], path[1:-1], path[2:], strict=True)),
+            path[-1],
+        ]
+    return path
+
+
+def border_hit(point: Point2, next_point: Point2, corners: tuple[Point2, ...]) -> tuple[Point2, float]:
+    direction = (point[0] - next_point[0], point[1] - next_point[1])
+    exits = []
+    for side, corner in enumerate(corners):
+        axis = 1 - side % 2
+        speed = direction[axis]
+        if (speed if side in (1, 2) else -speed) > 0:
+            exits.append(((corner[axis] - point[axis]) / speed, side))
+    if not exits:
+        raise MeshError("The path has adjacent points that are too close.")
+    distance, side = min(exits)
+    hit = (point[0] + distance * direction[0], point[1] + distance * direction[1])
+    a, b = corners[side], corners[(side + 1) % 4]
+    tangent = side % 2
+    fraction = (hit[tangent] - a[tangent]) / (b[tangent] - a[tangent])
+    return hit, side + min(1, max(0, fraction))
+
+
+def extended_path(
+    points: Sequence[Point2], lower: Point2, upper: Point2, smoothing: int,
+) -> tuple[list[Point2], list[Point2]]:
+    if len(points) < 2 or any(not all(map(isfinite, point)) for point in points):
+        raise MeshError("Draw a path with at least two valid points.")
+    if not 0 <= smoothing <= 12:
+        raise MeshError("Choose up to 12 path smoothing passes.")
+    epsilon = max(hypot(upper[0] - lower[0], upper[1] - lower[1]) * 1e-7, 1e-6)
+    if any(hypot(a[0] - b[0], a[1] - b[1]) <= epsilon for a, b in zip(points[:-1], points[1:], strict=True)):
+        raise MeshError("The path has adjacent points that are too close.")
+    path = smooth_path(points, smoothing)
+    low = tuple(min(lower[axis], *(point[axis] for point in path)) for axis in range(2))
+    high = tuple(max(upper[axis], *(point[axis] for point in path)) for axis in range(2))
+    pad = max(hypot(high[0] - low[0], high[1] - low[1]) * .1, .01)
+    corners = ((low[0] - pad, low[1] - pad), (high[0] + pad, low[1] - pad),
+               (high[0] + pad, high[1] + pad), (low[0] - pad, high[1] + pad))
+    start, first = border_hit(path[0], path[1], corners)
+    end, last = border_hit(path[-1], path[-2], corners)
+    if first < last:
+        first += 4
+    border = [corners[index % 4] for index in range(floor(last) + 1, ceil(first))]
+    return [start, *path, end], border
+
+
+def path_outline(
+    points: Sequence[Point2], lower: Point2, upper: Point2, smoothing: int,
+) -> list[Point2]:
+    path, border = extended_path(points, lower, upper, smoothing)
+    return closed_outline([*path, *border])

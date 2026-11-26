@@ -12,7 +12,7 @@ from .boolean import ExactBoolean
 from .custom_connector import CustomConnector
 from .mesh import bounds, evaluated_mm, inspect, primitive
 from .planar import PlanarCut, axis_frame, split
-from .polygon import Point2, closed_outline
+from .polygon import Point2, closed_outline, path_outline
 from .region import RegionCut, cutter_for_region
 from .region_connector import connect_region
 from .symmetry import SymmetricCut, split_symmetric
@@ -30,6 +30,7 @@ class VolumeCut:
     resolution: int
     cutter: bpy.types.Object | None
     points: tuple[Point2, ...]
+    smoothing: int = 0
 
 
 Cut = BaseCut | PlanarCut | RegionCut | SymmetricCut | VolumeCut
@@ -123,14 +124,20 @@ def cutter_mesh(
         if not all(map(isfinite, config.controls)) or config.resolution < 4:
             raise MeshError("Check the control heights and curve resolution.")
         return curve_volume(transaction, frame, lower, upper, config)
-    if config.shape not in {"RECTANGLE", "ELLIPSE", "POLYGON"} or (
+    if config.shape not in {"RECTANGLE", "ELLIPSE", "POLYGON", "PATH"} or (
         not all(map(isfinite, (*config.size, *config.shift))) or min(config.size) <= 0
     ):
         raise MeshError("Check the position and dimensions of the cutter.")
     center = (lower + upper) / 2 + Vector((*config.shift, config.offset))
     width, height, depth = config.size
-    coords = (closed_outline(config.points) if config.shape == "POLYGON"
-              else outline(config.shape, width, height))
+    if config.shape == "PATH":
+        coords = path_outline(
+            config.points, tuple((lower - center).xy), tuple((upper - center).xy), config.smoothing,
+        )
+    elif config.shape == "POLYGON":
+        coords = closed_outline(config.points)
+    else:
+        coords = outline(config.shape, width, height)
     return extruded_volume(transaction, frame, center, coords, depth)
 
 

@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import bpy
+from bpy.props import IntProperty
 from bpy_extras.view3d_utils import region_2d_to_location_3d, region_2d_to_vector_3d
 from mathutils import Euler, Vector
 
+from . import draft
 from .geometry.planar import axis_frame
-from .geometry.polygon import Point2, closed_outline
+from .geometry.polygon import Point2, closed_outline, path_outline
 from .localization import tr
 from .model import MeshError, millimeters_per_unit
 from .operators import MeshOperator, active_mesh, report_failure
+from .settings import TNTMESH_PG_settings
 from .viewport import project_bounds
 
 _sessions: list["TNTMESH_OT_draw_plane"] = []
@@ -16,6 +19,10 @@ _sessions: list["TNTMESH_OT_draw_plane"] = []
 def model_pivot(obj: bpy.types.Object) -> Vector:
     center = sum(map(Vector, obj.bound_box), Vector((0, 0, 0))) / 8
     return obj.matrix_world @ center
+
+
+def stable_euler(rotation: Euler) -> Euler:
+    return Euler(tuple(0.0 if abs(angle) < 1e-6 else angle for angle in rotation), "XYZ")
 
 
 def fit_plane(
@@ -37,8 +44,7 @@ def fit_plane(
     normal = (point_b - point_a).cross(view_ray)
     if normal.length_squared == 0.0:
         raise MeshError("Move the second point farther from the first.")
-    rotation = normal.to_track_quat("Z", "Y").to_euler("XYZ")
-    rotation = Euler(tuple(0.0 if abs(angle) < 1e-6 else angle for angle in rotation), "XYZ")
+    rotation = stable_euler(normal.to_track_quat("Z", "Y").to_euler("XYZ"))
     frame = axis_frame("FREE", tuple(rotation))
     extents = project_bounds(obj, depsgraph, frame)
     if extents is None:
@@ -51,10 +57,11 @@ def fit_plane(
 def fit_contour(
     context: bpy.types.Context, obj: bpy.types.Object, region: bpy.types.Region,
     view: bpy.types.RegionView3D, points: list[Vector],
+    *, open_path: bool = False,
 ) -> tuple[Euler, list[Point2], float]:
     depsgraph = context.evaluated_depsgraph_get()
     pivot = model_pivot(obj.evaluated_get(depsgraph))
-    rotation = view.view_rotation.to_euler("XYZ")
+    rotation = stable_euler(view.view_rotation.to_euler("XYZ"))
     frame = axis_frame("FREE", tuple(rotation))
     extents = project_bounds(obj, depsgraph, frame)
     if extents is None:
@@ -68,7 +75,13 @@ def fit_contour(
         world = region_2d_to_location_3d(region, view, point, pivot)
         xy = (inverse @ world - center).xy * unit
         outline.append(tuple(xy))
-    return rotation, closed_outline(outline), (upper.z - lower.z) * unit * 1.1
+    if open_path:
+        settings = context.scene.tntmesh_settings
+        path_outline(outline, tuple((lower - center).xy * unit), tuple((upper - center).xy * unit),
+                     settings.path_smoothing)
+    else:
+        outline = closed_outline(outline)
+    return rotation, outline, (upper.z - lower.z) * unit * 1.1
 
 
 class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
@@ -82,7 +95,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         return (context.area is not None and context.area.type == "VIEW_3D"
                 and not context.space_data.region_quadviews and MeshOperator.poll(context)
                 and context.scene.tntmesh_settings.mode == "EASY"
-                and context.scene.tntmesh_settings.cut_kind in {"PLANAR", "POLYGON", "SYMMETRY"})
+                and context.scene.tntmesh_settings.cut_kind in {"PLANAR", "POLYGON", "PATH", "SYMMETRY"})
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         if _sessions:
@@ -91,7 +104,8 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         self._region = next(region for region in self._area.regions if region.type == "WINDOW")
         self._view = context.space_data.region_3d
         self._source = active_mesh(context)
-        self._is_contour = context.scene.tntmesh_settings.cut_kind == "POLYGON"
+        self._shape = context.scene.tntmesh_settings.cut_kind
+        self._is_stroke = self._shape in {"PATH", "POLYGON"}
         self._points = []
         self._dragging = False
         self._pointer = None
@@ -99,10 +113,11 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             self._draw_line, (), "WINDOW", "POST_PIXEL"
         )
         _sessions.append(self)
-        self._area.header_text_set(tr(
-            "Click points or Shift-drag · Enter to close · Esc to cancel"
-            if self._is_contour else "Click the first point of the cut · Esc to cancel"
-        ))
+        instruction = {
+            "POLYGON": "Click points or Shift-drag · Enter to close · Esc to cancel",
+            "PATH": "Click points or Shift-drag · Enter to finish · Esc to cancel",
+        }.get(self._shape, "Click the first point of the cut · Esc to cancel")
+        self._area.header_text_set(tr(instruction))
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
 
@@ -110,6 +125,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         if self._handle is None:
             return {"CANCELLED"}
         if (context.area != self._area or active_mesh(context) != self._source
+                or context.scene.tntmesh_settings.cut_kind != self._shape
                 or event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS"):
             self.cleanup()
             return {"CANCELLED"}
@@ -124,7 +140,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             if self._dragging and self._pointer is not None:
                 self._add_contour_point(self._pointer)
             self._area.tag_redraw()
-        if self._is_contour:
+        if self._is_stroke:
             if event.type in {"RET", "NUMPAD_ENTER"} and event.value == "PRESS":
                 return self._finish_contour(context)
             if event.type == "BACK_SPACE" and event.value == "PRESS" and self._points:
@@ -140,7 +156,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             return {"RUNNING_MODAL"}
 
         click = Vector((x, y))
-        if self._is_contour:
+        if self._is_stroke:
             self._dragging = event.shift
             self._add_contour_point(click)
             self._area.tag_redraw()
@@ -176,11 +192,11 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
 
     def _finish_contour(self, context: bpy.types.Context) -> set[str]:
         points = self._points
-        if len(points) > 3 and (points[0] - points[-1]).length < 4.0:
+        if self._shape == "POLYGON" and len(points) > 3 and (points[0] - points[-1]).length < 4.0:
             points = points[:-1]
         try:
             rotation, contour, depth = fit_contour(
-                context, self._source, self._region, self._view, points
+                context, self._source, self._region, self._view, points, open_path=self._shape == "PATH",
             )
         except MeshError as error:
             self.report({"WARNING"}, tr(str(error)))
@@ -233,6 +249,38 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
 
     def cancel(self, context: bpy.types.Context) -> None:
         self.cleanup()
+
+
+class TNTMESH_OT_remove_cut_point(bpy.types.Operator):
+    bl_idname = "tntmesh.remove_cut_point"
+    bl_label = "Remove Point"
+    bl_options = {"UNDO"}
+
+    point_index: IntProperty(default=-1, min=-1)
+
+    @staticmethod
+    def settings(context: bpy.types.Context) -> TNTMESH_PG_settings | None:
+        scene = context.scene
+        if scene.tntmesh_settings.mode == "DRAFT":
+            plan = draft.active_plan(scene)
+            cut = draft.active_cut(plan) if plan is not None else None
+            return cut.settings if cut is not None else None
+        return scene.tntmesh_settings
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        settings = cls.settings(context)
+        return (context.mode == "OBJECT" and settings is not None
+                and settings.cut_kind in {"POLYGON", "PATH"} and bool(settings.contour))
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        settings = self.settings(context)
+        index = settings.contour_index if self.point_index < 0 else self.point_index
+        if index >= len(settings.contour):
+            return {"CANCELLED"}
+        settings.contour.remove(index)
+        settings.contour_index = min(index, max(0, len(settings.contour) - 1))
+        return {"FINISHED"}
 
 
 def cancel_sessions() -> None:

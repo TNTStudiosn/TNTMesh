@@ -58,6 +58,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("REGION", "Surface Region", "Extract a solid piece from matching faces"),
             ("SYMMETRY", "Symmetric Cuts", "Reflect a straight cut across a symmetry plane"),
             ("BASE", "Separate Base", "Find rising contacts and cut the figure from its base"),
+            ("PATH", "Manual Path", "Split along an open path drawn in the viewport"),
         ],
         default="PLANAR",
     )
@@ -148,6 +149,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     contour_depth: FloatProperty(name="Depth (mm)", default=10.0, min=0.01, precision=2)
     contour: CollectionProperty(type=TNTMESH_PG_contour_point)
     contour_index: IntProperty(min=0)
+    path_smoothing: IntProperty(
+        name="Path smoothing", description="Soften the interior points of the manual path",
+        min=0, max=12, default=0,
+    )
     region_method: EnumProperty(name="Region source", items=[
         ("MATERIAL", "By Material Slot", "Use faces assigned to a material slot"),
         ("SELECTION", "Selected Faces", "Use the face selection saved on the mesh"),
@@ -242,11 +247,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         if self.cut_kind == "REGION":
             return self.region_config()
         if self.cut_kind not in {"PLANAR", "SYMMETRY"}:
-            size = (1.0, 1.0, self.contour_depth) if self.cut_kind == "POLYGON" else tuple(self.profile_size)
+            size = (1.0, 1.0, self.contour_depth) if self.cut_kind in {"POLYGON", "PATH"} else tuple(self.profile_size)
             return VolumeCut(
                 self.cut_kind, self.axis, tuple(self.rotation), self.offset,
                 tuple(self.profile_shift), size, tuple(self.curve_controls),
                 self.curve_samples, self.cutter, tuple(tuple(point.position) for point in self.contour),
+                self.path_smoothing,
             )
         connector = None
         if self.connector == "CUSTOM":
