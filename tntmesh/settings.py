@@ -167,6 +167,15 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Boundary smoothing", description="Relax the cut contour along the original surface",
         default=0, min=0, max=12,
     )
+    region_connector: EnumProperty(
+        name="Connector",
+        items=[
+            ("NONE", "None", "Extract the region without a connector"),
+            ("ROUND", "Cylindrical", "Find a matching pin position inside the region seam"),
+            ("HEX", "Hexagonal", "Find a matching hexagonal pin position inside the region seam"),
+        ],
+        default="NONE",
+    )
     symmetry_axis: EnumProperty(
         name="Symmetry axis", items=[(name, name, "") for name in "XYZ"], default="X",
     )
@@ -194,19 +203,23 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     base_contact_source: PointerProperty(type=bpy.types.Object, poll=is_mesh)
 
     def region_config(self) -> RegionCut:
+        connector = None if self.region_connector == "NONE" else self.standard_connector(
+            self.region_connector, self.connector_count,
+        )
         return RegionCut(
             self.region_method, self.region_depth, self.region_slot, self.region_attribute,
             tuple(self.region_color), self.region_tolerance, self.region_weight, self.region_grow,
-            self.region_smoothing,
+            self.region_smoothing, connector,
         )
+
+    def standard_connector(self, shape: str, count: int) -> Connector:
+        return Connector(shape, self.diameter, self.insertion, self.lateral, self.axial,
+                         self.wall, count, self.loose_pins)
 
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
         connector = None
         if self.base_pins:
-            connector = Connector(
-                self.base_shape, self.diameter, self.insertion, self.lateral,
-                self.axial, self.wall, loose=self.loose_pins,
-            )
+            connector = self.standard_connector(self.base_shape, 1)
         items = self.base_contacts if source is None or self.base_contact_source == source else ()
         overrides = tuple(
             ContactOverride(tuple(item.center), item.shift, item.connector, item.diameter)
@@ -231,10 +244,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         if self.connector == "CUSTOM":
             connector = CustomConnector(self.pin_template, self.socket_template, self.wall)
         elif self.connector != "NONE":
-            connector = Connector(
-                self.connector, self.diameter, self.insertion, self.lateral, self.axial, self.wall,
-                self.connector_count, self.loose_pins,
-            )
+            connector = self.standard_connector(self.connector, self.connector_count)
         cut = PlanarCut(self.axis, self.offset, self.kerf, connector, tuple(self.rotation))
         if self.cut_kind == "SYMMETRY":
             return SymmetricCut(cut, self.symmetry_axis, self.symmetry_center, self.symmetry_secondary)

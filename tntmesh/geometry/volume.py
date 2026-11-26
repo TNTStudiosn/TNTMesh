@@ -14,6 +14,7 @@ from .mesh import bounds, evaluated_mm, inspect, primitive
 from .planar import PlanarCut, axis_frame, split
 from .polygon import Point2, closed_outline
 from .region import RegionCut, cutter_for_region
+from .region_connector import connect_region
 from .symmetry import SymmetricCut, split_symmetric
 
 
@@ -149,7 +150,8 @@ def apply_cut(
         return split(context, transaction, mesh, config)
     original_volume = inspect(mesh).volume_mm3
     if isinstance(config, RegionCut):
-        cutter = cutter_for_region(transaction, mesh, source, config)
+        region = cutter_for_region(transaction, mesh, source, config)
+        cutter = region.mesh
     else:
         cutter = cutter_mesh(context, transaction, mesh, config, origin, unit, source)
         inspect(cutter)
@@ -161,4 +163,6 @@ def apply_cut(
     total = inspect(outside).volume_mm3 + inspect(inside).volume_mm3
     if abs(total - original_volume) > original_volume * .001:
         raise MeshError("The split did not preserve the expected volume.")
+    if isinstance(config, RegionCut) and config.connector is not None:
+        return connect_region(engine, outside, inside, region, config.connector)
     return outside, inside

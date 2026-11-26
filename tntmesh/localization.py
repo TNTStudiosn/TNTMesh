@@ -103,6 +103,12 @@ SPANISH = {
     "Add or remove rings of edge-adjacent faces": "Agrega o quita anillos de caras vecinas",
     "Highlight region": "Resaltar región",
     "Extract Region": "Extraer región",
+    "Extract the region without a connector": "Extrae la región sin conector",
+    "Find a matching pin position inside the region seam": "Ubica un pin cilíndrico en la unión de la región",
+    "Find a matching hexagonal pin position inside the region seam":
+        "Ubica un pin hexagonal en la unión de la región",
+    "No planar region seam can fit the requested connectors.":
+        "Ninguna unión plana de la región tiene espacio para los conectores elegidos.",
     "Boundary smoothing": "Suavizar contorno",
     "Relax the cut contour along the original surface": "Suaviza el contorno sobre la superficie original",
     "Choose between zero and twelve smoothing passes.": "Elige entre cero y doce pasadas de suavizado.",
@@ -141,6 +147,11 @@ SPANISH = {
     "Extract a closed piece per material slot and keep a solid remainder":
         "Extrae una pieza cerrada por ranura de material y conserva un cuerpo sólido",
     "Retained material slot": "Ranura del cuerpo principal",
+    "Connect to the main body": "Conectar al cuerpo principal",
+    "Fit each extracted piece to the retained material using the region connector settings":
+        "Conecta cada pieza extraída al cuerpo principal con los ajustes de conector de la región",
+    "Choose a region connector before separating by material.":
+        "Elige un conector para la región antes de separar por material.",
     "Assign faces to the retained slot and at least one other material slot.":
         "Asigna caras tanto a la ranura principal como a otra ranura de material.",
     "A material cut consumed all remaining geometry or produced no piece.":

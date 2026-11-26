@@ -283,6 +283,10 @@ class TNTMESH_OT_split_materials(bpy.types.Operator, MeshOperator):
     bl_options = {"UNDO"}
     keep_slot: IntProperty(name="Retained material slot", min=1, default=1)
     depth: FloatProperty(name="Depth (mm)", default=2, min=.01, precision=3)
+    with_connectors: BoolProperty(
+        name="Connect to the main body",
+        description="Fit each extracted piece to the retained material using the region connector settings",
+    )
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -291,6 +295,7 @@ class TNTMESH_OT_split_materials(bpy.types.Operator, MeshOperator):
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         self.depth = context.scene.tntmesh_settings.region_depth
+        self.with_connectors = context.scene.tntmesh_settings.region_connector != "NONE"
         return context.window_manager.invoke_props_dialog(self, width=330)
 
     def draw(self, context: bpy.types.Context) -> None:
@@ -301,21 +306,33 @@ class TNTMESH_OT_split_materials(bpy.types.Operator, MeshOperator):
             name = slots[self.keep_slot - 1].name or tr("Empty material slot")
             layout.label(text=name, icon="MATERIAL", translate=False)
         layout.prop(self, "depth")
+        if context.scene.tntmesh_settings.region_connector != "NONE":
+            layout.prop(self, "with_connectors")
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         source = active_mesh(context)
+        settings = context.scene.tntmesh_settings
         unit = millimeters_per_unit(context.scene)
         wm = context.window_manager
         wm.progress_begin(0, 3)
         try:
+            connector = settings.region_config().connector if self.with_connectors else None
+            if self.with_connectors and connector is None:
+                raise MeshError("Choose a region connector before separating by material.")
             with GeometryTransaction() as transaction:
                 mesh, origin = evaluated_mm(context, source, transaction, unit)
                 wm.progress_update(1)
                 cuts = split_materials(
                     context, transaction, mesh, source, self.keep_slot, self.depth,
+                    smoothing=settings.region_smoothing, connector=connector,
                 )
                 wm.progress_update(2)
-                labels = [cut.name or tr("Slot {number}").format(number=cut.slot) for cut in cuts]
+                labels = []
+                for cut in cuts:
+                    label = cut.name or tr("Slot {number}").format(number=cut.slot)
+                    if cut.pin:
+                        label += " · " + tr("Pin {number}").format(number=cut.pin)
+                    labels.append(label)
                 parts = publish_parts(
                     context, transaction, source, [cut.mesh for cut in cuts], origin, unit, labels=labels,
                 )

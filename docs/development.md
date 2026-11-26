@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.3.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.4.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -37,6 +37,8 @@ Use **Boundary smoothing** in Cut Settings to relax the contour over the origina
 **Mesh Diagnostics → Scan Mesh** checks evaluated geometry in millimeters. It reports open edges, non-manifold elements, inconsistent winding, zero-length edges, degenerate triangles, near-duplicate vertices, duplicate faces, surface shells and intersections between triangles without shared vertices. Click a finding to isolate its markers, or the zoom icon to frame them. Markers clear after edits, undo or reload. Up to 256 locations per category are drawn. Shell counts can include legitimate hollow models. Wall thickness, shell nesting and continuous collision checks require separate analysis.
 
 In Easy mode, choose **Surface Region → By Material Slot → Separate by Material** to split several material slots in a single operation. Pick the slot for the main body and set the depth for the extracted slots. Cuts proceed in slot order, so the first slot receives any interior volume shared by adjacent cuts. The main body retains the remaining solid volume. The operation publishes all results together after each cut passes the surface and volume checks. It retains the source mesh and sets the parts' preview colors from the materials.
+
+Choose a **Cylindrical** or **Hexagonal** connector for a surface region. TNTMesh ranks planar inner faces by available area and checks the footprint, wall and insertion depth on both sides before carving the matching features. The cut can use built-in pins or separate printable pins. **Connect to the main body** fits each material insert against the retained body after all material cuts have run. If any interface has insufficient space, the operation leaves the source and previous results intact. The current search considers up to twelve candidate planes. Highly curved seams may have no suitable planar face.
 
 **Symmetric Cuts** reflects a straight plane around the chosen world axis and center. Move the first cut away from that center to create a middle piece and two outer pieces. The secondary offset can move the reflected plane along its normal. Round and hexagonal connector positions are reflected and must fit both cuts before results are published. Draft mode exposes the three bodies as separate targets for subsequent cuts.
 

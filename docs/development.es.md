@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.3.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.4.zip
 ```
 
 ## Geometría y borradores
@@ -35,6 +35,8 @@ Los perfiles de impresora se guardan en la escena y se pueden transferir entre p
 **Diagnóstico de malla → Analizar malla** revisa la geometría evaluada en milímetros. Detecta aristas abiertas, geometría no manifold, orientación inconsistente, aristas de longitud cero, triángulos degenerados, vértices cercanos, caras duplicadas, superficies desconectadas e intersecciones entre triángulos sin vértices comunes. Selecciona un hallazgo para aislar sus marcas o pulsa el icono de lupa para encuadrarlas. El visor muestra hasta 256 ubicaciones por categoría y borra las marcas al editar, deshacer o recargar. Las superficies desconectadas pueden corresponder a un modelo hueco válido.
 
 En modo Fácil, usa **Región de superficie → Por ranura de material → Separar por material** para procesar varias ranuras en una operación. Elige la ranura del cuerpo principal y la profundidad de las zonas a extraer. Los cortes avanzan en el orden de las ranuras. Si dos zonas contiguas comparten volumen interior, ese volumen queda con la que se procesa primero. El cuerpo principal conserva el resto. La operación publica todas las piezas juntas después de comprobar su cierre y volumen. Conserva la malla original y usa el color de cada material para la vista previa.
+
+Elige un conector **Cilíndrico** o **Hexagonal** en Región de superficie. TNTMesh ordena las caras interiores planas por área y comprueba el espacio, la pared y la profundidad a ambos lados antes de generar el pin y la cavidad. Puedes generar pines integrados o pasadores independientes. **Conectar al cuerpo principal** ajusta cada inserto al cuerpo retenido después de separar todos los materiales. Si una unión carece de espacio, se conservan el original y los resultados previos. La búsqueda considera hasta doce planos. Las uniones muy curvas pueden carecer de caras planas aptas.
 
 **Cortes simétricos** refleja un plano recto respecto al eje y centro elegidos. Separa el primer plano del centro para obtener dos piezas exteriores y una central. Puedes desplazar el segundo plano sobre su normal. Los conectores cilíndricos o hexagonales conservan sus posiciones reflejadas y ambas uniones deben pasar la comprobación de espacio. En Borrador puedes usar cada una de las tres piezas como entrada de cortes posteriores.
 

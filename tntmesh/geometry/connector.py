@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass
+from itertools import chain
 from math import cos, isfinite, sin, tau
 
 import bpy
@@ -8,6 +9,10 @@ from mathutils import Matrix, Vector
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
 from .mesh import VOLUME_EPSILON, bounds, inspect, primitive
+
+
+class ConnectorPlacementError(MeshError):
+    """The requested connector footprint has no valid placement."""
 
 
 @dataclass(frozen=True)
@@ -101,11 +106,14 @@ def safe_centers(
     count: int,
     requested: tuple[Vector, ...] | None = None,
     requested_error: str = "The requested connector positions do not fit.",
+    preferred: tuple[Vector, ...] = (),
 ) -> list[Vector]:
     low, high = planes
     probes = ((minus, low - depths[0], low - inset), (plus, high + inset, high + depths[1]))
     centers = []
-    search = requested if requested is not None else candidates(minus, frame, low, epsilon * 2)
+    search = requested if requested is not None else chain(
+        preferred, candidates(minus, frame, low, epsilon * 2),
+    )
     for center in search:
         if any((center - other).length < 2 * envelope for other in centers):
             continue
@@ -122,10 +130,10 @@ def safe_centers(
                     break
     if len(centers) < count:
         if requested is not None:
-            raise MeshError(requested_error)
+            raise ConnectorPlacementError(requested_error)
         if not centers:
-            raise MeshError("No safe connector position. Reduce its size or move the cut.")
-        raise MeshError("Not enough safe positions. Reduce the connector count or size.")
+            raise ConnectorPlacementError("No safe connector position. Reduce its size or move the cut.")
+        raise ConnectorPlacementError("Not enough safe positions. Reduce the connector count or size.")
     return centers
 
 
@@ -140,6 +148,7 @@ def add_connector(
     epsilon: float,
     requested: tuple[Vector, ...] | None = None,
     requested_error: str = "The requested connector positions do not fit.",
+    preferred: tuple[Vector, ...] = (),
 ) -> ConnectorResult:
     config.validate()
     low = position - kerf / 2
@@ -152,7 +161,7 @@ def add_connector(
     centers = safe_centers(
         engine, minus, plus, frame, (low, high),
         (minus_depth + config.wall, config.insertion + config.axial + config.wall),
-        envelope, config.sides, epsilon, inset, config.count, requested, requested_error,
+        envelope, config.sides, epsilon, inset, config.count, requested, requested_error, preferred,
     )
 
     polygon_factor = config.sides * sin(tau / config.sides) / 2

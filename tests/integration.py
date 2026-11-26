@@ -592,6 +592,41 @@ class WorkflowTests(unittest.TestCase):
         self.assertAlmostEqual(self.checked(remainder) + self.checked(extract), 24**3, places=3)
         self.assertEqual([vertex.co for vertex in mesh.vertices], before)
 
+    def test_region_connectors_fit_both_parts_and_respect_shell_depth(self):
+        source = self.cube()
+        for face in source.data.polygons:
+            face.select = face.normal.z > .9
+        source.data.update()
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "SELECTION"
+        self.settings.region_depth = 1
+        self.settings.region_connector = "HEX"
+        self.settings.connector_count = 2
+        self.settings.loose_pins = True
+        self.settings.insertion = 1.5
+        self.settings.diameter = 3
+        self.settings.axial = .2
+        self.settings.wall = .5
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertFalse(source.hide_get())
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        self.assertEqual(self.parts(), [])
+
+        self.settings.region_depth = 4
+        self.settings.region_smoothing = 1
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        body, patch, *pins = self.parts()
+        self.assertEqual(len(pins), 2)
+        self.checked(body)
+        self.checked(patch)
+        for pin in pins:
+            self.assertAlmostEqual(pin.dimensions.z, 3, places=5)
+            self.assertAlmostEqual(self.checked(pin), 6 * sin(tau / 6) * 1.5**2 * 3 / 2, places=4)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
     def test_diagnostics_report_open_edges_without_changing_the_mesh(self):
         bpy.ops.mesh.primitive_plane_add(size=20)
         obj = bpy.context.active_object
@@ -673,6 +708,30 @@ class WorkflowTests(unittest.TestCase):
         self.assertAlmostEqual(sum(self.checked(obj) for obj in parts), 24**3, places=3)
         self.assertAlmostEqual(self.checked(parts[1]), 24 * 24 * 2, places=3)
         self.assertAlmostEqual(self.checked(parts[2]), 22 * 24 * 2, places=3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
+
+    def test_material_batch_connects_each_region_to_the_final_body(self):
+        source = self.cube()
+        mesh = source.data
+        for name in ("Body", "Green", "Red"):
+            mesh.materials.append(bpy.data.materials.new(name))
+        max(mesh.polygons, key=lambda face: face.normal.z).material_index = 1
+        max(mesh.polygons, key=lambda face: face.normal.x).material_index = 2
+        mesh.update()
+        self.settings.region_connector = "ROUND"
+        self.settings.diameter = 4
+        self.settings.insertion = 1.5
+        self.settings.wall = .5
+        self.settings.loose_pins = True
+        self.assertEqual(
+            bpy.ops.tntmesh.split_materials(depth=4, with_connectors=True), {"FINISHED"},
+        )
+        parts = self.parts()
+        pins = [obj for obj in parts if "Pin " in obj.name]
+        self.assertEqual({obj["tntmesh_material_slot"] for obj in pins}, {2, 3})
+        self.assertEqual(len(parts), 5)
+        for pin in pins:
+            self.assertAlmostEqual(self.checked(pin), 64 * sin(tau / 64) * 2**2 * 3 / 2, places=3)
         self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
 
     def test_color_selection_and_vertex_groups_share_the_same_closed_output(self):

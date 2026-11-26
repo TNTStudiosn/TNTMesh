@@ -8,10 +8,12 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from ..model import GeometryTransaction, MeshError
+from .connector import Connector
 from .diagnostics import nonadjacent_overlaps
 from .mesh import inspect, primitive
 
 EdgeUses = dict[tuple[int, int], list[tuple[int, int, int]]]
+
 
 @dataclass(frozen=True)
 class RegionCut:
@@ -24,6 +26,13 @@ class RegionCut:
     weight: float = 0.5
     grow: int = 0
     smoothing: int = 0
+    connector: Connector | None = None
+
+
+@dataclass(frozen=True)
+class RegionTool:
+    mesh: bpy.types.Mesh
+    inner_faces: range
 
 
 def matching(
@@ -164,7 +173,7 @@ def reject_self_intersections(mesh: bpy.types.Mesh) -> None:
 def cutter_for_region(
     transaction: GeometryTransaction, mesh: bpy.types.Mesh, source: bpy.types.Object,
     config: RegionCut, *, uses: EdgeUses | None = None,
-) -> bpy.types.Mesh:
+) -> RegionTool:
     if not isfinite(config.depth) or config.depth <= 0:
         raise MeshError("Choose a positive extraction depth.")
     selected = matching(mesh, source, config)
@@ -206,4 +215,4 @@ def cutter_for_region(
     cutter = primitive(transaction, ".TNTMesh surface region", outer + inner, top + bottom + walls)
     inspect(cutter)
     reject_self_intersections(cutter)
-    return cutter
+    return RegionTool(cutter, range(len(top), len(top) + len(bottom)))

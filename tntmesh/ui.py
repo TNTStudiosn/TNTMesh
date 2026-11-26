@@ -46,6 +46,8 @@ def cut_properties(
         if method == "COLOR":
             layout.prop(settings, "region_color")
         layout.prop(settings, "region_depth")
+        layout.label(text="Connector")
+        layout.prop(settings, "region_connector", text="")
         return
     layout.row(align=True).prop(settings, "axis", expand=True)
     if settings.axis == "FREE":
@@ -88,6 +90,8 @@ def cut_details(
             layout.prop(settings, "region_tolerance")
         elif settings.region_method == "VERTEX_GROUP":
             layout.prop(settings, "region_weight")
+        if settings.region_connector != "NONE":
+            connector_details(layout, settings)
         return
     if settings.cut_kind == "BEZIER":
         layout.prop(settings, "curve_samples")
@@ -107,8 +111,12 @@ def cut_details(
     if settings.connector == "CUSTOM":
         layout.prop(settings, "wall")
     elif settings.connector != "NONE":
-        for prop in ("connector_count", "loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
-            layout.prop(settings, prop)
+        connector_details(layout, settings)
+
+
+def connector_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    for prop in ("connector_count", "loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
+        layout.prop(settings, prop)
 
 
 class TNTMESH_UL_draft_plans(bpy.types.UIList):

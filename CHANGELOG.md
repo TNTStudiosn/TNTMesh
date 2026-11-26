@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.4
 
 - Added one-operation separation of multiple material slots into closed pieces with a retained body.
 - Added a sampled straight-line insertion check that reports the first blocking part and distance.
 - Added mesh diagnostics with grouped viewport markers and a focus action for each finding.
 - Added optional surface-projected smoothing for region cut boundaries.
+- Added automatic pin and socket placement on planar region interfaces, including material-slot batches and loose pins.
 
 ## 0.3.0-alpha.3
 

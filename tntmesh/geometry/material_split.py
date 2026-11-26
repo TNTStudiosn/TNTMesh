@@ -6,8 +6,10 @@ import bpy
 
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
+from .connector import Connector
 from .mesh import inspect
-from .region import RegionCut, cutter_for_region, edge_map
+from .region import RegionCut, RegionTool, cutter_for_region, edge_map
+from .region_connector import connect_region
 
 
 @dataclass(frozen=True)
@@ -15,11 +17,13 @@ class MaterialPiece:
     mesh: bpy.types.Mesh
     slot: int
     name: str
+    pin: int = 0
 
 
 def split_materials(
     context: bpy.types.Context, transaction: GeometryTransaction, mesh: bpy.types.Mesh,
-    source: bpy.types.Object, keep_slot: int, depth: float,
+    source: bpy.types.Object, keep_slot: int, depth: float, *,
+    smoothing: int = 0, connector: Connector | None = None,
 ) -> list[MaterialPiece]:
     if not isfinite(depth) or depth <= 0:
         raise MeshError("Choose a positive extraction depth.")
@@ -37,13 +41,18 @@ def split_materials(
     remainder = mesh
     remaining_volume = original
     pieces = []
+    tools: dict[int, RegionTool] = {}
     for slot in sorted(slots - {keep_slot}):
-        cutter = cutter_for_region(
-            transaction, mesh, source, RegionCut("MATERIAL", depth, slot), uses=uses,
+        tool = cutter_for_region(
+            transaction, mesh, source, RegionCut("MATERIAL", depth, slot, smoothing=smoothing), uses=uses,
         )
+        cutter = tool.mesh
         extracted = engine.run(remainder, cutter, "INTERSECT")
         leftover = engine.run(remainder, cutter, "DIFFERENCE")
-        transaction.remove_mesh(cutter)
+        if connector is None:
+            transaction.remove_mesh(cutter)
+        else:
+            tools[slot] = tool
         if not extracted.polygons or not leftover.polygons:
             raise MeshError("A material cut consumed all remaining geometry or produced no piece.")
         taken_volume = inspect(extracted).volume_mm3
@@ -54,6 +63,18 @@ def split_materials(
             transaction.remove_mesh(remainder)
         remainder, remaining_volume = leftover, next_volume
         pieces.append(MaterialPiece(extracted, slot, material_label(mesh, slot)))
+
+    if connector is not None:
+        joined = []
+        for piece in pieces:
+            remainder, insert, *pins = connect_region(
+                engine, remainder, piece.mesh, tools[piece.slot], connector,
+            )
+            transaction.remove_mesh(tools[piece.slot].mesh)
+            joined.append(MaterialPiece(insert, piece.slot, piece.name))
+            joined.extend(MaterialPiece(pin, piece.slot, piece.name, number)
+                          for number, pin in enumerate(pins, 1))
+        pieces = joined
 
     return [MaterialPiece(remainder, keep_slot, material_label(mesh, keep_slot)), *pieces]
 
