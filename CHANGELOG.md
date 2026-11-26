@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Removed near-coincident vertices around zero-area faces produced by surface-region extraction.
+
 ## 0.3.0-alpha.7
 
 - Added face alignment for straight and symmetric cut planes.

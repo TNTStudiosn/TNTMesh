@@ -659,6 +659,22 @@ class WorkflowTests(unittest.TestCase):
             self.assertAlmostEqual(self.checked(pin), 6 * sin(tau / 6) * 1.5**2 * 3 / 2, places=4)
         self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
 
+    def test_region_extraction_cleans_degenerate_edges_on_a_spherical_seam(self):
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=20)
+        source = bpy.context.active_object
+        volume = self.checked(source)
+        original = [tuple(vertex.co) for vertex in source.data.vertices]
+        for face in source.data.polygons:
+            face.select = face.center.z > 15
+        source.data.update()
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "SELECTION"
+        self.settings.region_depth = 6.135
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 2)
+        self.assertAlmostEqual(sum(map(self.checked, self.parts())), volume, delta=volume * .0001)
+        self.assertEqual([tuple(vertex.co) for vertex in source.data.vertices], original)
+
     def test_region_connector_can_join_a_curved_shell_patch(self):
         profile = [(-12, -8), (12, -8), (12, 0), (6, 3), (0, 4), (-6, 3), (-12, 0)]
         count = len(profile)
