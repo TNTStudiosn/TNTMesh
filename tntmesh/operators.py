@@ -5,7 +5,14 @@ from pathlib import Path
 from uuid import uuid4
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
+from bpy.props import (
+    BoolProperty,
+    EnumProperty,
+    FloatProperty,
+    FloatVectorProperty,
+    IntProperty,
+    StringProperty,
+)
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
@@ -21,6 +28,7 @@ from .model import (
     ASSEMBLY_DIRECTION,
     MATERIAL_SLOT,
     PART_ID,
+    PART_KIND,
     PROJECT_ID,
     ROLE,
     GeometryTransaction,
@@ -76,6 +84,7 @@ def publish_parts(
         obj = transaction.object(collection, f"{source.name} · {label}", mesh)
         obj.location = origin
         identify_part(obj, project_id)
+        obj[PART_KIND] = "pin" if bodies is not None and index > bodies else "body"
         obj["tntmesh_parent_part_id"] = source.get(PART_ID, "")
         if direction is not None and index in (1, 2):
             inherited = Vector(source.get(ASSEMBLY_DIRECTION, (0, 0, 0)))
@@ -338,6 +347,7 @@ class TNTMESH_OT_split_materials(bpy.types.Operator, MeshOperator):
                 )
                 for obj, cut in zip(parts, cuts, strict=True):
                     obj[MATERIAL_SLOT] = cut.slot
+                    obj[PART_KIND] = "pin" if cut.pin else "body"
                     material = mesh.materials[cut.slot - 1]
                     if material is not None:
                         obj.color = material.diffuse_color
@@ -414,12 +424,12 @@ class TNTMESH_OT_repair(bpy.types.Operator, MeshOperator):
 class TNTMESH_OT_export_stl(bpy.types.Operator):
     bl_idname = "tntmesh.export_stl"
     bl_label = "Export Pieces"
-    bl_description = "Export generated pieces in STL, OBJ, FBX or 3MF"
+    bl_description = "Export generated pieces in STL, OBJ, FBX, PLY or 3MF"
 
     directory: StringProperty(subtype="DIR_PATH")
     file_format: EnumProperty(
         name="Format",
-        items=[(format_id, format_id, "") for format_id in ("STL", "OBJ", "FBX", "3MF")],
+        items=[(format_id, format_id, "") for format_id in ("STL", "OBJ", "FBX", "PLY", "3MF")],
         default="STL",
     )
     grouped_3mf: BoolProperty(
@@ -430,9 +440,27 @@ class TNTMESH_OT_export_stl(bpy.types.Operator):
         items=[
             ("SELECTED", "Selected", "Export selected generated pieces"),
             ("ALL", "All", "Export all current TNTMesh pieces in this view layer"),
+            ("CONNECTORS", "Loose Connectors", "Export only current loose connectors in this view layer"),
         ],
         default="SELECTED",
     )
+    include_pins: BoolProperty(name="Include Loose Connectors", default=True)
+    as_zip: BoolProperty(name="Save as ZIP")
+    create_subfolder: BoolProperty(
+        name="Use a Subfolder", description="Create a folder in the destination or inside the ZIP",
+    )
+    name_prefix: StringProperty(name="Prefix", description="Start export names with this prefix", maxlen=64)
+    numbered: BoolProperty(name="Number Files", default=True)
+    placement: EnumProperty(
+        name="Placement",
+        items=[
+            ("ASSEMBLY", "Assembly Positions", "Keep the position and orientation of each piece"),
+            ("BED", "Build Plate", "Rotate each exported piece and lower it to Z = 0"),
+        ],
+        default="ASSEMBLY",
+    )
+    print_rotation: FloatVectorProperty(name="Print Rotation", subtype="EULER", size=3)
+    part_spacing: FloatProperty(name="Spacing (mm)", default=3, min=0, soft_max=30, precision=2)
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
@@ -445,27 +473,62 @@ class TNTMESH_OT_export_stl(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def draw(self, context: bpy.types.Context) -> None:
-        self.layout.prop(self, "file_format")
-        self.layout.prop(self, "scope")
+        layout = self.layout
+        files = layout.column(align=True)
+        files.prop(self, "file_format")
+        files.prop(self, "scope")
+        if self.scope != "CONNECTORS":
+            files.prop(self, "include_pins")
         if self.file_format == "3MF":
-            self.layout.prop(self, "grouped_3mf")
+            files.prop(self, "grouped_3mf")
+
+        layout.separator()
+        placement = layout.column(align=True)
+        placement.label(text=tr("Placement"), translate=False)
+        placement.prop(self, "placement", text="")
+        if self.placement == "BED":
+            placement.prop(self, "print_rotation")
+            if self.file_format == "3MF" and self.grouped_3mf:
+                placement.prop(self, "part_spacing")
+
+        layout.separator()
+        output = layout.column(align=True)
+        output.prop(self, "name_prefix")
+        if self.file_format != "3MF" or not self.grouped_3mf:
+            output.prop(self, "numbered")
+        output.prop(self, "as_zip")
+        output.prop(self, "create_subfolder")
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         pieces = managed_parts(context, self.scope)
+        if self.scope == "CONNECTORS" or not self.include_pins:
+            connectors_only = self.scope == "CONNECTORS"
+            pieces = [obj for obj in pieces if exporters.is_loose_connector(obj) == connectors_only]
         if not pieces:
+            if self.scope == "CONNECTORS":
+                return report_failure(self, MeshError("There are no loose connectors to export."))
             return report_failure(self, MeshError("Select generated pieces to export."))
         path = Path(self.directory)
         if not self.directory or not path.is_dir():
             return report_failure(self, MeshError("Choose an existing destination folder."))
         try:
+            on_bed = self.placement == "BED"
+            grouped = self.grouped_3mf and self.file_format == "3MF"
+            printer = selected_printer(context.scene) if on_bed and grouped else None
+            options = exporters.ExportOptions(
+                as_zip=self.as_zip, subfolder=self.create_subfolder, prefix=self.name_prefix,
+                numbered=self.numbered, on_bed=on_bed, rotation=tuple(self.print_rotation),
+                spacing_mm=self.part_spacing,
+                printer=printer.data() if printer else None,
+            )
             outputs = exporters.export_parts(
-                context, pieces, path, self.file_format, grouped=self.grouped_3mf
+                context, pieces, path, self.file_format, grouped=grouped, options=options,
             )
         except (MeshError, OSError, RuntimeError, ValueError, OverflowError) as error:
             return report_failure(self, error)
         self.report(
             {"INFO"}, tr("Exported {count} {format} file(s).").format(
-                count=len(outputs), format=self.file_format
+                count=len(outputs), format="ZIP" if self.as_zip else self.file_format
             ),
         )
         return {"FINISHED"}

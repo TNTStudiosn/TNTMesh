@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from io import BytesIO
 from math import cos, pi, sin, sqrt, tau
 from pathlib import Path
 from xml.etree import ElementTree
@@ -1066,6 +1067,101 @@ class WorkflowTests(unittest.TestCase):
                 mesh = transaction.own_mesh(bpy.data.meshes.new(f"3MF fixture {index}"))
                 mesh.from_pydata(points, [], faces)
                 self.assertAlmostEqual(package_format.inspect(mesh).volume_mm3, 24**3 / 2)
+
+    def test_ply_build_plate_transform_leaves_source_unchanged(self):
+        obj = self.cube(10)
+        self.addon.operators.identify_part(obj, "export")
+        obj.name = "CON"
+        obj.location = (100, 200, 300)
+        obj.scale = (-2, 1, .5)
+        bpy.context.view_layer.update()
+        original = obj.matrix_world.copy()
+        vertices = [vertex.co.copy() for vertex in obj.data.vertices]
+        self.assertEqual(bpy.ops.tntmesh.export_stl(
+            directory=str(self.directory), file_format="PLY", numbered=False, create_subfolder=True,
+            placement="BED", print_rotation=(0, pi / 2, 0),
+        ), {"FINISHED"})
+        path = self.directory / "TNTMesh" / "_CON.ply"
+        self.assertTrue(path.is_file())
+        self.assertEqual(obj.matrix_world, original)
+        self.assertEqual([v.co for v in obj.data.vertices], vertices)
+        self.assertEqual(bpy.ops.wm.ply_import(
+            filepath=str(path), forward_axis="Y", up_axis="Z",
+        ), {"FINISHED"})
+        mesh = bpy.context.active_object.data
+        low, high = self.addon.operators.bounds(v.co for v in mesh.vertices)
+        for value, expected in zip((*low, *high), (-2.5, -5, 0, 2.5, 5, 20), strict=True):
+            self.assertAlmostEqual(value, expected, places=4)
+        self.assertAlmostEqual(self.checked(bpy.context.active_object), 1000, places=3)
+
+    def test_export_zip_grouped_3mf_build_plate_and_collision(self):
+        scene = bpy.context.scene
+        printer = scene.tntmesh_printers.add()
+        printer.model = "Plate test"
+        printer.build_mm = (30, 40, 30)
+        printer.margin_mm = (2, 3, 1)
+        scene.tntmesh_printer_index = 0
+        for index in range(3):
+            part = self.cube(10)
+            part.name = f"Piece {index}"
+            part.location = (200 * index, 20, 50)
+            self.addon.operators.identify_part(part, "export")
+        parameters = dict(directory=str(self.directory), file_format="3MF", grouped_3mf=True,
+                          scope="ALL", placement="BED", part_spacing=3, as_zip=True,
+                          create_subfolder=True, name_prefix="Colección")
+        collision = self.directory / "Colección.zip"
+        collision.write_bytes(b"Existing file")
+        self.assertEqual(bpy.ops.tntmesh.export_stl(**parameters), {"FINISHED"})
+        self.assertEqual(collision.read_bytes(), b"Existing file")
+        with ZipFile(self.directory / "Colección_2.zip") as bundle:
+            self.assertEqual(bundle.namelist(), ["Colección/Colección.3mf"])
+            self.assertIsNone(bundle.testzip())
+            data = bundle.read(bundle.namelist()[0])
+        model_io = importlib.import_module(f"{self.addon.__name__}.three_mf")
+        with ZipFile(BytesIO(data)) as package:
+            self.assertIsNone(package.testzip())
+            tree = ElementTree.fromstring(package.read(model_io.MODEL_PATH))
+        ns = {"m": model_io.CORE}
+        objects = tree.findall("m:resources/m:object", ns)
+        self.assertEqual(len(objects), 3)
+        self.assertEqual(len(tree.findall("m:build/m:item", ns)), 3)
+        for obj, (x, y) in zip(objects, [(2, 3), (15, 3), (2, 16)], strict=True):
+            points = [Vector(tuple(float(v.get(axis)) for axis in "xyz"))
+                      for v in obj.findall(".//m:vertex", ns)]
+            low, high = self.addon.operators.bounds(points)
+            self.assertEqual(tuple(low), (x, y, 0))
+            self.assertEqual(tuple(high - low), (10, 10, 10))
+        printer.build_mm = (18, 18, 18)
+        before = set(self.directory.iterdir())
+        self.assertEqual(bpy.ops.tntmesh.export_stl(**parameters), {"CANCELLED"})
+        self.assertEqual(set(self.directory.iterdir()), before)
+
+    def test_export_loose_connector_scope_and_legacy_names(self):
+        self.cube()
+        self.settings.loose_pins = True
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        model = self.addon.operators
+        (pin,) = [part for part in self.parts() if part.get(model.PART_KIND) == "pin"]
+        pin.name = "Replacement"
+        legacy = self.cube(3)
+        legacy.name = "Proyecto anterior · Pasador 1.001"
+        model.identify_part(legacy, "legacy")
+        cutter = self.cube(7)
+        cutter.name = "Temporary · Pin 1"
+        parameters = dict(directory=str(self.directory), file_format="STL", numbered=False, as_zip=True)
+        self.assertEqual(bpy.ops.tntmesh.export_stl(
+            **parameters, scope="CONNECTORS", name_prefix="Pins",
+        ), {"FINISHED"})
+        with ZipFile(self.directory / "Pins.zip") as bundle:
+            self.assertEqual(set(bundle.namelist()), {
+                "Pins_Replacement.stl", "Pins_Proyecto anterior · Pasador 1.001.stl",
+            })
+        self.assertEqual(bpy.ops.tntmesh.export_stl(
+            **parameters, scope="ALL", include_pins=False, name_prefix="Bodies",
+        ), {"FINISHED"})
+        with ZipFile(self.directory / "Bodies.zip") as bundle:
+            self.assertEqual(len(bundle.namelist()), 2)
+            self.assertTrue(all(name.startswith("Bodies_Cube · ") for name in bundle.namelist()))
 
     def test_unsafe_connector_and_tangent_leave_no_geometry(self):
         source = self.cube()

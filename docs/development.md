@@ -68,9 +68,17 @@ The **Assembly** panel groups generated pieces by their persistent project ID. I
 
 **Check Insertion Path** checks a straight translation of the selected piece toward its assembled position. Choose a starting direction and distance. The check estimates contact intervals between triangles and verifies solid overlap at their boundaries and intermediate positions using temporary copies in millimeters. The result names the first blocking part found and gives a distance where the obstruction occurs. The scene geometry and transforms stay intact. The check uses the same numerical tolerances as the assembled-position overlap check. Paths with rotation are pending.
 
-The 3MF writer uses Core 3MF with millimeter units and independent build items. It retains assembly positions and writes geometry without slicer profiles, supports, materials or toolpaths. [3MF Core Specification](https://github.com/3MFConsortium/spec_core)
+## Export
+
+**Export Pieces** saves closed meshes in millimeters. Choose selected pieces, all current pieces, or loose connectors only. For projects saved before connector types were recorded, keep the generated pin names to use the connector filter. STL, OBJ, FBX and PLY save one file per piece. 3MF can also keep all pieces as independent objects in one file. The slicer controls profiles, supports, materials and toolpaths. [3MF Core Specification](https://github.com/3MFConsortium/spec_core)
+
+**Assembly Positions** keeps each piece at its world transform. **Build Plate** applies the print rotation and moves the base to Z = 0. Individual files are centered in XY. A grouped 3MF places pieces in rows at the specified spacing and uses the build volume and margins of the selected printer, if available. Adjust spacing, rotation or scope if the pieces cannot fit on one plate.
+
+Use a prefix and optional numbering to name the files. **Use a Subfolder** creates a folder inside the chosen destination, or inside the archive when **Save as ZIP** is active. Existing filenames and folders are kept when an export name already exists.
 
 The Windows round-trip check exported a 24 mm cube split into two halves as one 3MF, opened and re-exported it using OrcaSlicer and Bambu Studio, then inspected the resulting build items and model geometry. Both preserved two objects measuring 24 × 24 × 12 mm. [Bambu Studio CLI](https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage)
+
+The build plate check extracted a grouped 3MF from a ZIP and re-exported it from both slicers. Each retained three independently printable objects, their rotated dimensions, 6 mm spacing and the Z = 0 bases.
 
 ## Material and cost
 

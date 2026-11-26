@@ -13,6 +13,7 @@ from .model import (
     ASSEMBLY_DIRECTION,
     DRAFT_ID,
     PART_ID,
+    PART_KIND,
     ROLE,
     GeometryTransaction,
     MeshError,
@@ -247,6 +248,7 @@ def rebuild(
                 obj.location = origin
                 identify_part(obj, plan.uid, part_id)
                 obj[DRAFT_ID] = plan.uid
+                obj[PART_KIND] = "pin" if key in pins else "body"
                 if key in directions and directions[key].length_squared:
                     obj[ASSEMBLY_DIRECTION] = tuple(directions[key])
                 created.append((obj, name))

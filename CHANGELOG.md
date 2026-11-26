@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.15
+
 - Added editable starting tolerances for common filament and resin materials in printer profiles.
+- Added PLY and ZIP export, loose connector filters, prefixes, optional numbering, and output subfolders.
+- Added build plate placement with print rotation, spacing and printer profile limits for grouped 3MF.
 
 ## 0.3.0-alpha.14
 

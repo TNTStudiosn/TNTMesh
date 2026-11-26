@@ -742,19 +742,24 @@ def scroll_magnet_details(up=False):
                               x=sidebar.x + 110, y=window.height - 570)
 
 
-def open_export_browser():
+def open_export_browser(advanced=False):
     window, area, region = viewport()
+    options = dict(file_format="3MF", grouped_3mf=True, placement="BED", as_zip=True,
+                   create_subfolder=True, name_prefix="TNTMesh") if advanced else {}
     with bpy.context.temp_override(window=window, area=area, region=region):
-        assert bpy.ops.tntmesh.export_stl("INVOKE_DEFAULT", directory=str(output)) == {"RUNNING_MODAL"}
+        assert bpy.ops.tntmesh.export_stl(
+            "INVOKE_DEFAULT", directory=str(output), **options,
+        ) == {"RUNNING_MODAL"}
 
 
-def check_export_browser():
+def check_export_browser(advanced=False):
     window, area = next(
         (window, area) for window in bpy.context.window_manager.windows
         for area in window.screen.areas if area.type == "FILE_BROWSER"
     )
     with bpy.context.temp_override(window=window, area=area):
-        result = bpy.ops.screen.screenshot(filepath=str(output / "05-export.png"))
+        filename = "05-export-3mf.png" if advanced else "05-export.png"
+        result = bpy.ops.screen.screenshot(filepath=str(output / filename))
         assert result == {"FINISHED"}
     window.event_simulate(type="ESC", value="PRESS")
 
@@ -823,7 +828,9 @@ shaped_connector_steps = (
     if line_steps and os.environ.get("TNTMESH_TEST_PROFILES") == "1" else ()
 )
 export_steps = (
-    (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
+    (open_export_browser, check_export_browser, check_export_cancelled,
+     lambda: open_export_browser(True), lambda: check_export_browser(True),
+     check_export_cancelled) if line_steps else ()
 )
 printer_steps = (
     (start_printer_preview, lambda: toggle_smoke_panel(93),

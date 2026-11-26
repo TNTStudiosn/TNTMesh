@@ -68,9 +68,17 @@ Elige un conector **Cilíndrico** o **Hexagonal** en Región de superficie. TNTM
 
 **Revisar recorrido de inserción** comprueba una trayectoria recta hacia la posición de ensamblaje. Elige la dirección de partida y el recorrido. La prueba estima cuándo pueden entrar en contacto los triángulos y verifica el traslape entre sólidos en los límites y puntos intermedios de esos intervalos. Informa cuál es la primera pieza que bloquea el recorrido y a qué distancia se comprobó el bloqueo. Usa copias temporales y conserva la geometría y las transformaciones de la escena. Aplica las mismas tolerancias numéricas que la revisión de la posición ensamblada. Los recorridos con rotación están pendientes.
 
-La exportación 3MF guarda mallas en milímetros como objetos independientes en posición de ensamblaje. Incluye geometría y deja los ajustes de impresión, soportes y materiales al slicer. [Especificación 3MF Core](https://github.com/3MFConsortium/spec_core)
+## Exportación
+
+**Exportar piezas** guarda mallas cerradas en milímetros. Elige las piezas seleccionadas, todas las vigentes o solo los conectores independientes. En proyectos guardados antes de registrar tipos de conectores, conserva los nombres generados de los pasadores para usar ese filtro. STL, OBJ, FBX y PLY guardan un archivo por pieza. 3MF también permite guardar todas las piezas como objetos independientes en un solo archivo. El slicer controla el perfil, los soportes, los materiales y las trayectorias. [Especificación 3MF Core](https://github.com/3MFConsortium/spec_core)
+
+**Posiciones de ensamblaje** conserva las transformaciones de cada pieza en la escena. **Cama de impresión** aplica el giro para impresión y lleva la base a Z = 0. Los archivos individuales se centran en XY. Un 3MF agrupado coloca las piezas en filas con la separación indicada y usa el volumen y los márgenes de la impresora seleccionada, cuando hay un perfil disponible. Ajusta la separación, el giro o la selección si las piezas exceden el espacio de una cama.
+
+Usa el prefijo y la numeración opcional para nombrar los archivos. **Usar una subcarpeta** crea una carpeta dentro del destino, o dentro del archivo comprimido si activas **Guardar como ZIP**. La exportación conserva los archivos y las carpetas existentes si su nombre coincide.
 
 En Windows se exportó un cubo de 24 mm dividido en dos mitades dentro de un solo 3MF. OrcaSlicer y Bambu Studio abrieron y reexportaron el archivo. En ambos se comprobó que se conservaron dos objetos de 24 × 24 × 12 mm. [CLI de Bambu Studio](https://github.com/bambulab/BambuStudio/wiki/Command-Line-Usage)
+
+Para comprobar la colocación en cama, se extrajo un 3MF agrupado de un ZIP y se reexportó desde ambos slicers. Cada uno conservó tres objetos imprimibles independientes, sus dimensiones tras el giro, la separación de 6 mm y las bases en Z = 0.
 
 ## Material y costo
 

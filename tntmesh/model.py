@@ -6,6 +6,7 @@ import bpy
 
 ROLE = "tntmesh_role"
 PART_ID = "tntmesh_part_id"
+PART_KIND = "tntmesh_part_kind"
 PROJECT_ID = "tntmesh_project_id"
 SCHEMA_VERSION = "tntmesh_schema_version"
 DRAFT_ID = "tntmesh_draft_id"
