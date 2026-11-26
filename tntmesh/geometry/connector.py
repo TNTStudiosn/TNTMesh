@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from collections.abc import Iterator
 from dataclasses import dataclass
 from itertools import chain
 from math import cos, isfinite, sin, tau
@@ -34,6 +35,19 @@ class Connector:
     def socket_radius(self) -> float:
         # Translate each polygon edge by the requested gap along its normal.
         return self.diameter / 2 + self.lateral / cos(tau / (2 * self.sides))
+
+    @property
+    def anchor(self) -> float:
+        return min(self.insertion / 2, self.diameter / 2)
+
+    @property
+    def envelope(self) -> float:
+        return self.socket_radius + self.wall / cos(tau / (2 * self.sides))
+
+    @property
+    def depths(self) -> tuple[float, float]:
+        socket = self.insertion + self.axial + self.wall
+        return (socket if self.loose else self.anchor + self.wall), socket
 
     def validate(self) -> None:
         values = (self.diameter, self.insertion, self.lateral, self.axial, self.wall)
@@ -75,7 +89,7 @@ def prism(
     return primitive(transaction, ".TNTMesh connector tool", vertices, faces)
 
 
-def candidates(mesh: bpy.types.Mesh, frame: Matrix, seam: float, epsilon: float):
+def candidates(mesh: bpy.types.Mesh, frame: Matrix, seam: float, epsilon: float) -> Iterator[Vector]:
     inverse = frame.transposed()
     points = [inverse @ vertex.co for vertex in mesh.vertices]
     seam_points = [point for point in points if abs(point.z - seam) <= epsilon]
@@ -107,6 +121,7 @@ def safe_centers(
     requested: tuple[Vector, ...] | None = None,
     requested_error: str = "The requested connector positions do not fit.",
     preferred: tuple[Vector, ...] = (),
+    allow_partial: bool = False,
 ) -> list[Vector]:
     low, high = planes
     probes = ((minus, low - depths[0], low - inset), (plus, high + inset, high + depths[1]))
@@ -115,6 +130,8 @@ def safe_centers(
         preferred, candidates(minus, frame, low, epsilon * 2),
     )
     for center in search:
+        if not all(map(isfinite, center)):
+            raise ConnectorPlacementError(requested_error)
         if any((center - other).length < 2 * envelope for other in centers):
             continue
         with GeometryTransaction() as temporary:
@@ -128,7 +145,7 @@ def safe_centers(
                 centers.append(center)
                 if len(centers) == count:
                     break
-    if len(centers) < count:
+    if not allow_partial and len(centers) < count:
         if requested is not None:
             raise ConnectorPlacementError(requested_error)
         if not centers:
@@ -153,15 +170,13 @@ def add_connector(
     config.validate()
     low = position - kerf / 2
     high = position + kerf / 2
-    anchor = min(config.insertion / 2, config.diameter / 2)
-    minus_depth = config.insertion + config.axial if config.loose else anchor
-    envelope = config.socket_radius + config.wall / cos(tau / (2 * config.sides))
+    anchor = config.anchor
     # Keep the probe inside the cut plane. The applied tool crosses the seam.
     inset = min(epsilon, anchor / 10, config.wall / 10)
     centers = safe_centers(
         engine, minus, plus, frame, (low, high),
-        (minus_depth + config.wall, config.insertion + config.axial + config.wall),
-        envelope, config.sides, epsilon, inset, config.count, requested, requested_error, preferred,
+        config.depths, config.envelope, config.sides, epsilon, inset, config.count,
+        requested, requested_error, preferred,
     )
 
     polygon_factor = config.sides * sin(tau / config.sides) / 2

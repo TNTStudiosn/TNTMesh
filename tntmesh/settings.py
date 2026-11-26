@@ -127,6 +127,11 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         default=0.8, min=0.01, precision=2,
     )
     connector_count: IntProperty(name="Connector count", min=1, default=1, soft_max=12)
+    connector_points: CollectionProperty(type=TNTMESH_PG_contour_point)
+    connector_point_index: IntProperty(min=0)
+    pin_positive: BoolProperty(
+        name="Pin on positive side", description="Use the positive side of the cut normal for the integrated pin",
+    )
     loose_pins: BoolProperty(
         name="Separate pins", description="Cut two sockets and generate removable pins",
     )
@@ -279,11 +284,15 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
                 self.path_smoothing,
             )
         connector = None
+        positions = tuple(tuple(point.position) for point in self.connector_points) if self.cut_kind == "PLANAR" else ()
         if self.connector == "CUSTOM":
             connector = CustomConnector(self.pin_template, self.socket_template, self.wall)
         elif self.connector != "NONE":
-            connector = self.standard_connector(self.connector, self.connector_count)
-        cut = PlanarCut(self.axis, self.offset, self.kerf, connector, tuple(self.rotation))
+            connector = self.standard_connector(self.connector, len(positions) or self.connector_count)
+        cut = PlanarCut(
+            self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
+            positions, self.cut_kind == "PLANAR" and self.pin_positive and not self.loose_pins,
+        )
         if self.cut_kind == "SYMMETRY":
             return SymmetricCut(
                 cut, self.symmetry_axis, self.symmetry_center,

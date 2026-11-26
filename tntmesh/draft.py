@@ -137,6 +137,49 @@ def track_followups(
             return
 
 
+def target_mesh(
+    context: bpy.types.Context, transaction: GeometryTransaction, plan: TNTMESH_PG_draft_plan,
+    index: int, unit: float,
+) -> bpy.types.Mesh:
+    source = plan.source
+    if source is None or source.type != "MESH" or source.name not in context.view_layer.objects:
+        raise MeshError("The draft source is missing from this view layer.")
+    target = plan.cuts[index].target
+    if target not in free_targets(plan, index):
+        raise MeshError("Choose an available input piece from an earlier cut.")
+    chain = []
+    for previous in reversed(list(plan.cuts)[:index]):
+        if target == SOURCE:
+            break
+        keys = cut_outputs(previous)
+        if previous.enabled and target in keys:
+            chain.append((previous, keys.index(target)))
+            target = previous.target
+    if target != SOURCE:
+        raise MeshError("Choose an available input piece from an earlier cut.")
+    hidden = source.hide_get()
+    try:
+        if hidden:
+            source.hide_set(False)
+            context.view_layer.update()
+        mesh, origin = evaluated_mm(context, source, transaction, unit)
+        for previous, branch in reversed(chain):
+            config = previous.settings.config(source)
+            try:
+                pieces = apply_cut(context, transaction, mesh, config, origin, unit, source)
+            except MeshError as error:
+                raise DraftError(previous.name, str(error)) from error
+            transaction.remove_mesh(mesh)
+            mesh = pieces[branch]
+            for piece in pieces:
+                if piece != mesh:
+                    transaction.remove_mesh(piece)
+        return mesh
+    finally:
+        if hidden:
+            source.hide_set(True)
+
+
 def rebuild(
     context: bpy.types.Context, plan: TNTMESH_PG_draft_plan
 ) -> list[bpy.types.Object]:

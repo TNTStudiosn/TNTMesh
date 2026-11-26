@@ -10,6 +10,7 @@ from .boolean import ExactBoolean, half_box
 from .connector import Connector, add_connector
 from .custom_connector import CustomConnector, add_custom_connector
 from .mesh import bounds, inspect
+from .polygon import Point2
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,8 @@ class PlanarCut:
     kerf: float = 0.0
     connector: Connector | CustomConnector | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    connector_positions: tuple[Point2, ...] = ()
+    pin_positive: bool = False
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,13 @@ class PlaneSplit:
     plus: bpy.types.Mesh
     position: float
     epsilon: float
+
+    def flipped(self) -> "PlaneSplit":
+        return PlaneSplit(self.plus, self.minus, -self.position, self.epsilon)
+
+
+def invert_frame(frame: Matrix) -> Matrix:
+    return frame @ Matrix.Diagonal(Vector((1.0, -1.0, -1.0)))
 
 
 def axis_frame(
@@ -94,6 +104,16 @@ def split(
             engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon
         ).meshes
     if config.connector is not None:
-        return add_connector(engine, minus, plus, frame, cut.position, config.kerf,
-                             config.connector, cut.epsilon).meshes
+        requested = None
+        if config.connector_positions:
+            requested = tuple(Vector((x, -y if config.pin_positive else y, 0))
+                              for x, y in config.connector_positions)
+        if config.pin_positive:
+            cut = cut.flipped()
+            frame = invert_frame(frame)
+        first, second, *pins = add_connector(
+            engine, cut.minus, cut.plus, frame, cut.position, config.kerf, config.connector,
+            cut.epsilon, requested=requested,
+        ).meshes
+        return (second, first, *pins) if config.pin_positive else (first, second, *pins)
     return minus, plus

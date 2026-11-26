@@ -415,6 +415,22 @@ SPANISH = {
     "Cut settings": "Ajustes de corte",
     "Hide input after split": "Ocultar entrada al dividir",
     "Diameter (mm)": "Diámetro (mm)",
+    "Suggest Connectors": "Sugerir conectores",
+    "Find connector dimensions and positions using the current cut and tolerances":
+        "Busca dimensiones y posiciones con el corte y las tolerancias actuales",
+    "Suggested {count} connector(s). Review the cut settings.":
+        "Se sugirieron {count} conectores. Revisa los ajustes del corte.",
+    "No connector fits this cut with the current wall and clearances.":
+        "Ningún conector cabe en este corte con el grosor y las holguras actuales.",
+    "Pin on positive side": "Pin en lado positivo",
+    "Use the positive side of the cut normal for the integrated pin":
+        "Coloca el pin integrado en el lado positivo de la normal del corte",
+    "Edit Connector Position": "Editar posición del conector",
+    "Connector Positions (mm)": "Posiciones de conectores (mm)",
+    "Set Positions": "Definir posiciones",
+    "Add Connector Position": "Añadir conector",
+    "Remove Connector Position": "Quitar conector",
+    "Use Automatic Positions": "Usar posiciones automáticas",
     "Pin diameter measured across opposite vertices": "Diámetro del pin entre vértices opuestos",
     "Insertion (mm)": "Inserción (mm)",
     "Length of the pin inside the matching piece": "Longitud del pin dentro de la pieza receptora",

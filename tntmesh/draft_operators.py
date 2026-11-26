@@ -11,7 +11,7 @@ from .operators import MeshOperator, active_mesh, report_failure, select_results
 from .settings import TNTMESH_PG_settings
 
 GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diameter", "insertion",
-                       "lateral", "axial", "wall", "connector_count", "loose_pins",
+                       "lateral", "axial", "wall", "connector_count", "loose_pins", "pin_positive",
                        "pin_template", "socket_template",
                        "cut_kind", "cutter", "profile_size",
                        "profile_shift", "curve_controls", "curve_samples", "contour_depth", "path_smoothing",
@@ -29,6 +29,10 @@ def copy_settings(source: TNTMESH_PG_settings, destination: TNTMESH_PG_settings)
     destination.contour.clear()
     for point in source.contour:
         destination.contour.add().position = point.position
+    destination.connector_points.clear()
+    for point in source.connector_points:
+        destination.connector_points.add().position = point.position
+    destination.connector_point_index = 0
     destination.base_contacts.clear()
     for item in source.base_contacts:
         contact = destination.base_contacts.add()

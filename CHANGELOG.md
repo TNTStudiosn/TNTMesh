@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Removed near-coincident vertices around zero-area faces produced by surface-region extraction.
+- Added validated connector suggestions with editable dimensions, positions and pin side for straight cuts and drafts.
 
 ## 0.3.0-alpha.7
 

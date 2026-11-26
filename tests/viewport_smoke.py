@@ -483,6 +483,27 @@ def verify_cancelled_offset():
     bpy.context.scene.unit_settings.system = "NONE"
 
 
+def suggest_connectors():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        assert bpy.ops.tntmesh.suggest_connectors() == {"FINISHED"}
+        assert settings.connector == "HEX" and len(settings.connector_points) == 1
+        assert settings.show_plane
+        area.tag_redraw()
+
+
+def capture_connector_suggestion():
+    screenshot("20-connector-suggestion.png")
+    assert bpy.ops.tntmesh.connector_point(action="ADD") == {"FINISHED"}
+    assert len(bpy.context.scene.tntmesh_settings.connector_points) == 2
+    assert bpy.ops.tntmesh.connector_point(action="REMOVE") == {"FINISHED"}
+    assert len(bpy.context.scene.tntmesh_settings.connector_points) == 1
+    assert bpy.ops.tntmesh.connector_point(action="CLEAR") == {"FINISHED"}
+    assert not bpy.context.scene.tntmesh_settings.connector_points
+    bpy.context.scene.tntmesh_settings.connector = "ROUND"
+
+
 def open_export_browser():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -540,6 +561,10 @@ gizmo_steps = (
      verify_metric_offset, cancel_line, verify_cancelled_offset)
     if line_steps and os.environ.get("TNTMESH_TEST_GIZMO") == "1" else ()
 )
+connector_steps = (
+    (suggest_connectors, capture_connector_suggestion)
+    if os.environ.get("TNTMESH_TEST_CONNECTORS") == "1" else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -577,7 +602,7 @@ repair_steps = (
     if os.environ.get("TNTMESH_TEST_REPAIR") == "1" else ()
 )
 steps = iter((
-    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *phase3_steps,
+    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,

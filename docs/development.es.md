@@ -26,6 +26,8 @@ En **Directo** y **Cortes simétricos**, pulsa **Alinear con cara** y elige una 
 
 Arrastra la flecha cian para mover el plano y actualizar **Desplazamiento (mm)**. Pulsa Esc durante el arrastre para recuperar el desplazamiento anterior. Puedes ocultar la flecha desde **Ajustes de corte**.
 
+En un corte directo, **Sugerir conectores** usa el área de unión y el material disponible en ambos lados para proponer cantidad, diámetro, profundidad, forma y posiciones. El diámetro y la profundidad actuales funcionan como límites superiores. La propuesta conserva el grosor mínimo, las holguras y la opción de pasadores independientes. Usa la normal al plano como eje de inserción y elige el lado del pin según la profundidad disponible para la cavidad. En **Ajustes de corte** puedes editar las posiciones en milímetros sobre el plano o volver al reparto automático. En Borrador, la sugerencia evalúa la pieza de entrada del corte seleccionado y sus cortes previos. Al generar las piezas, TNTMesh vuelve a validar los ajustes.
+
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 
 En **Reparar**, activa **Corregir orientación de caras** para corregir la orientación de caras vecinas y de las superficies cerradas según su profundidad de anidamiento. La copia conserva las cavidades y los sólidos separados. La reparación se detiene si las superficies se cruzan o si el anidamiento es ambiguo.

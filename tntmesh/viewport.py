@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from math import cos, sin, tau
+
 import bpy
 from bpy.app.handlers import persistent
 from mathutils import Matrix, Vector
@@ -190,6 +192,24 @@ def draw_plane() -> None:
                     coordinates = [*coordinates, coordinates[0]]
                 shader.uniform_float("color", (*color, 0.9))
                 batch_for_shader(shader, "LINE_STRIP", {"pos": coordinates}).draw(shader)
+        if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX"} and settings.connector_points:
+            from .draw_cut import model_pivot
+
+            origin = model_pivot(obj.evaluated_get(context.evaluated_depsgraph_get()))
+            center = frame.transposed() @ origin
+            height = (lower.z + upper.z) / 2 + settings.offset / unit
+            profile = settings.standard_connector(settings.connector, 1)
+            radius = profile.socket_radius / unit
+            gpu.state.depth_test_set("NONE")
+            shader.bind()
+            shader.uniform_float("color", (.78, .55, 1.0, 1.0))
+            for point in settings.connector_points:
+                x, y = point.position
+                ring = [frame @ Vector((center.x + x / unit + radius * cos(tau * i / profile.sides),
+                                        center.y + y / unit + radius * sin(tau * i / profile.sides),
+                                        height))
+                        for i in range(profile.sides)]
+                batch_for_shader(shader, "LINE_STRIP", {"pos": [*ring, ring[0]]}).draw(shader)
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)

@@ -305,6 +305,84 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(set(bpy.data.meshes.keys()), before)
         self.assertFalse(source.hide_get())
 
+    def test_connector_suggestion_resizes_and_uses_the_thicker_side_for_the_socket(self):
+        source = self.cube()
+        source.scale.x = 5.2 / 24
+        source.location = (31, -14, 9)
+        bpy.context.view_layer.update()
+        self.settings.offset = 9.9
+        self.settings.wall = .45
+        self.settings.lateral = .12
+        self.settings.axial = .23
+        self.settings.diameter = 7
+        original = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        self.assertEqual(set(bpy.data.meshes.keys()), original)
+        self.assertTrue(self.settings.pin_positive)
+        self.assertLess(self.settings.diameter, 5.2)
+        self.assertGreaterEqual(self.settings.insertion, 1.8)
+        self.assertAlmostEqual(self.settings.lateral, .12)
+        self.assertAlmostEqual(self.settings.axial, .23)
+        positions = [point.position[:] for point in self.settings.connector_points]
+        self.assertTrue(positions)
+        self.settings.connector_points[0].position = (500, 500)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual(set(bpy.data.meshes.keys()), original)
+        self.assertFalse(source.hide_get())
+        self.settings.connector_points[0].position = positions[0]
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        lower, upper = self.parts()
+        self.assertGreater(upper.dimensions.z, 3.9)
+        self.assertTrue(self.checked(lower) > self.checked(upper))
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
+    def test_connector_suggestion_finds_multiple_positions_around_a_cavity(self):
+        exterior = self.cube(40)
+        interior = self.cube(27)
+        interior.data.flip_normals()
+        exterior.select_set(True)
+        bpy.context.view_layer.objects.active = exterior
+        bpy.ops.object.join()
+        self.settings.loose_pins = True
+        self.settings.kerf = .2
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        self.assertGreaterEqual(len(self.settings.connector_points), 2)
+        self.assertEqual(self.settings.connector_count, len(self.settings.connector_points))
+        self.assertTrue(all(max(map(abs, point.position)) > 13.5
+                            for point in self.settings.connector_points))
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 2 + self.settings.connector_count)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
+    def test_connector_suggestion_for_dependent_draft_preserves_previous_outputs_on_failure(self):
+        source = self.cube(36)
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        plan = self.addon.draft.active_plan(bpy.context.scene)
+        operation = plan.cuts[1]
+        operation.settings.axis = "X"
+        self.settings.mode = "DRAFT"
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        prior = set(self.parts())
+        meshes = set(bpy.data.meshes.keys())
+        self.assertTrue(source.hide_get())
+        operation.settings.wall = 30
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"CANCELLED"})
+        self.assertFalse(operation.settings.connector_points)
+        self.assertEqual(set(self.parts()), prior)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+        self.assertTrue(source.hide_get())
+        operation.settings.wall = 1
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        self.assertTrue(operation.settings.connector_points)
+        self.assertFalse(self.settings.connector_points)
+        self.assertEqual(set(self.parts()), prior)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
     def test_multiple_fixed_connectors(self):
         self.cube(40)
         self.settings.connector = "HEX"

@@ -32,6 +32,8 @@ For **Straight** and **Symmetric Cuts**, click **Align to Face**, then click a f
 
 Drag the cyan arrow to move the plane and update **Offset (mm)**. Press Esc during the drag to restore the previous offset. The handle follows the plane preview and can be hidden from **Cut settings**.
 
+On a straight cut, **Suggest Connectors** uses the seam area and available material on both sides to propose pin count, diameter, insertion depth, shape and positions. The current diameter and insertion act as upper limits. The suggestion keeps the wall requirement, clearances and separate-pin setting. It uses the cut normal for insertion and picks the pin side with better socket depth. In **Cut settings**, edit the positions in millimeters along the cut plane or return to automatic placement. In a draft, the suggestion evaluates the selected cut's input, including cuts upstream of it. Generating pieces validates the current settings again.
+
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 
 Printer profiles are saved with the scene and can be moved between projects as schema-versioned JSON. The fit check uses world-space dimensions and subtracts the configured margin on each side of each axis. Alternative orientations permute the three axes. Split to Fit applies successive straight cuts and validates the remaining dimensions before publishing the resulting pieces.

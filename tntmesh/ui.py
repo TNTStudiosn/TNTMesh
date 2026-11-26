@@ -3,6 +3,7 @@ import bpy
 
 from . import draft
 from .base_ui import draw_contacts
+from .connector_ui import positions
 from .diagnostics_ui import controls as diagnostics_controls
 from .localization import tr
 from .operators import active_mesh, managed_parts
@@ -60,6 +61,8 @@ def cut_properties(
             layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
+        if settings.cut_kind == "PLANAR" and settings.connector != "CUSTOM":
+            layout.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
         if settings.connector == "CUSTOM":
             layout.prop(settings, "pin_template")
             layout.prop(settings, "socket_template")
@@ -115,10 +118,14 @@ def cut_details(
         layout.prop(settings, "wall")
     elif settings.connector != "NONE":
         connector_details(layout, settings)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
 
 
 def connector_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
-    for prop in ("connector_count", "loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
+    if settings.cut_kind != "PLANAR" or not settings.connector_points:
+        layout.prop(settings, "connector_count")
+    for prop in ("loose_pins", "diameter", "insertion", "lateral", "axial", "wall"):
         layout.prop(settings, prop)
 
 
