@@ -1139,6 +1139,34 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(bpy.ops.tntmesh.printer_import(filepath=str(path)), {"CANCELLED"})
         self.assertEqual(len(profiles), 3)
 
+    def test_printer_tolerances_by_material_are_editable_and_round_trip(self):
+        context = bpy.context
+        self.assertEqual(bpy.ops.tntmesh.printer_add(preset="MARS5"), {"FINISHED"})
+        profile = context.scene.tntmesh_printers[0]
+        original = profile.data()
+        ui = self.addon.printer_ui
+        self.assertEqual({item[0] for item in ui.material_items(None, context)},
+                         {"STANDARD", "ABS_LIKE", "FLEXIBLE", "CUSTOM"})
+        self.assertEqual(bpy.ops.tntmesh.printer_material(material="ABS_LIKE"), {"FINISHED"})
+        self.assertEqual(profile.material, "ABS-like Resin")
+        self.assertAlmostEqual(profile.lateral_mm, .2)
+        self.assertAlmostEqual(profile.axial_mm, .25)
+        self.assertAlmostEqual(profile.min_wall_mm, 1)
+        self.assertEqual(profile.data().build_mm, original.build_mm)
+        self.assertEqual(bpy.ops.tntmesh.printer_material(material="CUSTOM"), {"FINISHED"})
+        profile.material, profile.lateral_mm = "Mi mezcla", .28
+        path = self.directory / "material.json"
+        self.assertEqual(bpy.ops.tntmesh.printer_export(filepath=str(path)), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.printer_import(filepath=str(path)), {"FINISHED"})
+        self.assertEqual(context.scene.tntmesh_printers[1].data(), profile.data())
+        self.assertEqual(bpy.ops.tntmesh.printer_edit(action="USE_TOLERANCE"), {"FINISHED"})
+        self.assertAlmostEqual(self.settings.lateral, .28)
+        self.assertEqual(bpy.ops.tntmesh.printer_add(preset="A1"), {"FINISHED"})
+        self.assertEqual({item[0] for item in ui.material_items(None, context)},
+                         {"PLA", "PETG", "ABS", "ASA", "TPU", "NYLON", "CUSTOM"})
+        self.assertEqual(bpy.ops.tntmesh.printer_material(material="PETG"), {"FINISHED"})
+        self.assertEqual(context.scene.tntmesh_printers[2].material, "PETG")
+
     def test_fdm_estimate_uses_scene_units_and_invalidation(self):
         source = self.cube(1)
         units = bpy.context.scene.unit_settings

@@ -63,6 +63,29 @@ PRESETS = {
 
 
 @dataclass(frozen=True)
+class FitPreset:
+    material: str
+    technology: Technology
+    lateral_mm: float
+    axial_mm: float
+    min_wall_mm: float
+
+
+# Editable starting values for separately printed connectors. Calibrate the actual material and printer.
+FIT_PRESETS = {
+    "PLA": FitPreset("PLA", "FDM", .15, .20, 1.2),
+    "PETG": FitPreset("PETG", "FDM", .20, .25, 1.2),
+    "ABS": FitPreset("ABS", "FDM", .25, .30, 1.2),
+    "ASA": FitPreset("ASA", "FDM", .25, .30, 1.2),
+    "TPU": FitPreset("TPU", "FDM", .25, .30, 1.6),
+    "NYLON": FitPreset("Nylon", "FDM", .25, .30, 1.6),
+    "STANDARD": FitPreset("Standard Resin", "RESIN", .15, .20, .8),
+    "ABS_LIKE": FitPreset("ABS-like Resin", "RESIN", .20, .25, 1.0),
+    "FLEXIBLE": FitPreset("Flexible Resin", "RESIN", .25, .30, 1.2),
+}
+
+
+@dataclass(frozen=True)
 class Fit:
     exceeded: tuple[str, ...]
     alternative: str | None

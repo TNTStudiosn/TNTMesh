@@ -2,6 +2,19 @@
 import bpy
 
 SPANISH = {
+    "Standard Resin": "Resina estándar",
+    "ABS-like Resin": "Resina tipo ABS",
+    "Flexible Resin": "Resina flexible",
+    "Custom Material": "Material personalizado",
+    "Material Tolerance Preset": "Holguras por material",
+    "Enter your own material name and tolerances": "Indica tu propio material y sus tolerancias",
+    "Set the material name and starting tolerances in the active printer profile":
+        "Configura el material y las tolerancias iniciales del perfil de impresora activo",
+    "Enter the material and its tolerances in Profile settings.":
+        "Indica el material y sus tolerancias en Ajustes del perfil.",
+    "Choose a material for this printer technology.": "Elige un material para la tecnología de la impresora.",
+    "Starting tolerances applied. Verify the fit with calibration samples.":
+        "Se aplicaron las tolerancias iniciales. Comprueba el encaje con muestras de calibración.",
     "Tapered cylinder": "Cilíndrico cónico",
     "A round pin that narrows toward its tip": "Un pin redondo que se estrecha hacia la punta",
     "Square": "Cuadrado",

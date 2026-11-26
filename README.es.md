@@ -25,6 +25,8 @@ Elige **Cola de milano** en un corte recto o simétrico para crear un riel desli
 
 Los cortes rectos, simétricos, de región y de base admiten perfiles cilíndricos cónicos, cuadrados, rectangulares, triangulares, octagonales, ovalados, en D, en estrella, en cruz y de lengüeta y ranura. En **Ajustes de corte** puedes editar medidas, giro y holguras. En cortes rectos, **Sugerir conectores** busca posiciones para el perfil elegido. **Calibrar conectores** genera una muestra imprimible con la misma geometría.
 
+En **Impresora → Ajustes del perfil**, selecciona **Holguras por material** para cargar valores iniciales de holgura lateral, axial y grosor mínimo. Usa **Usar holguras del perfil** para copiarlos al corte. Calibra con tu material e impresora para determinar el ajuste final.
+
 La validación comprueba el cierre, la orientación de las caras, las caras degeneradas y el volumen interior. Revisa la orientación, los soportes y la preparación final en tu slicer. Imprime una muestra para comprobar el ajuste con tu material y equipo.
 
 Para imprimir en resina, abre **Preparación para resina**, ajusta el grosor de pared y el tamaño de vóxel, y selecciona **Crear copia hueca**. Usa una malla cerrada que se superponga con la pared del modelo para conservar una región sólida o reforzar una unión. Con **Colocar drenaje** puedes hacer clic en el exterior. También puedes colocar un drenaje circular sugerido según la dirección de impresión y generar un tapón aparte. Para una abertura irregular, coloca una malla cerrada que atraviese la pared y elige **Malla personalizada**. **Diagnóstico de malla** puede señalar las cavidades que siguen cerradas.

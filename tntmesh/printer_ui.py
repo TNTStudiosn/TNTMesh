@@ -12,7 +12,7 @@ from .localization import tr
 from .model import MeshError, millimeters_per_unit
 from .operators import active_mesh, report_failure
 from .printer_props import TNTMESH_PG_printer, selected_printer
-from .printing import PRESETS, PrinterProfile, fit, from_json, to_json
+from .printing import FIT_PRESETS, PRESETS, PrinterProfile, fit, from_json, to_json
 from .viewport import project_bounds
 
 
@@ -43,6 +43,46 @@ class PrinterOperator:
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
         return selected_printer(context.scene) is not None
+
+
+MATERIAL_ITEMS = (
+    ("CUSTOM", "Custom Material", "Enter your own material name and tolerances", 0),
+    *((key, preset.material, "", index) for index, (key, preset) in enumerate(FIT_PRESETS.items(), start=1)),
+)
+
+
+def material_items(
+    _operator: bpy.types.Operator, context: bpy.types.Context | None,
+) -> list[tuple[str, str, str, int]]:
+    profile = selected_printer(context.scene) if context is not None else None
+    if profile is None:
+        return list(MATERIAL_ITEMS)
+    return [item for item in MATERIAL_ITEMS if item[0] == "CUSTOM" or FIT_PRESETS[item[0]].technology == profile.technology]
+
+
+class TNTMESH_OT_printer_material(bpy.types.Operator, PrinterOperator):
+    bl_idname = "tntmesh.printer_material"
+    bl_label = "Material Tolerance Preset"
+    bl_description = "Set the material name and starting tolerances in the active printer profile"
+    bl_options = {"UNDO", "INTERNAL"}
+
+    material: EnumProperty(items=material_items)
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        profile = selected_printer(context.scene)
+        if self.material == "CUSTOM":
+            profile.material = ""
+            self.report({"INFO"}, tr("Enter the material and its tolerances in Profile settings."))
+            return {"FINISHED"}
+        preset = FIT_PRESETS.get(self.material)
+        if preset is None or preset.technology != profile.technology:
+            return report_failure(self, MeshError("Choose a material for this printer technology."))
+        profile.material = preset.material
+        profile.lateral_mm = preset.lateral_mm
+        profile.axial_mm = preset.axial_mm
+        profile.min_wall_mm = preset.min_wall_mm
+        self.report({"INFO"}, tr("Starting tolerances applied. Verify the fit with calibration samples."))
+        return {"FINISHED"}
 
 
 class TNTMESH_OT_printer_edit(bpy.types.Operator, PrinterOperator):
@@ -193,17 +233,22 @@ class TNTMESH_PT_print(bpy.types.Panel):
         header, body = layout.panel("tntmesh_printer_edit", default_closed=True)
         header.label(text="Profile settings")
         if body:
-            for field in ("manufacturer", "model", "technology", "build_mm", "margin_mm", "material",
-                          "lateral_mm", "axial_mm", "min_wall_mm", "compensation_pct",
+            technology = body.column(align=True)
+            technology.label(text="Technology")
+            technology.prop(profile, "technology", text="")
+            body.operator_menu_enum("tntmesh.printer_material", "material", icon="PRESET")
+            material = body.column(align=True)
+            for field in ("material", "lateral_mm", "axial_mm", "min_wall_mm"):
+                material.prop(profile, field)
+            material.operator("tntmesh.printer_edit", text="Use Profile Tolerances").action = "USE_TOLERANCE"
+            body.separator()
+            for field in ("manufacturer", "model", "build_mm", "margin_mm", "compensation_pct",
                           "density_g_cm3", "price_per_kg"):
                 body.prop(profile, field)
-            body.operator("tntmesh.printer_edit", text="Use Profile Tolerances").action = (
-                "USE_TOLERANCE"
-            )
             row = body.row(align=True)
             row.operator("tntmesh.printer_edit", text="", icon="DUPLICATE").action = "DUPLICATE"
             row.operator("tntmesh.printer_edit", text="", icon="X").action = "REMOVE"
 
 
-CLASSES = (TNTMESH_OT_printer_add, TNTMESH_OT_printer_edit, TNTMESH_OT_printer_import,
+CLASSES = (TNTMESH_OT_printer_add, TNTMESH_OT_printer_material, TNTMESH_OT_printer_edit, TNTMESH_OT_printer_import,
            TNTMESH_OT_printer_export, TNTMESH_UL_printers, TNTMESH_PT_print)

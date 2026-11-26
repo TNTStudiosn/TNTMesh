@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added editable starting tolerances for common filament and resin materials in printer profiles.
+
 ## 0.3.0-alpha.14
 
 - Added tapered cylindrical, square, rectangular, triangular, octagonal, oval, D-shaped, star, cross, and tongue-and-groove profiles.
