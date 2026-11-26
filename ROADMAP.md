@@ -9,9 +9,9 @@
 | 4 · Professional tools | Planned | Magnets, dovetails, snap-fits, articulations, glue features, hollowing, drains, a wall thickness heatmap, costs and assembly guides |
 | 5 · Automation | Planned | Smart Split, seam suggestions, orientation, bed layout, segmentation and stress testing |
 
-Straight cuts support axis selection, numeric offset, free rotation and drawing a line in the viewport. Gizmos, face alignment, snapping, the first-run assistant and manual language selection are pending.
+Straight cuts support axis selection, numeric offset, free rotation and drawing a line in the viewport. Gizmos, face alignment, the first-run assistant and manual language selection are pending.
 
-Freehand drawing produces closed extraction contours and open paths projected onto the view plane. Surface projection, vertex and edge snapping, and selective invalidation of draft operations are pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps, nesting of disjoint closed shells and wall thickness sampled from triangle centers. High-density profiling is pending.
+Freehand drawing produces closed extraction contours and open paths. The drawing tools support view-plane placement, surface projection and vertex or edge snapping. Selective invalidation of draft operations is pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps, nesting of disjoint closed shells and wall thickness sampled from triangle centers. High-density profiling is pending.
 
 Surface Region extracts one chosen region at a time. Face masks and vertex groups can come from Blender painting tools. Separate by Material processes multiple slots in one operation. Symmetric Cuts reflects the first plane, including custom connector templates, and offers independent shift and rotation for the second plane.
 

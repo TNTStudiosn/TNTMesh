@@ -153,6 +153,16 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Path smoothing", description="Soften the interior points of the manual path",
         min=0, max=12, default=0,
     )
+    draw_snap: EnumProperty(
+        name="Snap",
+        items=[
+            ("VIEW", "View Plane", "Project onto a plane through the model"),
+            ("SURFACE", "Surface", "Use the point where the cursor ray hits the model"),
+            ("VERTEX", "Vertex", "Snap to a nearby vertex of the surface under the cursor"),
+            ("EDGE", "Edge", "Snap to a nearby edge of the surface under the cursor"),
+        ],
+        default="VIEW",
+    )
     region_method: EnumProperty(name="Region source", items=[
         ("MATERIAL", "By Material Slot", "Use faces assigned to a material slot"),
         ("SELECTION", "Selected Faces", "Use the face selection saved on the mesh"),

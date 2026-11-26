@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.5.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.6.zip
 ```
 
 ## Geometría y borradores
@@ -18,7 +18,9 @@ El motor evalúa la malla y sus transformaciones en un espacio centrado medido e
 
 El corte recto se puede orientar con un eje, rotación numérica o una línea en la Vista 3D. Bézier usa un perfil cúbico con resolución configurable. Rectángulo, Elipse y Contorno extraen regiones con profundidad finita. En Contorno, coloca puntos con clic o arrastra con Mayús y pulsa Enter para cerrar. Los puntos se proyectan al plano de la vista y pueden editarse desde los ajustes de corte. También puedes usar como cortador otra malla cerrada.
 
-**Trazo manual** divide la malla siguiendo un trazo abierto proyectado al plano de la vista. Coloca puntos con clic o arrastra con Mayús y pulsa Enter para terminar. TNTMesh prolonga ambos extremos más allá del modelo. Ajusta el desplazamiento, la profundidad o el suavizado, y edita o quita puntos en los ajustes del corte. Dibuja el trazo en Fácil y añade el corte actual a un borrador para reutilizarlo.
+**Trazo manual** divide la malla siguiendo un trazo abierto. Coloca puntos con clic o arrastra con Mayús y pulsa Enter para terminar. TNTMesh prolonga ambos extremos más allá del modelo. Ajusta el desplazamiento, la profundidad o el suavizado, y edita o quita puntos en los ajustes del corte. Dibuja el trazo en Fácil y añade el corte actual a un borrador para reutilizarlo.
+
+En **Ajuste**, elige el plano de la vista o la superficie de la malla activa. **Vértice** y **Arista** buscan un punto cercano en la cara bajo el cursor. Cuando no hay ningún vértice o arista cerca, usan la superficie. Los puntos fuera de la malla usan el plano de la vista. El ajuste también está disponible al dibujar cortes rectos, simétricos y contornos cerrados.
 
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 

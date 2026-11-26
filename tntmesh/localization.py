@@ -79,6 +79,17 @@ SPANISH = {
     "Split along an open path drawn in the viewport": "Divide el modelo con un trazo abierto en la Vista 3D",
     "Draw Path": "Dibujar trazo",
     "Path smoothing": "Suavizado del trazo",
+    "Snap": "Ajuste",
+    "View Plane": "Plano de la vista",
+    "Project onto a plane through the model": "Proyecta sobre un plano que atraviesa el modelo",
+    "Surface": "Superficie",
+    "Vertex": "Vértice",
+    "Edge": "Arista",
+    "Use the point where the cursor ray hits the model": "Usa el punto de la malla bajo el cursor",
+    "Snap to a nearby vertex of the surface under the cursor":
+        "Ajusta a un vértice cercano de la superficie bajo el cursor",
+    "Snap to a nearby edge of the surface under the cursor":
+        "Ajusta a una arista cercana de la superficie bajo el cursor",
     "Soften the interior points of the manual path": "Suaviza los puntos interiores del trazo manual",
     "Draw a path with at least two valid points.": "Dibuja un trazo con al menos dos puntos válidos.",
     "Choose up to 12 path smoothing passes.": "Elige hasta 12 pasos de suavizado.",

@@ -5,6 +5,7 @@ from bpy_extras.view3d_utils import region_2d_to_location_3d, region_2d_to_vecto
 from mathutils import Euler, Vector
 
 from . import draft
+from .draw_snapping import CursorPoint, SurfacePicker
 from .geometry.planar import axis_frame
 from .geometry.polygon import Point2, closed_outline, path_outline
 from .localization import tr
@@ -30,17 +31,21 @@ def fit_plane(
     obj: bpy.types.Object,
     region: bpy.types.Region,
     view: bpy.types.RegionView3D,
-    start: Vector,
-    end: Vector,
+    start: CursorPoint,
+    end: CursorPoint,
 ) -> tuple[Euler, float]:
-    if (end - start).length < 4.0:
+    if (end.screen - start.screen).length < 4.0:
         raise MeshError("Move the second point farther from the first.")
     depsgraph = context.evaluated_depsgraph_get()
     evaluated = obj.evaluated_get(depsgraph)
     pivot = model_pivot(evaluated)
-    point_a = region_2d_to_location_3d(region, view, start, pivot)
-    point_b = region_2d_to_location_3d(region, view, end, pivot)
-    view_ray = region_2d_to_vector_3d(region, view, start)
+    point_a = start.surface if start.surface is not None else region_2d_to_location_3d(
+        region, view, start.screen, pivot,
+    )
+    point_b = end.surface if end.surface is not None else region_2d_to_location_3d(
+        region, view, end.screen, pivot,
+    )
+    view_ray = region_2d_to_vector_3d(region, view, start.screen)
     normal = (point_b - point_a).cross(view_ray)
     if normal.length_squared == 0.0:
         raise MeshError("Move the second point farther from the first.")
@@ -56,7 +61,7 @@ def fit_plane(
 
 def fit_contour(
     context: bpy.types.Context, obj: bpy.types.Object, region: bpy.types.Region,
-    view: bpy.types.RegionView3D, points: list[Vector],
+    view: bpy.types.RegionView3D, points: list[CursorPoint],
     *, open_path: bool = False,
 ) -> tuple[Euler, list[Point2], float]:
     depsgraph = context.evaluated_depsgraph_get()
@@ -72,7 +77,9 @@ def fit_contour(
     unit = millimeters_per_unit(context.scene)
     outline = []
     for point in points:
-        world = region_2d_to_location_3d(region, view, point, pivot)
+        world = point.surface if point.surface is not None else region_2d_to_location_3d(
+            region, view, point.screen, pivot,
+        )
         xy = (inverse @ world - center).xy * unit
         outline.append(tuple(xy))
     if open_path:
@@ -104,7 +111,15 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         self._region = next(region for region in self._area.regions if region.type == "WINDOW")
         self._view = context.space_data.region_3d
         self._source = active_mesh(context)
-        self._shape = context.scene.tntmesh_settings.cut_kind
+        settings = context.scene.tntmesh_settings
+        self._shape = settings.cut_kind
+        self._snapping = None
+        if settings.draw_snap != "VIEW":
+            try:
+                evaluated = self._source.evaluated_get(context.evaluated_depsgraph_get())
+                self._snapping = SurfacePicker(evaluated, settings.draw_snap)
+            except (MeshError, RuntimeError, ValueError) as error:
+                return report_failure(self, error)
         self._is_stroke = self._shape in {"PATH", "POLYGON"}
         self._points = []
         self._dragging = False
@@ -136,7 +151,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
                        and region.y <= event.mouse_y < region.y + region.height
                        for region in self._area.regions)
         if event.type == "MOUSEMOVE":
-            self._pointer = Vector((x, y)) if inside and not in_panel else None
+            self._pointer = self._pick(x, y) if inside and not in_panel else None
             if self._dragging and self._pointer is not None:
                 self._add_contour_point(self._pointer)
             self._area.tag_redraw()
@@ -155,7 +170,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         if in_panel:
             return {"RUNNING_MODAL"}
 
-        click = Vector((x, y))
+        click = self._pick(x, y)
         if self._is_stroke:
             self._dragging = event.shift
             self._add_contour_point(click)
@@ -182,17 +197,23 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         self.cleanup()
         return {"FINISHED"}
 
-    def _add_contour_point(self, point: Vector) -> None:
-        if not self._points or (point - self._points[-1]).length >= 4.0:
+    def _pick(self, x: float, y: float) -> CursorPoint:
+        pixel = Vector((x, y))
+        if self._snapping is None:
+            return CursorPoint(pixel)
+        return self._snapping.pick(self._region, self._view, pixel)
+
+    def _add_contour_point(self, point: CursorPoint) -> None:
+        if not self._points or (point.screen - self._points[-1].screen).length >= 4.0:
             if len(self._points) >= 1024:
                 self._dragging = False
                 self.report({"WARNING"}, tr("The contour has reached 1024 points."))
                 return
-            self._points.append(point.copy())
+            self._points.append(point)
 
     def _finish_contour(self, context: bpy.types.Context) -> set[str]:
         points = self._points
-        if self._shape == "POLYGON" and len(points) > 3 and (points[0] - points[-1]).length < 4.0:
+        if self._shape == "POLYGON" and len(points) > 3 and (points[0].screen - points[-1].screen).length < 4.0:
             points = points[:-1]
         try:
             rotation, contour, depth = fit_contour(
@@ -219,26 +240,34 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         return {"FINISHED"}
 
     def _draw_line(self) -> None:
-        if not self._points or bpy.context.region != self._region:
+        if bpy.context.region != self._region:
             return
         points = self._points[:]
         if self._pointer is not None:
             points.append(self._pointer)
-        if len(points) < 2:
+        if not points:
             return
         import gpu
         from gpu_extras.batch import batch_for_shader
 
-        shader = gpu.shader.from_builtin("UNIFORM_COLOR")
-        shader.bind()
-        shader.uniform_float("color", (0.0, 1.0, 1.0, 1.0))
-        batch_for_shader(shader, "LINE_STRIP", {"pos": points}).draw(shader)
+        if len(points) >= 2:
+            shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+            shader.bind()
+            shader.uniform_float("color", (0.0, 1.0, 1.0, 1.0))
+            batch_for_shader(shader, "LINE_STRIP", {"pos": [point.screen for point in points]}).draw(shader)
+        if self._pointer is not None and self._pointer.surface is not None:
+            shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
+            shader.bind()
+            shader.uniform_float("size", 9.0)
+            shader.uniform_float("color", (0.0, 1.0, 1.0, 1.0))
+            batch_for_shader(shader, "POINTS", {"pos": [(*self._pointer.screen, 0)]}).draw(shader)
 
     def cleanup(self) -> None:
         if self._handle is None:
             return
         bpy.types.SpaceView3D.draw_handler_remove(self._handle, "WINDOW")
         self._handle = None
+        self._snapping = None
         _sessions.remove(self)
         try:
             self._area.header_text_set(None)

@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.5.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.6.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -24,7 +24,9 @@ Straight cuts take a world axis or an Euler rotation. Drawing a line sets the cu
 
 Custom connectors take two closed mesh templates with matching object origins at the seam. Each template crosses its origin's XY plane. Positive Z is the pin's insertion direction and negative Z anchors the pin on the first piece or opens the socket cutter past the seam. Template translation is ignored. Rotation and scale are carried through. The socket template supplies the intended clearance. TNTMesh checks that it contains the protruding pin by volume. Custom templates currently require straight cuts with zero kerf.
 
-**Manual Path** splits along an open stroke projected onto the view plane. Click points or hold Shift and drag, then press Enter to finish. TNTMesh extends both ends beyond the model so the seam reaches the edges of the selected depth. Adjust **Depth (mm)**, in-plane shift or smoothing in the cut settings. Edit or remove points from the list. Draw in Easy mode and add the current settings to a draft to reuse the stroke there.
+**Manual Path** splits along an open stroke. Click points or hold Shift and drag, then press Enter to finish. TNTMesh extends both ends beyond the model. Adjust **Depth (mm)**, in-plane shift or smoothing in the cut settings. Edit or remove points from the list. Draw in Easy mode and add the current settings to a draft to reuse the stroke there.
+
+Set **Snap** to use the view plane or the surface of the active mesh. **Vertex** and **Edge** take a nearby point on the face under the cursor and fall back to the surface when no feature is close enough. Outside the model, points use the view plane. These options also work when drawing straight and symmetric cuts or closed contours.
 
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Run with a graphical Blender process and an isolated user configuration."""
+import importlib
 import os
 import sys
 import traceback
@@ -369,6 +370,7 @@ def start_manual_path():
     settings = bpy.context.scene.tntmesh_settings
     settings.cut_kind = "PATH"
     settings.path_smoothing = 1
+    settings.draw_snap = "SURFACE"
     start_line()
 
 
@@ -380,6 +382,33 @@ def verify_manual_path():
     screenshot("17-manual-path.png")
     settings.cut_kind = "PLANAR"
     settings.axis = "Z"
+    settings.draw_snap = "VIEW"
+
+
+def verify_drawing_snap():
+    from bpy_extras.view3d_utils import location_3d_to_region_2d
+    from mathutils import Vector
+
+    picker = importlib.import_module(f"{PACKAGE}.draw_snapping").SurfacePicker
+    _, area, region = viewport()
+    view = area.spaces.active.region_3d
+    previous = view.view_rotation.copy(), view.view_perspective
+    try:
+        view.view_rotation = Euler((0, 0, 0)).to_quaternion()
+        view.view_perspective = "ORTHO"
+        view.update()
+        evaluated = bpy.context.active_object.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        for mode, near, expected in (
+            ("SURFACE", (4, 3, 12), (4, 3, 12)),
+            ("VERTEX", (11.8, 11.7, 12), (12, 12, 12)),
+            ("EDGE", (4.5, 11.8, 12), (4.5, 12, 12)),
+        ):
+            pixel = location_3d_to_region_2d(region, view, Vector(near))
+            pick = picker(evaluated, mode).pick(region, view, pixel)
+            assert (pick.surface - Vector(expected)).length < .002, (mode, tuple(pick.surface))
+    finally:
+        view.view_rotation, view.view_perspective = previous
+        view.update()
 
 
 def open_export_browser():
@@ -422,9 +451,11 @@ contour_steps = (
 ) if line_steps and os.environ.get("TNTMESH_TEST_CONTOUR") == "1" else ()
 path_steps = (
     start_manual_path, lambda: contour_click(.40, .48),
+    lambda: contour_click(.46, .56, event="MOUSEMOVE", value="NOTHING"),
     lambda: contour_click(.46, .56), lambda: contour_click(.54, .48),
     finish_contour, verify_manual_path,
 ) if line_steps and os.environ.get("TNTMESH_TEST_PATH") == "1" else ()
+snap_steps = (verify_drawing_snap,) if path_steps else ()
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled) if line_steps else ()
 )
@@ -462,7 +493,8 @@ repair_steps = (
     if os.environ.get("TNTMESH_TEST_REPAIR") == "1" else ()
 )
 steps = iter((
-    setup, panel, *line_steps, *contour_steps, *path_steps, *phase3_steps, split, undo, redo, spanish, panel,
+    setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *phase3_steps,
+    split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
     *base_steps, draft_panel, *diagnostics_steps, finish, *repair_steps,

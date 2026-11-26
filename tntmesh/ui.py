@@ -257,6 +257,7 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 draw_label = {"POLYGON": "Draw Contour", "PATH": "Draw Path"}.get(
                     settings.cut_kind, "Draw Cut Line",
                 )
+                cut.prop(settings, "draw_snap")
                 cut.operator("tntmesh.draw_plane", icon="IPO_LINEAR", text=draw_label)
             if settings.cut_kind != "OBJECT":
                 preview_label = {
