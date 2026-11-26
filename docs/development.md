@@ -80,6 +80,31 @@ Set `TNTMESH_TEST_BASE=1` to capture the detected supports on the two-height bas
 
 GitHub Actions validates the source and installed ZIP on Linux, and the installed ZIP on macOS arm64. Release tags must match the manifest version. Release automation adds a SHA-256 checksum and flags alpha, beta and release candidates as prereleases.
 
+## Dense-mesh benchmarks
+
+Run one operation per Blender process and record the CPU model, RAM, Blender version, operating system, wall time and process peak memory. The fixture is a closed quad torus with a major radius of 12 mm and a minor radius of 3 mm. It can generate each density from 10,000 to 10,000,000 faces listed in the specification.
+
+```sh
+blender --background --factory-startup --python-exit-code 1 --python tests/benchmark.py -- 100000 intersections
+```
+
+Use `inspect` for topology and volume, `diagnostics` for the basic mesh scan, `intersections` to include crossing and coplanar checks, or `split` for an exact straight cut without connectors. Results are written as JSON. Time starts after mesh construction. Peak memory includes Blender startup and fixture construction.
+
+Reference runs used Blender 5.3.0 on Windows 11 build 26200 with a Ryzen 7 3700X, 16 logical CPUs and 31.9 GiB of RAM. Each row records one run.
+
+| Faces | Operation | Seconds | Peak GiB |
+| ---: | --- | ---: | ---: |
+| 10,000 | Intersections | 1.18 | 0.20 |
+| 100,000 | Intersections | 12.13 | 0.45 |
+| 100,000 | Straight cut | 2.74 | 0.64 |
+| 500,000 | Basic diagnosis | 8.57 | 0.99 |
+| 1,000,000 | Topology and volume | 4.70 | 1.00 |
+| 3,000,000 | Topology and volume | 16.53 | 2.69 |
+| 5,000,000 | Topology and volume | 25.26 | 4.25 |
+| 10,000,000 | Topology and volume | 56.49 | 8.34 |
+
+These results cover the stated operations on this fixture. Cutting and full intersection diagnostics at the highest densities still need verification.
+
 ## Native extension repository
 
 In Blender Preferences, open Get Extensions → Repositories → Add Remote Repository. Add one index for the channel you want. The [experimental index](https://tntstudiosn.github.io/TNTMesh/experimental/index.json) serves prereleases. The [stable index](https://tntstudiosn.github.io/TNTMesh/stable/index.json) populates after the first stable release.

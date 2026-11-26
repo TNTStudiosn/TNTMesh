@@ -12,8 +12,12 @@ AREA_EPSILON = DISTANCE_EPSILON**2
 
 
 def touches(a: Box | Triangle, b: Box | Triangle) -> bool:
-    return all(max(a.lower[axis], b.lower[axis]) <= min(a.upper[axis], b.upper[axis]) + DISTANCE_EPSILON
-               for axis in range(3))
+    low_a, high_a = a.lower, a.upper
+    low_b, high_b = b.lower, b.upper
+    eps = DISTANCE_EPSILON
+    return (low_a.x <= high_b.x + eps and low_b.x <= high_a.x + eps
+            and low_a.y <= high_b.y + eps and low_b.y <= high_a.y + eps
+            and low_a.z <= high_b.z + eps and low_b.z <= high_a.z + eps)
 
 
 def clipped_area(subject: tuple[Point2, ...], clip: tuple[Point2, ...]) -> float:
@@ -62,22 +66,23 @@ def leaf_pairs(a: Box, b: Box) -> Iterator[tuple[Triangle, Triangle]]:
                 yield first, second
 
 
-def pairs(a: Box, b: Box) -> Iterator[tuple[Triangle, Triangle]]:
-    if not touches(a, b):
-        return
-    if a is b and a.children:
-        left, right = a.children
-        yield from pairs(left, left)
-        yield from pairs(left, right)
-        yield from pairs(right, right)
-    elif a.children:
-        for child in a.children:
-            yield from pairs(child, b)
-    elif b.children:
-        for child in b.children:
-            yield from pairs(a, child)
-    else:
-        yield from leaf_pairs(a, b)
+def pairs(root: Box) -> Iterator[tuple[Triangle, Triangle]]:
+    pending = [(root, root)]
+    while pending:
+        a, b = pending.pop()
+        if not touches(a, b):
+            continue
+        if a is b and a.children:
+            left, right = a.children
+            pending.extend(((left, left), (left, right), (right, right)))
+        elif a.children and (not b.children or a.count >= b.count):
+            left, right = a.children
+            pending.extend(((left, b), (right, b)))
+        elif b.children:
+            left, right = b.children
+            pending.extend(((a, left), (a, right)))
+        else:
+            yield from leaf_pairs(a, b)
 
 
 def coplanar_faces(mesh: bpy.types.Mesh, coordinates: list[Vector]) -> set[int]:
@@ -86,7 +91,7 @@ def coplanar_faces(mesh: bpy.types.Mesh, coordinates: list[Vector]) -> set[int]:
         return set()
     root = hierarchy(triangles)
     affected = set()
-    for first, second in pairs(root, root):
+    for first, second in pairs(root):
         if first.face in affected and second.face in affected:
             continue
         if overlap_area(first, second) > AREA_EPSILON:

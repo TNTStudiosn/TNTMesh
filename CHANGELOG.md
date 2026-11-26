@@ -4,6 +4,7 @@
 
 - Added face alignment for straight and symmetric cut planes.
 - Added a viewport handle to drag straight and symmetric cut planes along their normal.
+- Reduced the spatial checks needed to find coplanar overlaps and added reproducible dense-mesh benchmarks.
 
 ## 0.3.0-alpha.6
 

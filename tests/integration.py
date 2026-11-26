@@ -750,6 +750,22 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(report.thinnest_wall_mm)
         self.assertNotIn("THIN_WALL", {finding.kind for finding in report.findings})
 
+    def test_diagnostics_finds_coplanar_pairs_across_spatial_tree_branches(self):
+        vertices = []
+        faces = []
+        for block in range(11):
+            base = len(vertices)
+            x = block * 8
+            vertices.extend(((x, 0, 0), (x + 4, 0, 0), (x, 4, 0),
+                             (x + 1, 1, 0), (x + 5, 1, 0), (x + 1, 5, 0)))
+            faces.extend(((base, base + 1, base + 2), (base + 3, base + 4, base + 5)))
+        mesh = bpy.data.meshes.new("Disconnected overlapping triangles")
+        mesh.from_pydata(vertices, [], faces)
+        mesh.update()
+        geometry = importlib.import_module(f"{self.addon.__name__}.geometry.diagnostics")
+        report = geometry.scan(mesh, 0, 0, intersections=True)
+        self.assertEqual(next(item.count for item in report.findings if item.kind == "COPLANAR"), 22)
+
     def test_diagnostics_find_duplicate_faces_and_nearby_vertices(self):
         bpy.ops.mesh.primitive_plane_add(size=5)
         first = bpy.context.active_object

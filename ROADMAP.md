@@ -11,7 +11,7 @@
 
 Straight cuts support axis selection, numeric offset, free rotation, face alignment, drawing a line and moving the plane with a viewport handle. The first-run assistant and manual language selection are pending.
 
-Freehand drawing produces closed extraction contours and open paths. The drawing tools support view-plane placement, surface projection and vertex or edge snapping. Selective invalidation of draft operations is pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps, nesting of disjoint closed shells and wall thickness sampled from triangle centers. High-density profiling is pending.
+Freehand drawing produces closed extraction contours and open paths. The drawing tools support view-plane placement, surface projection and vertex or edge snapping. Selective invalidation of draft operations is pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps, nesting of disjoint closed shells and wall thickness sampled from triangle centers. The development guides record measured dense-mesh results by operation.
 
 Surface Region extracts one chosen region at a time. Face masks and vertex groups can come from Blender painting tools. Separate by Material processes multiple slots in one operation. Symmetric Cuts reflects the first plane, including custom connector templates, and offers independent shift and rotation for the second plane.
 

@@ -74,6 +74,31 @@ GitHub Actions compara el tag con el manifiesto, prueba el ZIP instalado y gener
 
 Las pruebas pasaron en Windows y Linux con Blender 4.5.17 LTS, 5.1.2, 5.2.4 LTS y 5.3.0, y en macOS arm64 con 4.5.17 LTS. El código fuente también pasó con 4.2.23 LTS en Windows. El mínimo declarado para el ZIP es Blender 4.5.
 
+## Pruebas de mallas densas
+
+Ejecuta una operación por proceso y registra el modelo de procesador, la RAM, la versión de Blender, el sistema operativo, el tiempo y el pico de memoria. El modelo de prueba es un toro cerrado de cuadriláteros con radio mayor de 12 mm y menor de 3 mm. Puede generar las densidades de la especificación, desde 10,000 hasta 10,000,000 de caras.
+
+```sh
+blender --background --factory-startup --python-exit-code 1 --python tests/benchmark.py -- 100000 intersections
+```
+
+Usa `inspect` para revisar topología y volumen, `diagnostics` para el análisis básico, `intersections` para añadir cruces y traslapes coplanares, o `split` para un corte recto exacto sin conectores. El resultado se imprime en JSON. El cronómetro arranca después de construir la malla. El pico de memoria incluye el arranque de Blender y la construcción del modelo.
+
+Las mediciones usaron Blender 5.3.0 en Windows 11 compilación 26200, con un Ryzen 7 3700X, 16 procesadores lógicos y 31.9 GiB de RAM. Cada fila corresponde a una ejecución.
+
+| Caras | Operación | Segundos | Pico en GiB |
+| ---: | --- | ---: | ---: |
+| 10,000 | Intersecciones | 1.18 | 0.20 |
+| 100,000 | Intersecciones | 12.13 | 0.45 |
+| 100,000 | Corte recto | 2.74 | 0.64 |
+| 500,000 | Diagnóstico básico | 8.57 | 0.99 |
+| 1,000,000 | Topología y volumen | 4.70 | 1.00 |
+| 3,000,000 | Topología y volumen | 16.53 | 2.69 |
+| 5,000,000 | Topología y volumen | 25.26 | 4.25 |
+| 10,000,000 | Topología y volumen | 56.49 | 8.34 |
+
+Estas cifras corresponden a las operaciones indicadas sobre el modelo de prueba. Falta verificar el corte y el diagnóstico completo de intersecciones en las densidades más altas.
+
 ## Actualizaciones
 
 En Preferencias → Obtener extensiones → Repositorios → Añadir repositorio remoto, introduce la URL de un solo canal. El [índice experimental](https://tntstudiosn.github.io/TNTMesh/experimental/index.json) contiene las versiones preliminares. El [índice estable](https://tntstudiosn.github.io/TNTMesh/stable/index.json) se poblará tras la primera publicación estable.

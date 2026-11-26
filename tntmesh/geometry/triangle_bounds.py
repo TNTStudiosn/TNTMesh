@@ -21,6 +21,7 @@ class Box:
     lower: Vector
     upper: Vector
     items: list[Triangle]
+    count: int
     children: tuple["Box", "Box"] | None = None
 
 
@@ -28,11 +29,11 @@ def hierarchy(items: list[Triangle]) -> Box:
     lower = Vector(tuple(min(item.lower[axis] for item in items) for axis in range(3)))
     upper = Vector(tuple(max(item.upper[axis] for item in items) for axis in range(3)))
     if len(items) <= LEAF_SIZE:
-        return Box(lower, upper, items)
+        return Box(lower, upper, items, len(items))
     longest = max(range(3), key=lambda axis: upper[axis] - lower[axis])
     items.sort(key=lambda item: item.lower[longest] + item.upper[longest])
     middle = len(items) // 2
-    return Box(lower, upper, [], (hierarchy(items[:middle]), hierarchy(items[middle:])))
+    return Box(lower, upper, [], len(items), (hierarchy(items[:middle]), hierarchy(items[middle:])))
 
 
 def triangles_from(
