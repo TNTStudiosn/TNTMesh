@@ -163,6 +163,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Grow / shrink", description="Add or remove rings of edge-adjacent faces",
         default=0, min=-50, max=50,
     )
+    region_smoothing: IntProperty(
+        name="Boundary smoothing", description="Relax the cut contour along the original surface",
+        default=0, min=0, max=12,
+    )
     symmetry_axis: EnumProperty(
         name="Symmetry axis", items=[(name, name, "") for name in "XYZ"], default="X",
     )
@@ -193,6 +197,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         return RegionCut(
             self.region_method, self.region_depth, self.region_slot, self.region_attribute,
             tuple(self.region_color), self.region_tolerance, self.region_weight, self.region_grow,
+            self.region_smoothing,
         )
 
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:

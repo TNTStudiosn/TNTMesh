@@ -156,6 +156,7 @@ def set_region_preview():
         settings = bpy.context.scene.tntmesh_settings
         settings.cut_kind = "REGION"
         settings.region_method = "SELECTION"
+        settings.region_smoothing = 2
         settings.show_plane = True
     area.tag_redraw()
 
@@ -247,6 +248,25 @@ def open_insertion_dialog():
 def capture_insertion_dialog():
     screenshot("13-insertion.png")
     cancel_line()
+
+
+def start_diagnostics():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        from mathutils import Vector
+
+        bpy.ops.mesh.primitive_plane_add(size=25, location=(-6, -8, 19), rotation=(.7, 0, .25))
+        obj = bpy.context.object
+        obj.name = "Open surface"
+        area.spaces.active.region_3d.view_location = Vector(obj.location)
+        assert bpy.ops.tntmesh.diagnose() == {"FINISHED"}
+        assert bpy.ops.tntmesh.diagnostic_view(kind="OPEN", focus=True) == {"FINISHED"}
+    area.tag_redraw()
+
+
+def capture_diagnostics():
+    screenshot("14-diagnostics.png")
+    assert bpy.ops.tntmesh.diagnostic_view(kind="CLEAR") == {"FINISHED"}
 
 
 def start_line():
@@ -385,11 +405,15 @@ insertion_steps = (
     (open_insertion_dialog, capture_insertion_dialog)
     if os.environ.get("TNTMESH_TEST_INSERTION") == "1" else ()
 )
+diagnostics_steps = (
+    (start_diagnostics, capture_diagnostics)
+    if os.environ.get("TNTMESH_TEST_DIAGNOSTICS") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
-    *base_steps, draft_panel, finish,
+    *base_steps, draft_panel, *diagnostics_steps, finish,
 ))
 
 

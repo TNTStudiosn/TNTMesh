@@ -8,6 +8,7 @@ from . import (
     assembly_view,
     base_ui,
     calibration_ui,
+    diagnostics_ui,
     draft,
     draft_operators,
     draw_cut,
@@ -27,7 +28,7 @@ _CLASSES = (
     *operators.CLASSES,
     *draft_operators.CLASSES,
     draw_cut.TNTMESH_OT_draw_plane, *ui.CLASSES, *printer_ui.CLASSES, *calibration_ui.CLASSES,
-    *assembly_ui.CLASSES, *base_ui.CLASSES,
+    *assembly_ui.CLASSES, *base_ui.CLASSES, *diagnostics_ui.CLASSES,
 )
 _registered: list[type] = []
 
@@ -49,6 +50,7 @@ def register() -> None:
         viewport.register()
         assembly_view.register()
         base_ui.register()
+        diagnostics_ui.register()
     except Exception:
         unregister()
         raise
@@ -56,6 +58,7 @@ def register() -> None:
 
 def unregister() -> None:
     draw_cut.cancel_sessions()
+    diagnostics_ui.unregister()
     base_ui.unregister()
     assembly_view.unregister()
     viewport.unregister()

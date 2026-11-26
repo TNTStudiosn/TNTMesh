@@ -8,6 +8,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from ..model import GeometryTransaction, MeshError
+from .diagnostics import nonadjacent_overlaps
 from .mesh import inspect, primitive
 
 EdgeUses = dict[tuple[int, int], list[tuple[int, int, int]]]
@@ -22,6 +23,7 @@ class RegionCut:
     tolerance: float = 0.05
     weight: float = 0.5
     grow: int = 0
+    smoothing: int = 0
 
 
 def matching(
@@ -99,14 +101,64 @@ def region_faces(mesh: bpy.types.Mesh, source: bpy.types.Object, config: RegionC
     return grow_selection(selected, edge_map(mesh), config.grow) if config.grow else selected
 
 
-def reject_self_intersections(mesh: bpy.types.Mesh) -> None:
+def boundary_edges(selected: set[int], uses: EdgeUses) -> list[tuple[int, int]]:
+    boundary = []
+    for faces in uses.values():
+        selected_uses = [edge for edge in faces if edge[0] in selected]
+        if len(selected_uses) == 1:
+            _, start, end = selected_uses[0]
+            boundary.append((start, end))
+    return boundary
+
+
+def smooth_boundary(
+    mesh: bpy.types.Mesh, positions: list[Vector], boundary: list[tuple[int, int]], passes: int,
+) -> dict[int, Vector]:
+    if not passes or not boundary:
+        return {}
+    if not 1 <= passes <= 12:
+        raise MeshError("Choose between zero and twelve smoothing passes.")
+    neighbors = defaultdict(set)
+    for start, end in boundary:
+        neighbors[start].add(end)
+        neighbors[end].add(start)
     mesh.calc_loop_triangles()
-    triangles = [tuple(triangle.vertices) for triangle in mesh.loop_triangles]
-    points = [vertex.co for vertex in mesh.vertices]
-    tree = BVHTree.FromPolygons(points, triangles, all_triangles=True)
-    for first, second in tree.overlap(tree):
-        if first < second and set(triangles[first]).isdisjoint(triangles[second]):
-            raise MeshError("The region cutter folds into itself. Reduce the depth or change the region.")
+    # Restrict projection to the immediate surface around the original boundary.
+    # This prevents a contour from snapping onto another nearby sheet.
+    local = [tuple(triangle.vertices) for triangle in mesh.loop_triangles
+             if any(index in neighbors for index in triangle.vertices)]
+    if not local:
+        return {}
+    tree = BVHTree.FromPolygons(positions, local, all_triangles=True)
+    limits = {
+        index: min((positions[index] - positions[neighbor]).length for neighbor in adjacent) * .45
+        for index, adjacent in neighbors.items()
+    }
+    positions_by_index = {index: positions[index] for index in neighbors}
+    for _ in range(passes):
+        updated = positions_by_index.copy()
+        for index, adjacent in neighbors.items():
+            if len(adjacent) != 2 or limits[index] == 0:
+                continue
+            first, second = sorted(adjacent)
+            origin = positions[index]
+            target = (positions_by_index[first] + positions_by_index[second]) / 2
+            candidate = positions_by_index[index].lerp(target, .35)
+            delta = candidate - origin
+            limit = limits[index]
+            if delta.length > limit:
+                candidate = origin + delta.normalized() * limit
+            projected, _, face, _ = tree.find_nearest(candidate, limit)
+            if (projected is not None and index in local[face]
+                    and (projected - origin).length <= limit + limit * 1e-5):
+                updated[index] = projected
+        positions_by_index = updated
+    return positions_by_index
+
+
+def reject_self_intersections(mesh: bpy.types.Mesh) -> None:
+    if next(nonadjacent_overlaps(mesh), None) is not None:
+        raise MeshError("The region cutter folds into itself. Reduce the depth or change the region.")
 
 
 def cutter_for_region(
@@ -124,12 +176,11 @@ def cutter_for_region(
         raise MeshError("The region has no matching faces.")
     if len(selected) == len(mesh.polygons):
         raise MeshError("Choose a region smaller than the entire model.")
-    boundary = []
-    for faces in uses.values():
-        selected_uses = [edge for edge in faces if edge[0] in selected]
-        if len(selected_uses) == 1:
-            _, start, end = selected_uses[0]
-            boundary.append((start, end))
+    boundary = boundary_edges(selected, uses)
+    smoothed = (
+        smooth_boundary(mesh, [vertex.co for vertex in mesh.vertices], boundary, config.smoothing)
+        if config.smoothing else {}
+    )
 
     incident = defaultdict(list)
     for face_id in sorted(selected):
@@ -145,7 +196,7 @@ def cutter_for_region(
         alignment = min(normal.dot(face.normal) for face in faces)
         if alignment < 0.18:
             raise MeshError("The region has a sharp fold. Select a smaller patch.")
-        point = mesh.vertices[vertex].co
+        point = smoothed.get(vertex, mesh.vertices[vertex].co)
         outer.append(point + normal * (lift / alignment))
         inner.append(point - normal * (config.depth / alignment))
     count = len(outer)

@@ -5,7 +5,7 @@ from mathutils import Matrix, Vector
 
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
-from .geometry.region import RegionCut, region_faces
+from .geometry.region import RegionCut, boundary_edges, edge_map, region_faces, smooth_boundary
 from .geometry.symmetry import reflection
 from .geometry.volume import bezier_path, outline
 from .model import MeshError, millimeters_per_unit
@@ -16,7 +16,7 @@ from .settings import TNTMESH_PG_settings
 
 _handles = []
 _preview_bounds: dict[tuple[int, int, tuple], tuple[Vector, Vector]] = {}
-_region_preview: dict[tuple[int, int, RegionCut], list[Vector]] = {}
+_region_preview: dict[tuple[int, int, RegionCut], tuple[list[Vector], list[Vector]]] = {}
 
 
 @persistent
@@ -155,8 +155,14 @@ def draw_region(context: bpy.types.Context, obj: bpy.types.Object, config: Regio
                 lift = (normal_matrix @ mesh.polygons[triangle.polygon_index].normal).normalized()
                 positions.extend(world @ mesh.vertices[index].co + lift * offset
                                  for index in triangle.vertices)
-        _region_preview[key] = positions
-    positions = _region_preview[key]
+        contour = []
+        if selected and config.smoothing:
+            edges = boundary_edges(selected, edge_map(mesh))
+            vertices = [world @ vertex.co for vertex in mesh.vertices]
+            moved = smooth_boundary(mesh, vertices, edges, config.smoothing)
+            contour = [moved.get(index, vertices[index]) for edge in edges for index in edge]
+        _region_preview[key] = positions, contour
+    positions, contour = _region_preview[key]
     if not positions:
         return
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
@@ -168,6 +174,10 @@ def draw_region(context: bpy.types.Context, obj: bpy.types.Object, config: Regio
         shader.bind()
         shader.uniform_float("color", (0.0, 1.0, 1.0, 0.38))
         batch_for_shader(shader, "TRIS", {"pos": positions}).draw(shader)
+        if contour:
+            gpu.state.depth_test_set("NONE")
+            shader.uniform_float("color", (0.72, 0.54, 1.0, 1.0))
+            batch_for_shader(shader, "LINES", {"pos": contour}).draw(shader)
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)

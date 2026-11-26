@@ -573,6 +573,82 @@ class WorkflowTests(unittest.TestCase):
                                places=3)
         self.assertAlmostEqual(self.checked(remainder) + self.checked(extract), 24**3, places=3)
 
+    def test_region_smoothing_builds_a_smaller_closed_cut_on_the_original_surface(self):
+        source = self.cube()
+        mesh = source.data
+        for face in mesh.polygons:
+            face.select = face.normal.z > .9
+        mesh.update()
+        before = [vertex.co.copy() for vertex in mesh.vertices]
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "SELECTION"
+        self.settings.region_depth = 2
+        self.settings.region_smoothing = 2
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        remainder, extract = self.parts()
+        self.assertLess(extract.dimensions.x, 23)
+        self.assertLess(extract.dimensions.y, 23)
+        self.assertAlmostEqual(extract.dimensions.z, 2)
+        self.assertAlmostEqual(self.checked(remainder) + self.checked(extract), 24**3, places=3)
+        self.assertEqual([vertex.co for vertex in mesh.vertices], before)
+
+    def test_diagnostics_report_open_edges_without_changing_the_mesh(self):
+        bpy.ops.mesh.primitive_plane_add(size=20)
+        obj = bpy.context.active_object
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        ui = self.addon.diagnostics_ui
+        result = ui.current(bpy.context).result
+        self.assertEqual({item.kind: item.count for item in result.findings}, {"OPEN": 4})
+        self.assertIsNone(result.volume_mm3)
+        self.assertEqual(bpy.ops.tntmesh.diagnostic_view(kind="OPEN"), {"FINISHED"})
+        self.assertEqual(ui.current(bpy.context).kind, "OPEN")
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        obj.location.x += 2
+        bpy.context.view_layer.update()
+        self.assertIsNone(ui.current(bpy.context))
+
+    def test_diagnostics_separates_intersections_from_legitimate_nested_shells(self):
+        outer = self.cube(12)
+        inner = self.cube(4)
+        inner.data.flip_normals()
+        outer.select_set(True)
+        bpy.context.view_layer.objects.active = outer
+        bpy.ops.object.join()
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result
+        self.assertEqual({item.kind: item.count for item in result.findings}, {"SHELLS": 2})
+        self.assertAlmostEqual(result.volume_mm3, 12**3 - 4**3, places=3)
+        crossing = self.cube(5)
+        crossing.location = (5, 1.25, 1.5)
+        outer.select_set(True)
+        bpy.context.view_layer.objects.active = outer
+        bpy.ops.object.join()
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result
+        counts = {item.kind: item.count for item in result.findings}
+        self.assertGreater(counts["INTERSECTION"], 0)
+        self.assertEqual(counts["SHELLS"], 3)
+        self.assertTrue(result.checked_intersections)
+        self.assertEqual(bpy.ops.tntmesh.diagnose(intersections=False), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result
+        self.assertFalse(result.checked_intersections)
+        self.assertNotIn("INTERSECTION", {item.kind for item in result.findings})
+
+    def test_diagnostics_find_duplicate_faces_and_nearby_vertices(self):
+        bpy.ops.mesh.primitive_plane_add(size=5)
+        first = bpy.context.active_object
+        bpy.ops.mesh.primitive_plane_add(size=5)
+        first.select_set(True)
+        bpy.context.view_layer.objects.active = first
+        bpy.ops.object.join()
+        self.assertEqual(bpy.ops.tntmesh.diagnose(), {"FINISHED"})
+        result = self.addon.diagnostics_ui.current(bpy.context).result
+        counts = {item.kind: item.count for item in result.findings}
+        self.assertEqual(counts["DUP_FACE"], 1)
+        self.assertEqual(counts["DUP_VERT"], 8)
+        self.assertEqual(counts["OPEN"], 8)
+
     def test_material_batch_separates_multiple_solid_regions_atomically(self):
         source = self.cube()
         mesh = source.data

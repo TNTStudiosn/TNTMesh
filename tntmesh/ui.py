@@ -3,6 +3,7 @@ import bpy
 
 from . import draft
 from .base_ui import draw_contacts
+from .diagnostics_ui import controls as diagnostics_controls
 from .localization import tr
 from .operators import active_mesh, managed_parts
 from .settings import TNTMESH_PG_settings
@@ -82,6 +83,7 @@ def cut_details(
         return
     if settings.cut_kind == "REGION":
         layout.prop(settings, "region_grow")
+        layout.prop(settings, "region_smoothing")
         if settings.region_method == "COLOR":
             layout.prop(settings, "region_tolerance")
         elif settings.region_method == "VERTEX_GROUP":
@@ -261,6 +263,12 @@ class TNTMESH_PT_main(bpy.types.Panel):
             if settings.cut_kind == "REGION" and settings.region_method == "MATERIAL":
                 layout.operator("tntmesh.split_materials", icon="MATERIAL")
             layout.operator("tntmesh.validate", icon="VIEWZOOM")
+
+        if obj is not None:
+            header, body = layout.panel("tntmesh_diagnostics", default_closed=True)
+            header.label(text="Mesh Diagnostics", icon="INFO")
+            if body:
+                diagnostics_controls(body, context)
 
         if managed_parts(context, "ALL"):
             layout.separator()
