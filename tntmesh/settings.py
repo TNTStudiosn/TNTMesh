@@ -18,6 +18,7 @@ from .geometry.planar import PlanarCut
 from .geometry.region import RegionCut
 from .geometry.symmetry import SymmetricCut
 from .geometry.volume import Cut, VolumeCut
+from .model import millimeters_per_unit
 
 
 def is_mesh(self, obj: bpy.types.Object) -> bool:
@@ -40,6 +41,12 @@ class TNTMESH_PG_base_contact(bpy.types.PropertyGroup):
 
 
 class TNTMESH_PG_settings(bpy.types.PropertyGroup):
+    def get_offset_view(self) -> float:
+        return self.offset / millimeters_per_unit(self.id_data)
+
+    def set_offset_view(self, value: float) -> None:
+        self.offset = value * millimeters_per_unit(self.id_data)
+
     mode: EnumProperty(
         name="Mode",
         items=[("EASY", "Easy", "Cut the selected model now"),
@@ -75,6 +82,9 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     offset: FloatProperty(
         name="Offset (mm)", description="Distance from the center along the cut axis",
         precision=2, step=25,
+    )
+    offset_view: FloatProperty(
+        get=get_offset_view, set=set_offset_view, options={"HIDDEN", "SKIP_SAVE"},
     )
     kerf: FloatProperty(
         name="Kerf (mm)", description="Physical gap removed between the pieces",

@@ -88,16 +88,7 @@ class TNTMESH_GGT_cut_offset(bpy.types.GizmoGroup):
         gizmo.matrix_basis = matrix
         binding = settings.as_pointer(), unit, settings.offset
         if not gizmo.is_modal and self._binding != binding:
-            area = context.area
-
-            def get() -> float:
-                return settings.offset / unit
-
-            def set_offset(value: float) -> None:
-                settings.offset = value * unit
-                area.tag_redraw()
-
-            gizmo.target_set_handler("offset", get=get, set=set_offset)
+            gizmo.target_set_prop("offset", settings, "offset_view")
             self._binding = binding
 
 
