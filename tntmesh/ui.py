@@ -3,6 +3,7 @@ import bpy
 
 from . import draft
 from .base_ui import draw_contacts
+from .localization import tr
 from .operators import active_mesh, managed_parts
 from .settings import TNTMESH_PG_settings
 
@@ -27,7 +28,8 @@ def cut_properties(
         if method == "MATERIAL":
             layout.prop(settings, "region_slot")
             if source is not None and settings.region_slot <= len(source.material_slots):
-                layout.label(text=source.material_slots[settings.region_slot - 1].name,
+                name = source.material_slots[settings.region_slot - 1].name
+                layout.label(text=name or tr("Empty material slot"),
                              translate=False, icon="MATERIAL")
         elif method == "SELECTION":
             layout.label(text="Uses saved face selection.", icon="FACESEL")
@@ -256,6 +258,8 @@ class TNTMESH_PT_main(bpy.types.Panel):
             action.scale_y = 1.45
             label = {"REGION": "Extract Region", "BASE": "Separate Base"}.get(settings.cut_kind, "Split Model")
             action.operator("tntmesh.split", icon="CHECKMARK", text=label)
+            if settings.cut_kind == "REGION" and settings.region_method == "MATERIAL":
+                layout.operator("tntmesh.split_materials", icon="MATERIAL")
             layout.operator("tntmesh.validate", icon="VIEWZOOM")
 
         if managed_parts(context, "ALL"):

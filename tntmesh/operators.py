@@ -5,12 +5,13 @@ from pathlib import Path
 from uuid import uuid4
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
 from . import draft, exporters, stl
 from .geometry.grid import fit_grid
+from .geometry.material_split import split_materials
 from .geometry.mesh import bounds, evaluated_mm, inspect
 from .geometry.planar import PlanarCut, axis_frame
 from .geometry.repair import repair_copy
@@ -18,6 +19,7 @@ from .geometry.volume import apply_cut, structural_parts
 from .localization import tr
 from .model import (
     ASSEMBLY_DIRECTION,
+    MATERIAL_SLOT,
     PART_ID,
     PROJECT_ID,
     ROLE,
@@ -59,6 +61,7 @@ def publish_parts(
     context: bpy.types.Context, transaction: GeometryTransaction, source: bpy.types.Object,
     meshes: Sequence[bpy.types.Mesh], origin: Vector, unit: float, *, bodies: int | None = None,
     direction: Vector | None = None,
+    labels: Sequence[str] | None = None,
 ) -> list[bpy.types.Object]:
     project_id = source.get(PROJECT_ID) or uuid4().hex
     collection = owned_collection(context.scene, "part")
@@ -68,6 +71,8 @@ def publish_parts(
         mesh.update()
         label = (tr("Pin {number}").format(number=index - bodies)
                  if bodies is not None and index > bodies else f"{index:02d}")
+        if labels is not None:
+            label = labels[index - 1]
         obj = transaction.object(collection, f"{source.name} · {label}", mesh)
         obj.location = origin
         identify_part(obj, project_id)
@@ -271,6 +276,65 @@ class TNTMESH_OT_fit_grid(bpy.types.Operator, MeshOperator):
         return {"FINISHED"}
 
 
+class TNTMESH_OT_split_materials(bpy.types.Operator, MeshOperator):
+    bl_idname = "tntmesh.split_materials"
+    bl_label = "Separate by Material"
+    bl_description = "Extract a closed piece per material slot and keep a solid remainder"
+    bl_options = {"UNDO"}
+    keep_slot: IntProperty(name="Retained material slot", min=1, default=1)
+    depth: FloatProperty(name="Depth (mm)", default=2, min=.01, precision=3)
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return (MeshOperator.poll(context) and context.scene.tntmesh_settings.mode == "EASY"
+                and len(context.active_object.material_slots) >= 2)
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
+        self.depth = context.scene.tntmesh_settings.region_depth
+        return context.window_manager.invoke_props_dialog(self, width=330)
+
+    def draw(self, context: bpy.types.Context) -> None:
+        layout = self.layout
+        layout.prop(self, "keep_slot")
+        slots = context.active_object.material_slots
+        if self.keep_slot <= len(slots):
+            name = slots[self.keep_slot - 1].name or tr("Empty material slot")
+            layout.label(text=name, icon="MATERIAL", translate=False)
+        layout.prop(self, "depth")
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        source = active_mesh(context)
+        unit = millimeters_per_unit(context.scene)
+        wm = context.window_manager
+        wm.progress_begin(0, 3)
+        try:
+            with GeometryTransaction() as transaction:
+                mesh, origin = evaluated_mm(context, source, transaction, unit)
+                wm.progress_update(1)
+                cuts = split_materials(
+                    context, transaction, mesh, source, self.keep_slot, self.depth,
+                )
+                wm.progress_update(2)
+                labels = [cut.name or tr("Slot {number}").format(number=cut.slot) for cut in cuts]
+                parts = publish_parts(
+                    context, transaction, source, [cut.mesh for cut in cuts], origin, unit, labels=labels,
+                )
+                for obj, cut in zip(parts, cuts, strict=True):
+                    obj[MATERIAL_SLOT] = cut.slot
+                    material = mesh.materials[cut.slot - 1]
+                    if material is not None:
+                        obj.color = material.diffuse_color
+            select_new_parts(context, source, parts)
+            wm.progress_update(3)
+        except (MeshError, RuntimeError, ValueError) as error:
+            return report_failure(self, error)
+        finally:
+            wm.progress_end()
+            context.view_layer.update()
+        self.report({"INFO"}, tr("Created {count} material pieces.").format(count=len(parts)))
+        return {"FINISHED"}
+
+
 class TNTMESH_OT_validate(bpy.types.Operator, MeshOperator):
     bl_idname = "tntmesh.validate"
     bl_label = "Check Mesh"
@@ -390,5 +454,6 @@ class TNTMESH_OT_export_stl(bpy.types.Operator):
 
 CLASSES = (
     TNTMESH_OT_import_stl, TNTMESH_OT_resize, TNTMESH_OT_split,
-    TNTMESH_OT_fit_grid, TNTMESH_OT_validate, TNTMESH_OT_repair, TNTMESH_OT_export_stl,
+    TNTMESH_OT_fit_grid, TNTMESH_OT_split_materials, TNTMESH_OT_validate,
+    TNTMESH_OT_repair, TNTMESH_OT_export_stl,
 )

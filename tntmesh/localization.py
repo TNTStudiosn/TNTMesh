@@ -81,7 +81,9 @@ SPANISH = {
     "Surface Region": "Región de superficie",
     "Extract a solid piece from matching faces": "Extrae un sólido a partir de las caras elegidas",
     "Region source": "Origen de la región",
-    "Material Slot": "Ranura de material",
+    "By Material Slot": "Por ranura de material",
+    "Source material slot": "Ranura de origen",
+    "Empty material slot": "Ranura sin material",
     "Use faces assigned to a material slot": "Usa las caras asignadas a una ranura",
     "Selected Faces": "Caras seleccionadas",
     "Use the face selection saved on the mesh": "Usa la selección de caras guardada en la malla",
@@ -101,6 +103,16 @@ SPANISH = {
     "Add or remove rings of edge-adjacent faces": "Agrega o quita anillos de caras vecinas",
     "Highlight region": "Resaltar región",
     "Extract Region": "Extraer región",
+    "Separate by Material": "Separar por material",
+    "Extract a closed piece per material slot and keep a solid remainder":
+        "Extrae una pieza cerrada por ranura de material y conserva un cuerpo sólido",
+    "Retained material slot": "Ranura del cuerpo principal",
+    "Assign faces to the retained slot and at least one other material slot.":
+        "Asigna caras tanto a la ranura principal como a otra ranura de material.",
+    "A material cut consumed all remaining geometry or produced no piece.":
+        "Un corte consumió toda la geometría restante o no produjo una pieza.",
+    "Slot {number}": "Ranura {number}",
+    "Created {count} material pieces.": "Se crearon {count} piezas por material.",
     "Symmetric Cuts": "Cortes simétricos",
     "Reflect a straight cut across a symmetry plane": "Refleja un corte recto con un plano de simetría",
     "Symmetry axis": "Eje de simetría",

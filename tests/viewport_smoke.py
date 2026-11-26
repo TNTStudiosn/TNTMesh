@@ -216,6 +216,28 @@ def capture_base():
     screenshot("11-base-contacts.png")
 
 
+def open_material_separation():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        obj = bpy.context.active_object
+        obj.data.materials.clear()
+        for label in ("Base material", "Top material"):
+            obj.data.materials.append(bpy.data.materials.new(label))
+        for face in obj.data.polygons:
+            face.material_index = 0
+        max(obj.data.polygons, key=lambda face: face.normal.z).material_index = 1
+        settings = bpy.context.scene.tntmesh_settings
+        settings.cut_kind = "REGION"
+        settings.region_method = "MATERIAL"
+        assert bpy.ops.tntmesh.split_materials("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
+    area.tag_redraw()
+
+
+def capture_material_separation():
+    screenshot("12-material-separation.png")
+    cancel_line()
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -344,10 +366,14 @@ assembly_steps = (
     if phase3_steps else ()
 )
 base_steps = (start_base_preview, capture_base) if os.environ.get("TNTMESH_TEST_BASE") == "1" else ()
+material_steps = (
+    (open_material_separation, capture_material_separation)
+    if os.environ.get("TNTMESH_TEST_MATERIAL") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
-    *export_steps, *printer_steps, *assembly_steps, *base_steps, draft_panel, finish,
+    *export_steps, *printer_steps, *assembly_steps, *material_steps, *base_steps, draft_panel, finish,
 ))
 
 

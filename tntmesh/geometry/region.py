@@ -10,6 +10,7 @@ from mathutils.bvhtree import BVHTree
 from ..model import GeometryTransaction, MeshError
 from .mesh import inspect, primitive
 
+EdgeUses = dict[tuple[int, int], list[tuple[int, int, int]]]
 
 @dataclass(frozen=True)
 class RegionCut:
@@ -65,7 +66,7 @@ def matching(
     raise MeshError("Choose a region source.")
 
 
-def edge_map(mesh: bpy.types.Mesh) -> dict[tuple[int, int], list[tuple[int, int, int]]]:
+def edge_map(mesh: bpy.types.Mesh) -> EdgeUses:
     uses = defaultdict(list)
     for face in mesh.polygons:
         points = tuple(face.vertices)
@@ -75,7 +76,7 @@ def edge_map(mesh: bpy.types.Mesh) -> dict[tuple[int, int], list[tuple[int, int,
 
 
 def grow_selection(
-    selected: set[int], uses: dict[tuple[int, int], list[tuple[int, int, int]]], steps: int,
+    selected: set[int], uses: EdgeUses, steps: int,
 ) -> set[int]:
     neighbors = [(faces[0][0], faces[1][0]) for faces in uses.values() if len(faces) == 2]
     for _ in range(abs(steps)):
@@ -110,12 +111,13 @@ def reject_self_intersections(mesh: bpy.types.Mesh) -> None:
 
 def cutter_for_region(
     transaction: GeometryTransaction, mesh: bpy.types.Mesh, source: bpy.types.Object,
-    config: RegionCut,
+    config: RegionCut, *, uses: EdgeUses | None = None,
 ) -> bpy.types.Mesh:
     if not isfinite(config.depth) or config.depth <= 0:
         raise MeshError("Choose a positive extraction depth.")
     selected = matching(mesh, source, config)
-    uses = edge_map(mesh)
+    if uses is None:
+        uses = edge_map(mesh)
     if config.grow:
         selected = grow_selection(selected, uses, config.grow)
     if not selected:

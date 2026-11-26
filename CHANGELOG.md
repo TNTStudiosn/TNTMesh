@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added one-operation separation of multiple material slots into closed pieces with a retained body.
+
 ## 0.3.0-alpha.3
 
 - Added base-contact detection and solid base separation for models with one or more supports at distinct heights.

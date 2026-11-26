@@ -145,14 +145,14 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     contour: CollectionProperty(type=TNTMESH_PG_contour_point)
     contour_index: IntProperty(min=0)
     region_method: EnumProperty(name="Region source", items=[
-        ("MATERIAL", "Material Slot", "Use faces assigned to a material slot"),
+        ("MATERIAL", "By Material Slot", "Use faces assigned to a material slot"),
         ("SELECTION", "Selected Faces", "Use the face selection saved on the mesh"),
         ("FACE_MASK", "Face Mask", "Use a Boolean attribute on the face domain"),
         ("VERTEX_GROUP", "Vertex Group", "Use faces whose vertices reach the group weight"),
         ("COLOR", "Color Attribute", "Match all face colors within the given RGB tolerance"),
     ])
     region_depth: FloatProperty(name="Depth (mm)", default=2, min=.01, precision=3)
-    region_slot: IntProperty(name="Material Slot", default=1, min=1)
+    region_slot: IntProperty(name="Source material slot", default=1, min=1)
     region_attribute: StringProperty(name="Name")
     region_color: FloatVectorProperty(
         name="Target color", default=(1.0, 0.0, 0.0), min=0, max=1, size=3, subtype="COLOR",

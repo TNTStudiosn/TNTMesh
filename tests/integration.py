@@ -573,6 +573,32 @@ class WorkflowTests(unittest.TestCase):
                                places=3)
         self.assertAlmostEqual(self.checked(remainder) + self.checked(extract), 24**3, places=3)
 
+    def test_material_batch_separates_multiple_solid_regions_atomically(self):
+        source = self.cube()
+        mesh = source.data
+        for name, color in (("Body", (.2, .2, .2, 1)), ("Green", (0, 1, 0, 1)),
+                            ("Red", (1, 0, 0, 1))):
+            mat = bpy.data.materials.new(name)
+            mat.diffuse_color = color
+            mesh.materials.append(mat)
+        max(mesh.polygons, key=lambda face: face.normal.z).material_index = 1
+        max(mesh.polygons, key=lambda face: face.normal.x).material_index = 2
+        mesh.update()
+        before = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split_materials(keep_slot=4), {"CANCELLED"})
+        self.assertEqual(bpy.ops.tntmesh.split_materials(depth=30), {"CANCELLED"})
+        self.assertEqual(self.parts(), [])
+        self.assertEqual(set(bpy.data.meshes.keys()), before)
+        self.assertFalse(source.hide_get())
+        self.assertEqual(bpy.ops.tntmesh.split_materials(depth=2), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual([obj["tntmesh_material_slot"] for obj in parts], [1, 2, 3])
+        self.assertEqual([tuple(obj.color) for obj in parts[1:]], [(0, 1, 0, 1), (1, 0, 0, 1)])
+        self.assertAlmostEqual(sum(self.checked(obj) for obj in parts), 24**3, places=3)
+        self.assertAlmostEqual(self.checked(parts[1]), 24 * 24 * 2, places=3)
+        self.assertAlmostEqual(self.checked(parts[2]), 22 * 24 * 2, places=3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
+
     def test_color_selection_and_vertex_groups_share_the_same_closed_output(self):
         for method in ("COLOR", "VERTEX_GROUP", "FACE_MASK", "SELECTION"):
             with self.subTest(method=method):
