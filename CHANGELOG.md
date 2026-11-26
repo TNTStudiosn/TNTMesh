@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added sampled insertion checks for rotation with optional translation and a configurable pivot.
+
 ## 0.3.0-alpha.11
 
 - Added a viewport thickness map and thin-wall markers for areas around sockets and other printed features.

@@ -1,13 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from collections.abc import Iterator
+from dataclasses import dataclass
+from math import pi, sin, sqrt
 from typing import Protocol
 
-from mathutils import Vector
+from mathutils import Quaternion, Vector
 
+from ..model import MeshError
+from .mesh import bounds
 from .triangle_bounds import Box, Triangle
 
 DISTANCE_EPSILON = 1e-5
 AXIS_EPSILON = 1e-14
+MAX_ROTARY_INTERVALS = 32768
+ROTATION_LIMIT_ERROR = "Rotation scan exceeded its limit. Increase the sample distance or shorten the path."
 Window = tuple[float, float]
 
 
@@ -17,6 +23,62 @@ class Bounded(Protocol):
 
     @property
     def upper(self) -> Vector: ...
+
+
+@dataclass(frozen=True)
+class RotarySweep:
+    corners: tuple[Vector, ...]
+    pivot: Vector
+    axis: Vector
+    travel: Vector
+    angle: float
+    radius: float
+    projected_radius: Vector
+
+    @classmethod
+    def make(cls, box: Bounded, pivot: Vector, axis: Vector, travel: Vector, angle: float) -> "RotarySweep":
+        corners = tuple(Vector((x, y, z)) for x in (box.lower.x, box.upper.x)
+                        for y in (box.lower.y, box.upper.y) for z in (box.lower.z, box.upper.z))
+        unit_axis = axis.normalized()
+        radius = max((corner - pivot).cross(unit_axis).length for corner in corners)
+        projected = Vector(sqrt(max(0.0, 1.0 - value**2)) * radius for value in unit_axis)
+        return cls(corners, pivot, unit_axis, travel, angle, radius, projected)
+
+    def pose(self, fraction: float) -> tuple[Quaternion, Vector]:
+        rotation = Quaternion(self.axis, self.angle * fraction)
+        offset = self.pivot - rotation @ self.pivot + self.travel * fraction
+        return rotation, offset
+
+def rotation_probes(
+    sweep: RotarySweep, obstacle: Bounded, minimum: float, sample_mm: float,
+) -> Iterator[float]:
+    pending = [(minimum, 1.0)]
+    last = None
+    iterations = 0
+    while pending:
+        iterations += 1
+        if iterations > MAX_ROTARY_INTERVALS:
+            raise MeshError(ROTATION_LIMIT_ERROR)
+        low, high = pending.pop()
+        middle = (low + high) / 2
+        rotation, offset = sweep.pose(middle)
+        lower, upper = bounds(rotation @ corner + offset for corner in sweep.corners)
+        # Bound each coordinate of the motion away from the midpoint. Rotation has
+        # zero movement along its axis, even when the chosen pivot is far away.
+        half_span = (high - low) / 2
+        angle = min(pi, abs(sweep.angle) * half_span)
+        chord = 2 * sin(angle / 2)
+        margins = [abs(sweep.travel[i]) * half_span + sweep.projected_radius[i] * chord for i in range(3)]
+        if any(lower[i] - margins[i] > obstacle.upper[i] or upper[i] + margins[i] < obstacle.lower[i]
+               for i in range(3)):
+            continue
+        if sweep.travel.length * half_span + sweep.radius * chord > sample_mm:
+            pending.extend(((low, middle), (middle, high)))
+            continue
+        for sample in (high, middle, low):
+            if sample != last:
+                yield sample
+                last = sample
 
 
 def clip_interval(window: Window, low: float, high: float, speed: float) -> Window | None:

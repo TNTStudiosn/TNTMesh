@@ -4,7 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
-from math import cos, sin, tau
+from math import cos, pi, sin, sqrt, tau
 from pathlib import Path
 from xml.etree import ElementTree
 from zipfile import ZipFile
@@ -1733,6 +1733,61 @@ class WorkflowTests(unittest.TestCase):
         first = assembly.insertion_hit(bpy.context, moving, [thin, nearer_start], direction, 20)
         self.assertEqual(first.obstacle, nearer_start)
         self.assertEqual(assembly.insertion_hit(bpy.context, moving, [nearer_start, thin], direction, 20), first)
+
+    def test_insertion_rotation_finds_a_blocker_between_clear_end_poses(self):
+        moving = self.cube(2)
+        moving.scale = (5, .35, .5)
+        blocker = self.cube(.4)
+        blocker.location = (3.2, 3.2, 0)
+        for obj in (moving, blocker):
+            self.addon.operators.identify_part(obj, "rotating-insertion-test")
+        context = bpy.context
+        context.view_layer.update()
+        transforms = {obj: obj.matrix_world.copy() for obj in (moving, blocker)}
+        datablocks = tuple(bpy.data.meshes.keys())
+        assembly = self.addon.assembly
+        self.assertEqual(assembly.overlaps(context, [moving, blocker]), [])
+        axis, direction = Vector((0, 0, 1)), Vector((0, 0, 0))
+        hit = assembly.insertion_hit(context, moving, [blocker], direction, 0,
+                                     rotation_axis=axis, rotation_radians=pi / 2)
+        self.assertEqual(hit.obstacle, blocker)
+        self.assertAlmostEqual(hit.rotation_radians, pi / 4, delta=.2)
+        self.assertEqual(hit.distance_mm, 0)
+        self.assertIsNone(assembly.insertion_hit(context, moving, [blocker], direction, 0,
+                                                 rotation_axis=axis, rotation_radians=-pi / 2))
+        self.addon.operators.select_results(context, [moving])
+        self.assertEqual(bpy.ops.tntmesh.assembly_project(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.check_insertion(distance=0, rotation=pi / 2), {"FINISHED"})
+        self.assertEqual({obj: obj.matrix_world for obj in transforms}, transforms)
+        self.assertEqual(tuple(bpy.data.meshes.keys()), datablocks)
+
+    def test_insertion_with_rotation_and_translation_uses_the_world_pivot_in_scene_units(self):
+        context = bpy.context
+        context.scene.unit_settings.system = "METRIC"
+        context.scene.unit_settings.scale_length = .01
+        pivot = Vector((1, 2, 3))
+        moving = self.cube(.1)
+        moving.location = pivot + Vector((4, 0, 0))
+        blocker = self.cube(.1)
+        blocker.location = pivot + Vector((2 * sqrt(2), 2 * sqrt(2), 2))
+        context.view_layer.update()
+        assembly = self.addon.assembly
+        axis = Vector((0, 0, 1))
+        self.assertIsNone(assembly.insertion_hit(context, moving, [blocker], axis, 40))
+        self.assertIsNone(assembly.insertion_hit(context, moving, [blocker], axis, 0,
+                                                 rotation_axis=axis, rotation_radians=pi / 2, pivot_world=pivot))
+        hit = assembly.insertion_hit(context, moving, [blocker], axis, 40, rotation_axis=axis,
+                                     rotation_radians=pi / 2, pivot_world=pivot)
+        self.assertEqual(hit.obstacle, blocker)
+        self.assertAlmostEqual(hit.distance_mm, 20, delta=2)
+        self.assertAlmostEqual(hit.rotation_radians, pi / 4, delta=.06)
+        context.scene.cursor.location = pivot
+        for obj in (moving, blocker):
+            self.addon.operators.identify_part(obj, "translating-rotation-test")
+        self.addon.operators.select_results(context, [moving])
+        self.assertEqual(bpy.ops.tntmesh.assembly_project(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.check_insertion(axis="+Z", distance=40, rotation=pi / 2,
+                                                        rotation_pivot="CURSOR"), {"FINISHED"})
 
     def test_assembly_visibility_and_copy_are_scoped_to_the_project(self):
         source = self.cube()

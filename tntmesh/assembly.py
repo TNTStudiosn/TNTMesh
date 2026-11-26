@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass
-from math import isfinite
+from math import isfinite, tau
 
 import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
@@ -8,7 +8,13 @@ from mathutils import Matrix, Vector
 
 from .geometry.boolean import ExactBoolean
 from .geometry.mesh import BOOLEAN_VOLUME_NOISE, absolute_volume, bounds, evaluated_mm, inspect
-from .geometry.sweep import box_interval, probe_positions
+from .geometry.sweep import (
+    ROTATION_LIMIT_ERROR,
+    RotarySweep,
+    box_interval,
+    probe_positions,
+    rotation_probes,
+)
 from .geometry.triangle_bounds import hierarchy, triangles_from
 from .model import (
     ASSEMBLY_DIRECTION,
@@ -20,6 +26,7 @@ from .model import (
 )
 
 CONTACT_EPSILON = 0.001
+MAX_ROTARY_TESTS = 2048
 
 
 class TNTMESH_PG_assembly(bpy.types.PropertyGroup):
@@ -100,6 +107,7 @@ class InsertionHit:
     obstacle: bpy.types.Object
     distance_mm: float
     volume_mm3: float
+    rotation_radians: float = 0
 
 
 def create_body(
@@ -163,10 +171,18 @@ def overlaps(
 def insertion_hit(
     context: bpy.types.Context, moving: bpy.types.Object, obstacles: list[bpy.types.Object],
     direction: Vector, distance_mm: float, steps: int = 1,
+    *, rotation_axis: Vector | None = None, rotation_radians: float = 0,
+    pivot_world: Vector | None = None, sample_mm: float = .25,
 ) -> InsertionHit | None:
-    if (not all(map(isfinite, (*direction, distance_mm))) or direction.length_squared == 0
-            or distance_mm <= 0 or steps < 1):
+    if (not all(map(isfinite, (*direction, distance_mm, rotation_radians))) or distance_mm < 0 or steps < 1
+            or (distance_mm > 0 and direction.length_squared == 0) or (not distance_mm and not rotation_radians)):
         raise MeshError("Choose a valid insertion direction and travel distance.")
+    if rotation_radians and (
+        rotation_axis is None or not all(map(isfinite, (*rotation_axis, sample_mm)))
+        or rotation_axis.length_squared == 0 or not .05 <= sample_mm <= 10 or abs(rotation_radians) > tau + 1e-6
+        or (pivot_world is not None and not all(map(isfinite, pivot_world)))
+    ):
+        raise MeshError("Set a valid rotation axis, pivot and sampling distance.")
     axis = direction.normalized()
     unit = millimeters_per_unit(context.scene)
     reference = moving.matrix_world.translation.copy()
@@ -178,6 +194,11 @@ def insertion_hit(
             bodies = [create_body(context, transaction, obj, reference, unit)
                       for obj in obstacles if obj != moving]
             reach = axis * distance_mm
+            if rotation_radians:
+                pivot = ((moving_body.lower + moving_body.upper) / 2 if pivot_world is None
+                         else (pivot_world - reference) * unit)
+                sweep = RotarySweep.make(moving_body, pivot, rotation_axis, reach, rotation_radians)
+                return rotary_hit(context, transaction, moving_body, bodies, sweep, distance_mm, sample_mm)
             swept = bounds((moving_body.lower, moving_body.upper,
                             moving_body.lower + reach, moving_body.upper + reach))
             nearby = [body for body in bodies if candidate_pair(*swept, body)]
@@ -212,3 +233,33 @@ def insertion_hit(
     finally:
         wm.progress_end()
         context.view_layer.update()
+
+
+def rotary_hit(
+    context: bpy.types.Context, transaction: GeometryTransaction, moving: Body, obstacles: list[Body],
+    sweep: RotarySweep, distance_mm: float, sample_mm: float,
+) -> InsertionHit | None:
+    points = [vertex.co.copy() for vertex in moving.mesh.vertices]
+    probe = transaction.own_mesh(moving.mesh.copy())
+    engine = ExactBoolean(context, transaction)
+    found = None
+    first = 0.0
+    tests = 0
+    for index, obstacle in enumerate(obstacles, start=1):
+        for fraction in rotation_probes(sweep, obstacle, first, sample_mm):
+            rotation, offset = sweep.pose(fraction)
+            if not candidate_pair(*bounds(rotation @ corner + offset for corner in sweep.corners), obstacle):
+                continue
+            tests += 1
+            if tests > MAX_ROTARY_TESTS:
+                raise MeshError(ROTATION_LIMIT_ERROR)
+            for original, vertex in zip(points, probe.vertices, strict=True):
+                vertex.co = rotation @ original + offset
+            probe.update()
+            volume = measure_intersection(engine, probe, obstacle.mesh)
+            if volume > BOOLEAN_VOLUME_NOISE:
+                found = InsertionHit(obstacle.obj, fraction * distance_mm, volume, fraction * sweep.angle)
+                first = fraction
+                break
+        context.window_manager.progress_update(index)
+    return found

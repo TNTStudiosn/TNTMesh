@@ -19,6 +19,8 @@ En **Impresora**, selecciona un perfil, establece los márgenes y previsualiza e
 
 **Calibrar conectores** genera un pin reutilizable y cavidades grabadas. Después de imprimir, selecciona la cavidad que ajustó mejor y guarda la holgura en el perfil. **Región de superficie** extrae una capa sólida por material, color o selección. **Cortes simétricos** refleja un corte recto junto con sus conectores. En **Ensamblaje** puedes revisar las piezas y separarlas visualmente conservando sus posiciones de exportación.
 
+En **Ensamblaje → Revisar recorrido de inserción**, indica el recorrido y, si hace falta, el ángulo inicial. El giro puede usar como pivote el centro de la pieza, el origen del objeto o el cursor 3D. El aviso muestra la distancia y el ángulo donde se encontró un choque. Reduce el paso de muestreo para comprobar detalles más pequeños durante el giro.
+
 La validación comprueba el cierre, la orientación de las caras, las caras degeneradas y el volumen interior. Revisa la orientación, los soportes y la preparación final en tu slicer. Imprime una muestra para comprobar el ajuste con tu material y equipo.
 
 Para imprimir en resina, abre **Preparación para resina**, ajusta el grosor de pared y el tamaño de vóxel, y selecciona **Crear copia hueca**. Usa una malla cerrada que se superponga con la pared del modelo para conservar una región sólida o reforzar una unión. Con **Colocar drenaje** puedes hacer clic en el exterior. También puedes colocar un drenaje circular sugerido según la dirección de impresión y generar un tapón aparte. Para una abertura irregular, coloca una malla cerrada que atraviese la pared y elige **Malla personalizada**. **Diagnóstico de malla** puede señalar las cavidades que siguen cerradas.

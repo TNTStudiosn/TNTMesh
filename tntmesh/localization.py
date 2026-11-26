@@ -2,6 +2,35 @@
 import bpy
 
 SPANISH = {
+    "Test the selected piece for collisions along an insertion path":
+        "Comprueba si la pieza seleccionada choca durante la inserción",
+    "Starting angle": "Ángulo inicial",
+    "Angle at the start of insertion relative to the assembled pose":
+        "Ángulo de la pieza al comenzar la inserción respecto a su posición ensamblada",
+    "Rotation axis": "Eje de giro",
+    "World X": "X global",
+    "World Y": "Y global",
+    "World Z": "Z global",
+    "Rotate around the world X axis": "Gira alrededor del eje X global",
+    "Rotate around the world Y axis": "Gira alrededor del eje Y global",
+    "Rotate around the world Z axis": "Gira alrededor del eje Z global",
+    "Travel Direction": "Dirección de desplazamiento",
+    "Rotate around the direction of travel": "Gira alrededor de la dirección de desplazamiento",
+    "Rotation pivot": "Pivote de giro",
+    "Piece Center": "Centro de la pieza",
+    "Rotate around the center of the piece's bounds": "Gira alrededor del centro de los límites de la pieza",
+    "Rotate around the object's origin": "Gira alrededor del origen del objeto",
+    "Rotate around the 3D cursor": "Gira alrededor del cursor 3D",
+    "Sample travel (mm)": "Paso (mm)",
+    "Maximum estimated movement between tested poses": "Movimiento máximo estimado entre posiciones comprobadas",
+    "Rotating paths are sampled.": "El recorrido con giro se muestrea.",
+    "Blocked by {name} at {distance:.2f} mm and {angle:.1f}°.":
+        "{name} bloquea la inserción a {distance:.2f} mm y {angle:.1f}°.",
+    "No overlap found at the sampled poses.": "No se encontraron choques en las posiciones muestreadas.",
+    "Set a valid rotation axis, pivot and sampling distance.":
+        "Indica un eje de giro, pivote y paso de muestreo válidos.",
+    "Rotation scan exceeded its limit. Increase the sample distance or shorten the path.":
+        "El giro superó el límite de muestras. Aumenta el paso o acorta el recorrido.",
     "Possible suction regions": "Posibles zonas de succión",
     "Resin Traps": "Trampas de resina",
     "Check Resin Traps": "Revisar trampas de resina",
@@ -439,8 +468,6 @@ SPANISH = {
         "{count} traslape(s). {first} y {second}: {volume:.3f} mm³",
     "No volume overlaps at the assembled position.": "No hay traslapes de volumen en el ensamblaje.",
     "Check Insertion Path": "Revisar recorrido de inserción",
-    "Test the selected piece for collisions along a straight insertion path":
-        "Comprueba si la pieza elegida choca durante una inserción recta",
     "Start from": "Dirección de partida",
     "Assembly Direction": "Dirección del ensamblaje",
     "Use the piece's suggested separation direction": "Usa la dirección de separación sugerida",

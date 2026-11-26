@@ -4,6 +4,7 @@ import importlib
 import os
 import sys
 import traceback
+from math import pi
 from pathlib import Path
 
 import addon_utils
@@ -249,6 +250,17 @@ def open_insertion_dialog():
 
 def capture_insertion_dialog():
     screenshot("13-insertion.png")
+    cancel_line()
+
+
+def open_rotating_insertion_dialog():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.check_insertion("INVOKE_DEFAULT", rotation=pi / 2) == {"RUNNING_MODAL"}
+
+
+def capture_rotating_insertion_dialog():
+    screenshot("27-rotating-insertion.png")
     cancel_line()
 
 
@@ -754,7 +766,7 @@ material_steps = (
     if os.environ.get("TNTMESH_TEST_MATERIAL") == "1" else ()
 )
 insertion_steps = (
-    (open_insertion_dialog, capture_insertion_dialog)
+    (open_insertion_dialog, capture_insertion_dialog, open_rotating_insertion_dialog, capture_rotating_insertion_dialog)
     if os.environ.get("TNTMESH_TEST_INSERTION") == "1" else ()
 )
 diagnostics_steps = (

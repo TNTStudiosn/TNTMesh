@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from math import degrees, tau
+
 import bpy
 from bpy.props import EnumProperty, FloatProperty, IntProperty
 from mathutils import Matrix, Vector
@@ -192,13 +194,30 @@ class TNTMESH_UL_assembly_parts(bpy.types.UIList):
 class TNTMESH_OT_check_insertion(bpy.types.Operator):
     bl_idname = "tntmesh.check_insertion"
     bl_label = "Check Insertion Path"
-    bl_description = "Test the selected piece for collisions along a straight insertion path"
+    bl_description = "Test the selected piece for collisions along an insertion path"
 
     axis: EnumProperty(name="Start from", items=[
         ("AUTO", "Assembly Direction", "Use the piece's suggested separation direction"),
         *((axis, axis, "") for axis in ("+X", "-X", "+Y", "-Y", "+Z", "-Z")),
     ])
-    distance: FloatProperty(name="Travel distance (mm)", default=25, min=.01, max=10000, precision=2)
+    distance: FloatProperty(name="Travel distance (mm)", default=25, min=0, max=10000, precision=2)
+    rotation: FloatProperty(
+        name="Starting angle", subtype="ANGLE", min=-tau, max=tau,
+        description="Angle at the start of insertion relative to the assembled pose",
+    )
+    rotation_axis: EnumProperty(name="Rotation axis", items=(
+        ("Z", "World Z", "Rotate around the world Z axis"),
+        ("X", "World X", "Rotate around the world X axis"),
+        ("Y", "World Y", "Rotate around the world Y axis"),
+        ("TRAVEL", "Travel Direction", "Rotate around the direction of travel"),
+    ))
+    rotation_pivot: EnumProperty(name="Rotation pivot", items=(
+        ("CENTER", "Piece Center", "Rotate around the center of the piece's bounds"),
+        ("ORIGIN", "Object Origin", "Rotate around the object's origin"),
+        ("CURSOR", "3D Cursor", "Rotate around the 3D cursor"),
+    ))
+    sample_mm: FloatProperty(name="Sample travel (mm)", default=.25, min=.05, max=10, precision=2,
+                             description="Maximum estimated movement between tested poses")
     steps: IntProperty(default=1, min=1, max=150, options={"HIDDEN", "SKIP_SAVE"})
 
     @classmethod
@@ -214,8 +233,12 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         if obj is not None:
             layout.label(text=obj.name, icon="MESH_DATA", translate=False)
         layout.use_property_split = True
-        for prop in ("axis", "distance"):
+        for prop in ("axis", "distance", "rotation"):
             layout.prop(self, prop)
+        if self.rotation:
+            for prop in ("rotation_axis", "rotation_pivot", "sample_mm"):
+                layout.prop(self, prop)
+            layout.label(text="Rotating paths are sampled.", icon="INFO")
 
     def execute(self, context: bpy.types.Context) -> set[str]:
         moving = assembly.current_member(context)
@@ -229,14 +252,28 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         else:
             direction = Vector((0, 0, 0))
             direction["XYZ".index(self.axis[1])] = 1 if self.axis[0] == "+" else -1
+        rotation_axis, pivot = None, None
+        if self.rotation:
+            rotation_axis = direction if self.rotation_axis == "TRAVEL" else Vector((
+                float(self.rotation_axis == "X"), float(self.rotation_axis == "Y"), float(self.rotation_axis == "Z"),
+            ))
+            if self.rotation_pivot == "ORIGIN":
+                pivot = moving.matrix_world.translation
+            elif self.rotation_pivot == "CURSOR":
+                pivot = context.scene.cursor.location
         try:
-            hit = assembly.insertion_hit(context, moving, pieces, direction, self.distance, self.steps)
+            hit = assembly.insertion_hit(context, moving, pieces, direction, self.distance, self.steps,
+                                         rotation_axis=rotation_axis, rotation_radians=self.rotation,
+                                         pivot_world=pivot, sample_mm=self.sample_mm)
         except (MeshError, RuntimeError, ValueError) as error:
             return report_failure(self, error)
         if hit is not None:
-            self.report({"WARNING"}, tr("Blocked by {name} at {distance:.2f} mm.").format(
-                name=hit.obstacle.name, distance=hit.distance_mm,
-            ))
+            message = ("Blocked by {name} at {distance:.2f} mm and {angle:.1f}°." if self.rotation
+                       else "Blocked by {name} at {distance:.2f} mm.")
+            self.report({"WARNING"}, tr(message).format(name=hit.obstacle.name, distance=hit.distance_mm,
+                                                       angle=degrees(hit.rotation_radians)))
+        elif self.rotation:
+            self.report({"INFO"}, tr("No overlap found at the sampled poses."))
         else:
             self.report({"INFO"}, tr("No overlap found along the insertion path."))
         return {"FINISHED"}
