@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.6.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.7.zip
 ```
 
 ## Geometría y borradores
@@ -48,7 +48,7 @@ Configura **Grosor mínimo (mm)** para marcar paredes delgadas en un sólido cer
 
 En modo Fácil, usa **Región de superficie → Por ranura de material → Separar por material** para procesar varias ranuras en una operación. Elige la ranura del cuerpo principal y la profundidad de las zonas a extraer. Los cortes avanzan en el orden de las ranuras. Si dos zonas contiguas comparten volumen interior, ese volumen queda con la que se procesa primero. El cuerpo principal conserva el resto. La operación publica todas las piezas juntas después de comprobar su cierre y volumen. Conserva la malla original y usa el color de cada material para la vista previa.
 
-Elige un conector **Cilíndrico** o **Hexagonal** en Región de superficie. TNTMesh ordena las caras interiores planas por área y comprueba el espacio, la pared y la profundidad a ambos lados antes de generar el pin y la cavidad. Puedes generar pines integrados o pasadores independientes. **Conectar al cuerpo principal** ajusta cada inserto al cuerpo retenido después de separar todos los materiales. Si una unión carece de espacio, se conservan el original y los resultados previos. La búsqueda considera hasta doce planos. Las uniones muy curvas pueden carecer de caras planas aptas.
+Elige un conector **Cilíndrico** o **Hexagonal** en Región de superficie. TNTMesh prueba primero las caras interiores planas. En una unión curva busca un eje común de inserción y comprueba que el pin y la cavidad encajen en todo su ancho con el grosor seleccionado en ambas piezas. Puedes generar pines integrados o pasadores independientes. **Conectar al cuerpo principal** ajusta cada inserto al cuerpo retenido después de separar todos los materiales. Si la búsqueda no encuentra espacio, se conservan el original y los resultados previos.
 
 **Cortes simétricos** refleja un plano recto respecto al eje y centro elegidos. Separa el primer plano del centro para obtener dos piezas exteriores y una central. Desde los detalles del corte puedes desplazar o girar el segundo plano sobre sus propios ejes. Los conectores siguen ese ajuste y ambas uniones deben pasar la comprobación de espacio. Si usas plantillas personalizadas, TNTMesh refleja también la forma del pin y de su cavidad. En Borrador puedes usar cada una de las tres piezas como entrada de cortes posteriores.
 

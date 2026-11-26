@@ -659,6 +659,36 @@ class WorkflowTests(unittest.TestCase):
             self.assertAlmostEqual(self.checked(pin), 6 * sin(tau / 6) * 1.5**2 * 3 / 2, places=4)
         self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
 
+    def test_region_connector_can_join_a_curved_shell_patch(self):
+        profile = [(-12, -8), (12, -8), (12, 0), (6, 3), (0, 4), (-6, 3), (-12, 0)]
+        count = len(profile)
+        vertices = [(x, y, z) for y in (10, -10) for x, z in profile]
+        faces = [tuple(reversed(range(count))), tuple(range(count, 2 * count))]
+        faces.extend((i, (i + 1) % count, (i + 1) % count + count, i + count) for i in range(count))
+        original = bpy.data.meshes.new("Cambered shell")
+        original.from_pydata(vertices, [], faces)
+        original.update()
+        source = bpy.data.objects.new(original.name, original)
+        bpy.context.collection.objects.link(source)
+        bpy.context.view_layer.objects.active = source
+        for face in original.polygons:
+            face.select = face.normal.z > .5
+        original.update()
+        self.settings.cut_kind = "REGION"
+        self.settings.region_method = "SELECTION"
+        self.settings.region_depth = 4.3
+        self.settings.region_connector = "HEX"
+        self.settings.diameter = 7
+        self.settings.insertion = 1.4
+        self.settings.wall = .45
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        remainder, patch = self.parts()
+        self.assertGreater(self.checked(remainder), 3050)
+        self.assertLess(self.checked(patch), 1990)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [remainder, patch]))
+        self.assertEqual(source.data, original)
+        self.assertEqual(len(original.vertices), 14)
+
     def test_diagnostics_report_open_edges_without_changing_the_mesh(self):
         bpy.ops.mesh.primitive_plane_add(size=20)
         obj = bpy.context.active_object

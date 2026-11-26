@@ -2,13 +2,12 @@
 from dataclasses import dataclass
 from math import isfinite
 
-import bmesh
 import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
 from mathutils import Matrix, Vector
 
 from .geometry.boolean import ExactBoolean
-from .geometry.mesh import bounds, evaluated_mm, inspect
+from .geometry.mesh import BOOLEAN_VOLUME_NOISE, absolute_volume, bounds, evaluated_mm, inspect
 from .geometry.sweep import box_interval, probe_positions
 from .geometry.triangle_bounds import hierarchy, triangles_from
 from .model import (
@@ -21,7 +20,6 @@ from .model import (
 )
 
 CONTACT_EPSILON = 0.001
-VOLUME_NOISE = 0.00001
 
 
 class TNTMESH_PG_assembly(bpy.types.PropertyGroup):
@@ -116,15 +114,6 @@ def create_body(
     return Body(obj, mesh, lower, upper)
 
 
-def intersection_volume(mesh: bpy.types.Mesh) -> float:
-    bm = bmesh.new()
-    try:
-        bm.from_mesh(mesh)
-        return abs(bm.calc_volume(signed=True)) if bm.faces else 0.0
-    finally:
-        bm.free()
-
-
 def candidate_pair(
     first_lower: Vector, first_upper: Vector, second: Body,
 ) -> bool:
@@ -140,7 +129,7 @@ def measure_intersection(
 ) -> float:
     intersection = engine.run(first, second, "INTERSECT")
     try:
-        return intersection_volume(intersection)
+        return absolute_volume(intersection)
     finally:
         engine.transaction.remove_mesh(intersection)
 
@@ -166,7 +155,7 @@ def overlaps(
                 if not candidate_pair(first.lower, first.upper, second):
                     continue
                 volume = measure_intersection(engine, first.mesh, second.mesh)
-                if volume > VOLUME_NOISE:
+                if volume > BOOLEAN_VOLUME_NOISE:
                     results.append((first.obj, second.obj, volume))
     return results
 
@@ -215,7 +204,7 @@ def insertion_hit(
                         vertex.co = original + offset
                     probe.update()
                     volume = measure_intersection(engine, probe, body.mesh)
-                    if volume > VOLUME_NOISE:
+                    if volume > BOOLEAN_VOLUME_NOISE:
                         found = InsertionHit(body.obj, distance, volume)
                         break
                 wm.progress_update(index)

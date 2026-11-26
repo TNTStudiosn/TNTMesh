@@ -8,6 +8,7 @@ from mathutils import Vector
 from ..model import MeshError
 from .boolean import ExactBoolean
 from .connector import Connector, ConnectorPlacementError, add_connector
+from .curved_connector import connect_curved
 from .region import RegionTool
 
 PLANE_TOLERANCE_MM = .0001
@@ -60,4 +61,7 @@ def connect_region(
             ).meshes
         except ConnectorPlacementError:
             continue
-    raise MeshError("No planar region seam can fit the requested connectors.")
+    curved = connect_curved(engine, remainder, insert, tool, connector, envelope)
+    if curved is not None:
+        return curved
+    raise MeshError("No region seam can fit the requested connectors.")

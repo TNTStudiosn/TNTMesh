@@ -10,12 +10,24 @@ from mathutils import Matrix, Vector
 from ..model import GeometryTransaction, MeshError
 
 VOLUME_EPSILON = 1e-10
+BOOLEAN_VOLUME_NOISE = 1e-5
 
 
 @dataclass(frozen=True)
 class Inspection:
     volume_mm3: float
     shells: int
+
+
+def absolute_volume(mesh: bpy.types.Mesh) -> float:
+    if not mesh.polygons:
+        return 0.0
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(mesh)
+        return abs(bm.calc_volume(signed=True))
+    finally:
+        bm.free()
 
 
 def inspect(mesh: bpy.types.Mesh) -> Inspection:

@@ -145,15 +145,15 @@ def apply_cut(
     context: bpy.types.Context, transaction: GeometryTransaction, mesh: bpy.types.Mesh,
     config: Cut, origin: Vector, unit: float, source: bpy.types.Object,
 ) -> tuple[bpy.types.Mesh, ...]:
+    planar = config.primary if isinstance(config, SymmetricCut) else config
+    if isinstance(planar, PlanarCut) and isinstance(planar.connector, CustomConnector):
+        if source in (planar.connector.pin, planar.connector.socket):
+            raise MeshError("Use connector templates separate from the input model.")
     if isinstance(config, SymmetricCut):
         return split_symmetric(context, transaction, mesh, config)
     if isinstance(config, BaseCut):
         return split_base(context, transaction, mesh, config)
     if isinstance(config, PlanarCut):
-        if isinstance(config.connector, CustomConnector) and source in (
-            config.connector.pin, config.connector.socket
-        ):
-            raise MeshError("Use connector templates separate from the input model.")
         return split(context, transaction, mesh, config)
     original_volume = inspect(mesh).volume_mm3
     if isinstance(config, RegionCut):

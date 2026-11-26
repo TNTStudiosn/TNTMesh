@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.7
 
 - Added face alignment for straight and symmetric cut planes.
 - Added a viewport handle to drag straight and symmetric cut planes along their normal.
 - Reduced the spatial checks needed to find coplanar overlaps and added reproducible dense-mesh benchmarks.
+- Extended region connector placement to curved seams that have room for a shared insertion axis.
 
 ## 0.3.0-alpha.6
 

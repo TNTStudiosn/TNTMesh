@@ -142,8 +142,8 @@ SPANISH = {
     "Find a matching pin position inside the region seam": "Ubica un pin cilíndrico en la unión de la región",
     "Find a matching hexagonal pin position inside the region seam":
         "Ubica un pin hexagonal en la unión de la región",
-    "No planar region seam can fit the requested connectors.":
-        "Ninguna unión plana de la región tiene espacio para los conectores elegidos.",
+    "No region seam can fit the requested connectors.":
+        "Ninguna unión de la región tiene espacio para los conectores elegidos.",
     "Boundary smoothing": "Suavizar contorno",
     "Relax the cut contour along the original surface": "Suaviza el contorno sobre la superficie original",
     "Choose between zero and twelve smoothing passes.": "Elige entre cero y doce pasadas de suavizado.",
