@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass
+from math import isfinite
 
 import bmesh
 import bpy
@@ -8,7 +9,14 @@ from mathutils import Matrix, Vector
 
 from .geometry.boolean import ExactBoolean
 from .geometry.mesh import bounds, evaluated_mm, inspect
-from .model import ASSEMBLY_DIRECTION, PROJECT_ID, ROLE, GeometryTransaction, millimeters_per_unit
+from .model import (
+    ASSEMBLY_DIRECTION,
+    PROJECT_ID,
+    ROLE,
+    GeometryTransaction,
+    MeshError,
+    millimeters_per_unit,
+)
 
 CONTACT_EPSILON = 0.001
 VOLUME_NOISE = 0.00001
@@ -87,6 +95,13 @@ class Body:
     upper: Vector
 
 
+@dataclass(frozen=True)
+class InsertionHit:
+    obstacle: bpy.types.Object
+    distance_mm: float
+    volume_mm3: float
+
+
 def create_body(
     context: bpy.types.Context, transaction: GeometryTransaction, obj: bpy.types.Object,
     reference: Vector, unit: float,
@@ -108,6 +123,26 @@ def intersection_volume(mesh: bpy.types.Mesh) -> float:
         bm.free()
 
 
+def candidate_pair(
+    first_lower: Vector, first_upper: Vector, second: Body,
+) -> bool:
+    return all(
+        min(first_upper[axis], second.upper[axis]) -
+        max(first_lower[axis], second.lower[axis]) > CONTACT_EPSILON
+        for axis in range(3)
+    )
+
+
+def measure_intersection(
+    engine: ExactBoolean, first: bpy.types.Mesh, second: bpy.types.Mesh,
+) -> float:
+    intersection = engine.run(first, second, "INTERSECT")
+    try:
+        return intersection_volume(intersection)
+    finally:
+        engine.transaction.remove_mesh(intersection)
+
+
 def overlaps(
     context: bpy.types.Context, objects: list[bpy.types.Object],
 ) -> list[tuple[bpy.types.Object, bpy.types.Object, float]]:
@@ -126,13 +161,55 @@ def overlaps(
             for second in bodies[i + 1:]:
                 if second.lower.x >= first.upper.x - CONTACT_EPSILON:
                     break
-                if any(min(first.upper[axis], second.upper[axis]) -
-                       max(first.lower[axis], second.lower[axis]) <= CONTACT_EPSILON
-                       for axis in range(3)):
+                if not candidate_pair(first.lower, first.upper, second):
                     continue
-                intersection = engine.run(first.mesh, second.mesh, "INTERSECT")
-                volume = intersection_volume(intersection)
-                transaction.remove_mesh(intersection)
+                volume = measure_intersection(engine, first.mesh, second.mesh)
                 if volume > VOLUME_NOISE:
                     results.append((first.obj, second.obj, volume))
     return results
+
+
+def insertion_hit(
+    context: bpy.types.Context, moving: bpy.types.Object, obstacles: list[bpy.types.Object],
+    direction: Vector, distance_mm: float, steps: int,
+) -> InsertionHit | None:
+    if (not all(map(isfinite, (*direction, distance_mm))) or direction.length_squared == 0
+            or distance_mm <= 0 or steps < 1):
+        raise MeshError("Choose an insertion direction, travel distance and step count.")
+    axis = direction.normalized()
+    unit = millimeters_per_unit(context.scene)
+    reference = moving.matrix_world.translation.copy()
+    wm = context.window_manager
+    wm.progress_begin(0, steps + 1)
+    try:
+        with GeometryTransaction() as transaction:
+            moving_body = create_body(context, transaction, moving, reference, unit)
+            bodies = [create_body(context, transaction, obj, reference, unit)
+                      for obj in obstacles if obj != moving]
+            reach = axis * distance_mm
+            swept = bounds((moving_body.lower, moving_body.upper,
+                            moving_body.lower + reach, moving_body.upper + reach))
+            nearby = [body for body in bodies if candidate_pair(*swept, body)]
+            if not nearby:
+                return None
+            probe = transaction.own_mesh(moving_body.mesh.copy())
+            engine = ExactBoolean(context, transaction)
+            for index in range(steps + 1):
+                distance = distance_mm * (steps - index) / steps
+                offset = axis * distance
+                candidates = [body for body in nearby if candidate_pair(
+                    moving_body.lower + offset, moving_body.upper + offset, body,
+                )]
+                if candidates:
+                    for original, vertex in zip(moving_body.mesh.vertices, probe.vertices, strict=True):
+                        vertex.co = original.co + offset
+                    probe.update()
+                    for body in candidates:
+                        volume = measure_intersection(engine, probe, body.mesh)
+                        if volume > VOLUME_NOISE:
+                            return InsertionHit(body.obj, distance, volume)
+                wm.progress_update(index + 1)
+    finally:
+        wm.progress_end()
+        context.view_layer.update()
+    return None

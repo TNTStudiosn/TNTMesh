@@ -181,6 +181,20 @@ SPANISH = {
     "{count} overlap(s). {first} and {second}: {volume:.3f} mm³":
         "{count} traslape(s). {first} y {second}: {volume:.3f} mm³",
     "No volume overlaps at the assembled position.": "No hay traslapes de volumen en el ensamblaje.",
+    "Check Insertion Path": "Revisar recorrido de inserción",
+    "Test the selected piece for collisions along a straight insertion path":
+        "Comprueba si la pieza elegida choca durante una inserción recta",
+    "Start from": "Dirección de partida",
+    "Assembly Direction": "Dirección del ensamblaje",
+    "Use the piece's suggested separation direction": "Usa la dirección de separación sugerida",
+    "Travel distance (mm)": "Recorrido (mm)",
+    "Intervals": "Intervalos",
+    "Checks discrete positions.": "Comprueba posiciones discretas.",
+    "Smaller intervals detect more obstructions.": "Usa intervalos más cortos para detectar más obstáculos.",
+    "Choose an insertion direction, travel distance and step count.":
+        "Elige la dirección, el recorrido y la cantidad de intervalos.",
+    "Blocked by {name} at {distance:.2f} mm.": "Bloqueo con {name} a {distance:.2f} mm.",
+    "No overlap at {count} sampled positions.": "Sin traslapes en {count} posiciones revisadas.",
     "Piece settings": "Ajustes de pieza",
     "Preview color": "Color de vista previa",
     "Explosion (mm)": "Separación visual (mm)",

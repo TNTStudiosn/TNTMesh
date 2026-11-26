@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import bpy
-from bpy.props import EnumProperty
-from mathutils import Matrix
+from bpy.props import EnumProperty, FloatProperty, IntProperty
+from mathutils import Matrix, Vector
 
 from . import assembly
 from .geometry.mesh import evaluated_mm, inspect
@@ -189,6 +189,62 @@ class TNTMESH_UL_assembly_parts(bpy.types.UIList):
         row.prop(item, "name", text="", emboss=False)
 
 
+class TNTMESH_OT_check_insertion(bpy.types.Operator):
+    bl_idname = "tntmesh.check_insertion"
+    bl_label = "Check Insertion Path"
+    bl_description = "Test the selected piece for collisions along a straight insertion path"
+
+    axis: EnumProperty(name="Start from", items=[
+        ("AUTO", "Assembly Direction", "Use the piece's suggested separation direction"),
+        *((axis, axis, "") for axis in ("+X", "-X", "+Y", "-Y", "+Z", "-Z")),
+    ])
+    distance: FloatProperty(name="Travel distance (mm)", default=25, min=.01, max=10000, precision=2)
+    steps: IntProperty(name="Intervals", default=25, min=1, max=150)
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.mode == "OBJECT" and len(assembly.members(context)) > 1
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
+        return context.window_manager.invoke_props_dialog(self, width=345)
+
+    def draw(self, context: bpy.types.Context) -> None:
+        layout = self.layout
+        obj = assembly.current_member(context)
+        if obj is not None:
+            layout.label(text=obj.name, icon="MESH_DATA", translate=False)
+        layout.use_property_split = True
+        for prop in ("axis", "distance", "steps"):
+            layout.prop(self, prop)
+        layout.separator()
+        layout.label(text="Checks discrete positions.", icon="INFO")
+        layout.label(text="Smaller intervals detect more obstructions.")
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        moving = assembly.current_member(context)
+        pieces = assembly.members(context)
+        if moving is None or len(pieces) < 2:
+            return {"CANCELLED"}
+        if self.axis == "AUTO":
+            direction = next(offset for obj, _, offset in assembly.explosion_offsets(
+                pieces, context.evaluated_depsgraph_get(), 1,
+            ) if obj == moving)
+        else:
+            direction = Vector((0, 0, 0))
+            direction["XYZ".index(self.axis[1])] = 1 if self.axis[0] == "+" else -1
+        try:
+            hit = assembly.insertion_hit(context, moving, pieces, direction, self.distance, self.steps)
+        except (MeshError, RuntimeError, ValueError) as error:
+            return report_failure(self, error)
+        if hit is not None:
+            self.report({"WARNING"}, tr("Blocked by {name} at {distance:.2f} mm.").format(
+                name=hit.obstacle.name, distance=hit.distance_mm,
+            ))
+        else:
+            self.report({"INFO"}, tr("No overlap at {count} sampled positions.").format(count=self.steps + 1))
+        return {"FINISHED"}
+
+
 class TNTMESH_PT_assembly(bpy.types.Panel):
     bl_label = "Assembly"
     bl_space_type = "VIEW_3D"
@@ -230,6 +286,7 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
             if state.distance > 0:
                 layout.operator("tntmesh.assembly_action", text="Back to Assembly", icon="LOOP_BACK").action = "RESET"
             layout.operator("tntmesh.check_assembly", icon="VIEWZOOM")
+            layout.operator("tntmesh.check_insertion", icon="PLAY")
 
         if obj is not None:
             header, body = layout.panel("tntmesh_assembly_details", default_closed=True)
@@ -242,4 +299,5 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
 
 
 CLASSES = (TNTMESH_OT_assembly_project, TNTMESH_OT_assembly_action,
-           TNTMESH_OT_check_assembly, TNTMESH_UL_assembly_parts, TNTMESH_PT_assembly)
+           TNTMESH_OT_check_assembly, TNTMESH_OT_check_insertion, TNTMESH_UL_assembly_parts,
+           TNTMESH_PT_assembly)

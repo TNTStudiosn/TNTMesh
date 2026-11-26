@@ -238,6 +238,17 @@ def capture_material_separation():
     cancel_line()
 
 
+def open_insertion_dialog():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.check_insertion("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
+
+
+def capture_insertion_dialog():
+    screenshot("13-insertion.png")
+    cancel_line()
+
+
 def start_line():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -370,10 +381,15 @@ material_steps = (
     (open_material_separation, capture_material_separation)
     if os.environ.get("TNTMESH_TEST_MATERIAL") == "1" else ()
 )
+insertion_steps = (
+    (open_insertion_dialog, capture_insertion_dialog)
+    if os.environ.get("TNTMESH_TEST_INSERTION") == "1" else ()
+)
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *phase3_steps, split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
-    *export_steps, *printer_steps, *assembly_steps, *material_steps, *base_steps, draft_panel, finish,
+    *export_steps, *printer_steps, *assembly_steps, *material_steps, *insertion_steps,
+    *base_steps, draft_panel, finish,
 ))
 
 

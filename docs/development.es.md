@@ -36,7 +36,9 @@ En modo Fácil, usa **Región de superficie → Por ranura de material → Separ
 
 **Separar base** busca contornos cerrados de apoyo cerca de la parte inferior del modelo sobre el eje Z global. Pon la figura de pie y usa **Detectar apoyos** para revisar los contornos. Una altura de búsqueda de cero analiza el 22% inferior. Cada apoyo conserva su altura e inclinación, incluso si los pies están sobre niveles distintos. En los ajustes puedes mover cada apoyo, activar su conector y cambiar el diámetro. Usa una altura suficiente para incluir la base y revisa el resultado si los pies se ensanchan por encima del contacto. Borrador copia los ajustes de los apoyos de la malla de origen.
 
-**Ensamblaje** agrupa las piezas por proyecto y permite seleccionarlas, encuadrarlas, ocultarlas, duplicarlas y medirlas. El deslizador separa la geometría solo en la vista previa. Las posiciones de exportación se conservan. Las piezas densas se muestran con su caja envolvente. **Revisar ensamblaje** busca traslapes de volumen en la posición actual. La simulación de inserción queda pendiente.
+**Ensamblaje** agrupa las piezas por proyecto y permite seleccionarlas, encuadrarlas, ocultarlas, duplicarlas y medirlas. El deslizador separa la geometría solo en la vista previa. Las posiciones de exportación se conservan. Las piezas densas se muestran con su caja envolvente. **Revisar ensamblaje** busca traslapes de volumen en la posición actual.
+
+**Revisar recorrido de inserción** comprueba una trayectoria recta hacia la posición de ensamblaje. Elige la dirección de partida, el recorrido y los intervalos. La prueba incluye los extremos, considera las demás piezas del proyecto e indica el primer bloqueo detectado. Usa copias temporales y conserva la geometría y la posición de la escena. Un obstáculo pequeño puede quedar entre dos posiciones revisadas. Quedan pendientes la detección continua y los recorridos con rotación.
 
 La exportación 3MF guarda mallas en milímetros como objetos independientes en posición de ensamblaje. Incluye geometría y deja los ajustes de impresión, soportes y materiales al slicer. [Especificación 3MF Core](https://github.com/3MFConsortium/spec_core)
 
