@@ -383,6 +383,57 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(self.parts()), 3)
         self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
 
+    def test_connector_patterns_validate_and_leave_the_current_layout_on_failure(self):
+        source = self.cube(48)
+        self.settings.connector = "HEX"
+        self.settings.diameter = 4
+        self.settings.loose_pins = True
+        self.settings.kerf = .4
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="CONTOUR", count=4, setback=5), {"FINISHED"})
+        for item in self.settings.connector_points:
+            self.assertAlmostEqual(max(map(abs, item.position)), 19)
+        self.assertEqual(bpy.ops.tntmesh.connector_point(action="CLEAR"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="LINE", count=3, spacing=8, angle=tau / 4),
+                         {"FINISHED"})
+        for point, y in zip(self.settings.connector_points, (-8, 0, 8), strict=True):
+            self.assertAlmostEqual(point.position.x, 0, places=5)
+            self.assertAlmostEqual(point.position.y, y, places=5)
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="CIRCLE", count=4, spacing=8), {"FINISHED"})
+        ring = [Vector(point.position) for point in self.settings.connector_points]
+        self.assertTrue(all(abs((ring[i - 1] - point).length - 8) < .001 for i, point in enumerate(ring)))
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="GRID", count=4, spacing=1), {"CANCELLED"})
+        self.assertEqual([point.position[:] for point in self.settings.connector_points],
+                         [tuple(point) for point in ring])
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+        self.assertFalse(source.hide_get())
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="GRID", count=4, spacing=8), {"FINISHED"})
+        self.assertEqual({tuple(point.position) for point in self.settings.connector_points},
+                         {(x, y) for x in (-4, 4) for y in (-4, 4)})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 6)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
+    def test_connector_layout_reflection_deduplicates_and_clipboard_round_trips(self):
+        self.cube(48)
+        self.settings.connector = "HEX"
+        self.settings.pin_positive = True
+        self.settings.diameter = 3
+        self.settings.connector_points.add().position = (7, 5)
+        for action in ("MIRROR_X", "MIRROR_X", "MIRROR_Y"):
+            self.assertEqual(bpy.ops.tntmesh.connector_transfer(action=action), {"FINISHED"})
+        points = tuple(tuple(item.position) for item in self.settings.connector_points)
+        self.assertEqual(set(points), {(x, y) for x in (-7, 7) for y in (-5, 5)})
+        self.assertEqual(len(points), 4)
+        clipboard = importlib.import_module(f"{self.addon.__name__}.geometry.connector_clipboard")
+        design = self.settings.standard_connector("HEX", 4)
+        self.assertEqual(clipboard.decode(clipboard.encode(design, points, True)), (design, points, True))
+        with self.assertRaises(self.addon.model.MeshError):
+            clipboard.decode('{"tntmesh_connector":true}')
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        self.assertEqual(len(self.parts()), 2)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, self.parts()))
+
     def test_multiple_fixed_connectors(self):
         self.cube(40)
         self.settings.connector = "HEX"

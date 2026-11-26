@@ -7,7 +7,7 @@ from mathutils import Euler, Matrix, Vector
 
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean, half_box
-from .connector import Connector, add_connector
+from .connector import Connector, add_connector, safe_centers
 from .custom_connector import CustomConnector, add_custom_connector
 from .mesh import bounds, inspect
 from .polygon import Point2
@@ -37,6 +37,26 @@ class PlaneSplit:
 
 def invert_frame(frame: Matrix) -> Matrix:
     return frame @ Matrix.Diagonal(Vector((1.0, -1.0, -1.0)))
+
+
+def connector_frame(
+    cut: PlaneSplit, frame: Matrix, positions: tuple[Point2, ...], flip: bool,
+) -> tuple[PlaneSplit, Matrix, tuple[Vector, ...] | None]:
+    requested = (tuple(Vector((x, -y if flip else y, 0)) for x, y in positions) if positions else None)
+    return (cut.flipped(), invert_frame(frame), requested) if flip else (cut, frame, requested)
+
+
+def validate_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector,
+    positions: tuple[Point2, ...], flip: bool,
+) -> None:
+    design.validate()
+    cut, frame, requested = connector_frame(cut, frame, positions, flip)
+    safe_centers(
+        engine, cut.minus, cut.plus, frame, (cut.position - kerf / 2, cut.position + kerf / 2),
+        design.depths, design.envelope, design.sides, cut.epsilon,
+        min(cut.epsilon, design.anchor / 10, design.wall / 10), design.count, requested=requested,
+    )
 
 
 def axis_frame(
@@ -104,13 +124,7 @@ def split(
             engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon
         ).meshes
     if config.connector is not None:
-        requested = None
-        if config.connector_positions:
-            requested = tuple(Vector((x, -y if config.pin_positive else y, 0))
-                              for x, y in config.connector_positions)
-        if config.pin_positive:
-            cut = cut.flipped()
-            frame = invert_frame(frame)
+        cut, frame, requested = connector_frame(cut, frame, config.connector_positions, config.pin_positive)
         first, second, *pins = add_connector(
             engine, cut.minus, cut.plus, frame, cut.position, config.kerf, config.connector,
             cut.epsilon, requested=requested,

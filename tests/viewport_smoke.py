@@ -495,6 +495,21 @@ def suggest_connectors():
 
 def capture_connector_suggestion():
     screenshot("20-connector-suggestion.png")
+    settings = bpy.context.scene.tntmesh_settings
+    wm = bpy.context.window_manager
+    original = wm.clipboard
+    try:
+        assert bpy.ops.tntmesh.connector_transfer(action="COPY") == {"FINISHED"}
+        copied = wm.clipboard
+        assert '"tntmesh_connector":1' in copied
+        settings.diameter = 3
+        assert bpy.ops.tntmesh.connector_transfer(action="PASTE") == {"FINISHED"}
+        assert settings.diameter == 5 and len(settings.connector_points) == 1
+        wm.clipboard = "{}"
+        assert bpy.ops.tntmesh.connector_transfer(action="PASTE") == {"CANCELLED"}
+        assert settings.diameter == 5 and len(settings.connector_points) == 1
+    finally:
+        wm.clipboard = original
     assert bpy.ops.tntmesh.connector_point(action="ADD") == {"FINISHED"}
     assert len(bpy.context.scene.tntmesh_settings.connector_points) == 2
     assert bpy.ops.tntmesh.connector_point(action="REMOVE") == {"FINISHED"}
@@ -502,6 +517,31 @@ def capture_connector_suggestion():
     assert bpy.ops.tntmesh.connector_point(action="CLEAR") == {"FINISHED"}
     assert not bpy.context.scene.tntmesh_settings.connector_points
     bpy.context.scene.tntmesh_settings.connector = "ROUND"
+
+
+def start_connector_placement():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.draw_plane("INVOKE_DEFAULT", place_connector=True) == {"RUNNING_MODAL"}
+
+
+def click_connector_position():
+    from bpy_extras.view3d_utils import location_3d_to_region_2d
+    from mathutils import Vector
+
+    window, area, region = viewport()
+    position = location_3d_to_region_2d(region, area.spaces.active.region_3d, Vector((4, 3, 0)))
+    window.event_simulate(type="LEFTMOUSE", value="PRESS", x=region.x + round(position.x),
+                          y=region.y + round(position.y))
+
+
+def verify_connector_placement():
+    settings = bpy.context.scene.tntmesh_settings
+    assert len(settings.connector_points) == 1
+    x, y = settings.connector_points[0].position
+    assert abs(x - 4) < .3 and abs(y - 3) < .3, (x, y)
+    screenshot("21-connector-placement.png")
+    assert bpy.ops.tntmesh.connector_point(action="CLEAR") == {"FINISHED"}
 
 
 def open_export_browser():
@@ -562,7 +602,8 @@ gizmo_steps = (
     if line_steps and os.environ.get("TNTMESH_TEST_GIZMO") == "1" else ()
 )
 connector_steps = (
-    (suggest_connectors, capture_connector_suggestion)
+    (suggest_connectors, capture_connector_suggestion, start_connector_placement,
+     click_connector_position, verify_connector_placement)
     if os.environ.get("TNTMESH_TEST_CONNECTORS") == "1" else ()
 )
 export_steps = (

@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.7.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.8.zip
 ```
 
 ## Geometría y borradores
@@ -27,6 +27,12 @@ En **Directo** y **Cortes simétricos**, pulsa **Alinear con cara** y elige una 
 Arrastra la flecha cian para mover el plano y actualizar **Desplazamiento (mm)**. Pulsa Esc durante el arrastre para recuperar el desplazamiento anterior. Puedes ocultar la flecha desde **Ajustes de corte**.
 
 En un corte directo, **Sugerir conectores** usa el área de unión y el material disponible en ambos lados para proponer cantidad, diámetro, profundidad, forma y posiciones. El diámetro y la profundidad actuales funcionan como límites superiores. La propuesta conserva el grosor mínimo, las holguras y la opción de pasadores independientes. Usa la normal al plano como eje de inserción y elige el lado del pin según la profundidad disponible para la cavidad. En **Ajustes de corte** puedes editar las posiciones en milímetros sobre el plano o volver al reparto automático. En Borrador, la sugerencia evalúa la pieza de entrada del corte seleccionado y sus cortes previos. Al generar las piezas, TNTMesh vuelve a validar los ajustes.
+
+Usa **Patrón de conectores** para distribuir posiciones en línea, círculo o cuadrícula. La distancia se mide entre centros de conectores vecinos. El patrón se centra sobre las posiciones actuales o sobre el origen de entrada si la lista está vacía. En Fácil, **Colocar con clic** añade un conector sobre el plano de corte. Estos comandos conservan las posiciones anteriores si el nuevo reparto invade una cavidad, sale del material o deja una pared demasiado delgada.
+
+El patrón **Contorno** reparte las posiciones por longitud de arco sobre el contorno exterior de mayor área y las desplaza hacia dentro según el retiro del borde. Ajusta la rotación del patrón para desplazar el punto de partida si alguna posición queda muy cerca de una esquina.
+
+**Reflejar X** y **Reflejar Y** añaden posiciones simétricas respecto al centro del plano de corte. Los iconos de copiar y pegar junto a **Sugerir conectores** transfieren la forma, dimensiones, tolerancias, lado del pin y posiciones entre cortes rectos. Al pegar, TNTMesh valida el corte de destino antes de aplicar los ajustes.
 
 Los conectores se colocan en cortes rectos. La búsqueda comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 

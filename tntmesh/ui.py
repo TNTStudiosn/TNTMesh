@@ -62,7 +62,11 @@ def cut_properties(
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
         if settings.cut_kind == "PLANAR" and settings.connector != "CUSTOM":
-            layout.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
+            tools = layout.row(align=True)
+            tools.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
+            if settings.connector != "NONE":
+                tools.operator("tntmesh.connector_transfer", text="", icon="COPYDOWN").action = "COPY"
+            tools.operator("tntmesh.connector_transfer", text="", icon="PASTEDOWN").action = "PASTE"
         if settings.connector == "CUSTOM":
             layout.prop(settings, "pin_template")
             layout.prop(settings, "socket_template")
@@ -282,6 +286,10 @@ class TNTMESH_PT_main(bpy.types.Panel):
                 if settings.cut_kind in {"PLANAR", "SYMMETRY"}:
                     body.prop(settings, "show_cut_handle")
                 cut_details(body, settings, obj)
+                if settings.cut_kind == "PLANAR" and settings.connector in {"ROUND", "HEX"}:
+                    body.operator(
+                        "tntmesh.draw_plane", text="Pick Connector Position", icon="PIVOT_CURSOR",
+                    ).place_connector = True
 
             action = layout.row()
             action.scale_y = 1.45

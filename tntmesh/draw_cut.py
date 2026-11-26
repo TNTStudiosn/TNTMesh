@@ -5,6 +5,7 @@ from bpy_extras.view3d_utils import region_2d_to_location_3d, region_2d_to_vecto
 from mathutils import Euler, Vector
 
 from . import draft
+from .connector_ui import set_valid_positions
 from .draw_snapping import CursorPoint, SurfacePicker
 from .geometry.planar import axis_frame
 from .geometry.polygon import Point2, closed_outline, path_outline
@@ -102,9 +103,12 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
     bl_options = {"UNDO"}
 
     align_face: BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
+    place_connector: BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
 
     @classmethod
     def description(cls, context: bpy.types.Context, properties: bpy.types.OperatorProperties) -> str:
+        if properties.place_connector:
+            return tr("Pick a position for a connector on the cut plane")
         if properties.align_face:
             return tr("Orient the cut using a face normal and keep the current offset")
         return tr(cls.bl_description)
@@ -125,10 +129,12 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         self._source = active_mesh(context)
         settings = context.scene.tntmesh_settings
         self._shape = settings.cut_kind
+        if self.place_connector and (self._shape != "PLANAR" or settings.connector not in {"ROUND", "HEX"}):
+            return {"CANCELLED"}
         if self.align_face and self._shape not in {"PLANAR", "SYMMETRY"}:
             return {"CANCELLED"}
         self._snapping = None
-        snap = "SURFACE" if self.align_face else settings.draw_snap
+        snap = "VIEW" if self.place_connector else "SURFACE" if self.align_face else settings.draw_snap
         if snap != "VIEW":
             try:
                 evaluated = self._source.evaluated_get(context.evaluated_depsgraph_get())
@@ -149,6 +155,8 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         }.get(self._shape, "Click the first point of the cut · Esc to cancel")
         if self.align_face:
             instruction = "Click a face to align the cut · Esc to cancel"
+        if self.place_connector:
+            instruction = "Click a connector position · Esc to cancel"
         self._area.header_text_set(tr(instruction))
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
@@ -188,6 +196,8 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             return {"RUNNING_MODAL"}
 
         click = self._pick(x, y)
+        if self.place_connector:
+            return self._finish_connector(context, click.screen)
         if self.align_face:
             return self._finish_alignment(context, click)
         if self._is_stroke:
@@ -213,6 +223,38 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
         settings.offset = offset
         settings.axis = "FREE"
         settings.show_plane = True
+        self.cleanup()
+        return {"FINISHED"}
+
+    def _finish_connector(self, context: bpy.types.Context, pixel: Vector) -> set[str]:
+        settings = context.scene.tntmesh_settings
+        depsgraph = context.evaluated_depsgraph_get()
+        pivot = model_pivot(self._source.evaluated_get(depsgraph))
+        frame = axis_frame(settings.axis, tuple(settings.rotation))
+        normal = frame.col[2]
+        ray = region_2d_to_vector_3d(self._region, self._view, pixel)
+        incidence = normal.dot(ray)
+        extents = project_bounds(self._source, depsgraph, frame)
+        if abs(incidence) < .005 or extents is None:
+            self.report({"WARNING"}, tr("Rotate the view to see the cut plane."))
+            return {"RUNNING_MODAL"}
+        unit = millimeters_per_unit(context.scene)
+        lower, upper = extents
+        height = (lower.z + upper.z) / 2 + settings.offset / unit
+        origin = region_2d_to_location_3d(self._region, self._view, pixel, pivot)
+        point = origin + ray * ((height - normal.dot(origin)) / incidence)
+        relative = frame.transposed() @ (point - pivot) * unit
+        planned = (*[tuple(item.position) for item in settings.connector_points],
+                   (round(relative.x, 3), round(relative.y, 3)))
+        try:
+            set_valid_positions(context, settings, planned)
+        except MeshError as error:
+            self.report({"WARNING"}, tr(str(error)))
+            return {"RUNNING_MODAL"}
+        except (RuntimeError, ValueError) as error:
+            self.cleanup()
+            return report_failure(self, error)
+        settings.connector_point_index = len(planned) - 1
         self.cleanup()
         return {"FINISHED"}
 
@@ -285,7 +327,7 @@ class TNTMESH_OT_draw_plane(bpy.types.Operator, MeshOperator):
             shader.bind()
             shader.uniform_float("color", (0.0, 1.0, 1.0, 1.0))
             batch_for_shader(shader, "LINE_STRIP", {"pos": [point.screen for point in points]}).draw(shader)
-        if self._pointer is not None and self._pointer.surface is not None:
+        if self._pointer is not None and (self._pointer.surface is not None or self.place_connector):
             shader = gpu.shader.from_builtin("POINT_UNIFORM_COLOR")
             shader.bind()
             shader.uniform_float("size", 9.0)

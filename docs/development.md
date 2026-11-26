@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.7.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.8.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -33,6 +33,12 @@ For **Straight** and **Symmetric Cuts**, click **Align to Face**, then click a f
 Drag the cyan arrow to move the plane and update **Offset (mm)**. Press Esc during the drag to restore the previous offset. The handle follows the plane preview and can be hidden from **Cut settings**.
 
 On a straight cut, **Suggest Connectors** uses the seam area and available material on both sides to propose pin count, diameter, insertion depth, shape and positions. The current diameter and insertion act as upper limits. The suggestion keeps the wall requirement, clearances and separate-pin setting. It uses the cut normal for insertion and picks the pin side with better socket depth. In **Cut settings**, edit the positions in millimeters along the cut plane or return to automatic placement. In a draft, the suggestion evaluates the selected cut's input, including cuts upstream of it. Generating pieces validates the current settings again.
+
+Use **Connector Pattern** to lay out a line, circle or grid. Spacing is measured between adjacent connector centers. A pattern is centered on the current set of positions, or the input origin when the list is empty. In Easy mode, **Pick Connector Position** adds one connector at a point on the cut plane. These commands keep the previous positions if the new layout intersects a cavity, exceeds the available material or leaves too little wall.
+
+The **Contour** pattern spaces positions by arc length along the largest outer seam and moves them into the solid by the specified edge setback. Adjust the pattern rotation to move the starting point around the contour if a position falls too close to a corner.
+
+**Mirror X** and **Mirror Y** add reflected positions across the center of the cut frame. The copy and paste icons next to **Suggest Connectors** transfer the shape, dimensions, tolerances, pin side and positions between straight cuts. Paste checks the destination cut before applying the setup.
 
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 

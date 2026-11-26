@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.8
 
 - Removed near-coincident vertices around zero-area faces produced by surface-region extraction.
 - Added validated connector suggestions with editable dimensions, positions and pin side for straight cuts and drafts.
+- Added validated line, circle, grid and contour connector patterns and single-position placement in the viewport.
+- Added mirrored layouts and validated copy and paste for connector setups.
 
 ## 0.3.0-alpha.7
 
