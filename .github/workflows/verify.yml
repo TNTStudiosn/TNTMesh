@@ -51,15 +51,33 @@ jobs:
     runs-on: macos-15
     env:
       TNTMESH_BLENDER_VERSION: '4.5.17'
+      # blender-4.5.17.sha256 from download.blender.org/release/Blender4.5/
+      TNTMESH_MACOS_BLENDER_SHA256: 42e93c32d8c7a2eff057139de332fbab029ba21d08163b14269e7c342163e406
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/tntmesh-blender-macos
+          key: blender-macos-arm64-${{ env.TNTMESH_BLENDER_VERSION }}-${{ env.TNTMESH_MACOS_BLENDER_SHA256 }}
       - name: Mount verified Blender release
         run: |
-          dmg="blender-${TNTMESH_BLENDER_VERSION}-macos-arm64.dmg"
-          url="https://download.blender.org/release/Blender4.5"
-          curl -fsSL --retry 3 "$url/$dmg" -o "$dmg"
-          curl -fsSL --retry 3 "$url/blender-${TNTMESH_BLENDER_VERSION}.sha256" -o blender.sha256
-          grep -F " $dmg" blender.sha256 | shasum -a 256 --check -
+          archive="blender-${TNTMESH_BLENDER_VERSION}-macos-arm64.dmg"
+          dmg="$HOME/tntmesh-blender-macos/$archive"
+          verify() {
+            printf '%s  %s\n' "$TNTMESH_MACOS_BLENDER_SHA256" "$1" | shasum -a 256 --check --status
+          }
+          if [[ ! -f "$dmg" ]] || ! verify "$dmg"; then
+            mkdir -p "$(dirname "$dmg")"
+            for origin in https://download.blender.org https://mirror.clarkson.edu/blender https://mirror.dotsrc.org/blender; do
+              if curl -fsSL --connect-timeout 15 --max-time 180 --retry 2 \
+                  "$origin/release/Blender4.5/$archive" -o "$dmg.partial" && verify "$dmg.partial"; then
+                mv "$dmg.partial" "$dmg"
+                break
+              fi
+              echo "::warning::Blender download could not be verified from $origin"
+            done
+          fi
+          printf '%s  %s\n' "$TNTMESH_MACOS_BLENDER_SHA256" "$dmg" | shasum -a 256 --check -
           mount="$RUNNER_TEMP/tntmesh-blender"
           mkdir -p "$mount"
           hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
