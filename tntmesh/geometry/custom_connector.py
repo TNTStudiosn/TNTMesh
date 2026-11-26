@@ -18,13 +18,21 @@ class CustomConnector:
     wall: float
 
 
-def template(engine: ExactBoolean, obj: bpy.types.Object) -> bpy.types.Mesh:
+@dataclass(frozen=True)
+class CustomPlacement:
+    meshes: tuple[bpy.types.Mesh, bpy.types.Mesh]
+    center: Vector
+
+
+def template(engine: ExactBoolean, obj: bpy.types.Object, reflected: bool) -> bpy.types.Mesh:
     context = engine.context
     if obj.type != "MESH" or obj.name not in context.view_layer.objects:
         raise MeshError("Connector templates must be meshes in this view layer.")
     depsgraph = context.evaluated_depsgraph_get()
     evaluated = obj.evaluated_get(depsgraph)
     linear = evaluated.matrix_world.to_3x3()
+    if reflected:
+        linear = Matrix.Diagonal(Vector((-1, 1, 1))) @ linear
     determinant = linear.determinant()
     if not isfinite(determinant) or determinant == 0:
         raise MeshError("The object transform is singular.")
@@ -50,15 +58,18 @@ def add_custom_connector(
     kerf: float,
     config: CustomConnector,
     epsilon: float,
-) -> tuple[bpy.types.Mesh, bpy.types.Mesh]:
+    *,
+    reflected: bool = False,
+    requested: Vector | None = None,
+) -> CustomPlacement:
     if config.pin is None or config.socket is None or config.pin == config.socket:
         raise MeshError("Choose separate pin and socket templates.")
     if kerf != 0:
         raise MeshError("Custom templates require a cut with zero kerf.")
     if not isfinite(config.wall) or config.wall <= 0.0:
         raise MeshError("Check the connector dimensions and clearances.")
-    pin = template(engine, config.pin)
-    socket = template(engine, config.socket)
+    pin = template(engine, config.pin, reflected)
+    socket = template(engine, config.socket, reflected)
     pin_lower, pin_upper = bounds(vertex.co for vertex in pin.vertices)
     socket_lower, socket_upper = bounds(vertex.co for vertex in socket.vertices)
     if (pin_lower.z >= -epsilon or pin_upper.z <= epsilon or socket_lower.z >= -epsilon
@@ -81,6 +92,8 @@ def add_custom_connector(
         engine, minus, plus, frame, (position, position),
         (-pin_lower.z + wall, socket_upper.z + wall), (radius + wall) / cos(tau / 128),
         64, epsilon, min(epsilon, -pin_lower.z / 10, wall / 10), 1,
+        requested=(requested,) if requested is not None else None,
+        requested_error="The mirrored connector does not fit at its reflected position.",
     )
     placement = frame.to_4x4() @ Matrix.Translation(Vector((center.x, center.y, position)))
     for mesh in (pin, socket):
@@ -93,4 +106,4 @@ def add_custom_connector(
         if (first.shells != second.shells
                 or abs(second.volume_mm3 - first.volume_mm3 - expected) > abs(expected) * .01):
             raise MeshError("The connector could not be joined or the socket could not be cut.")
-    return male, female
+    return CustomPlacement((male, female), center)

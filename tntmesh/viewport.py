@@ -6,7 +6,7 @@ from mathutils import Matrix, Vector
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
 from .geometry.region import RegionCut, boundary_edges, edge_map, region_faces, smooth_boundary
-from .geometry.symmetry import reflection
+from .geometry.symmetry import reflected_plane
 from .geometry.volume import bezier_path, outline
 from .model import MeshError, millimeters_per_unit
 from .operators import active_mesh
@@ -99,6 +99,18 @@ def draw_plane() -> None:
         return
     lower, upper = extents
     unit = millimeters_per_unit(context.scene)
+    reflected = None
+    if settings.cut_kind == "SYMMETRY":
+        limits = project_bounds(obj, context.evaluated_depsgraph_get(), Matrix.Identity(3))
+        if limits is not None:
+            midpoint = (limits[0] + limits[1]) / 2
+            axis = "XYZ".index(settings.symmetry_axis)
+            center = midpoint[axis] + settings.symmetry_center / unit
+            position = (lower.z + upper.z) / 2 + settings.offset / unit
+            _, _, reflected = reflected_plane(
+                frame, position, midpoint, settings.symmetry_axis, center,
+                settings.symmetry_secondary / unit, tuple(settings.symmetry_rotation),
+            )
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
     previous_blend = gpu.state.blend_get()
     previous_depth = gpu.state.depth_test_get()
@@ -108,15 +120,8 @@ def draw_plane() -> None:
         for points, fill in cutter_paths(settings, lower, upper, unit):
             vertices = [frame @ Vector(point) for point in points]
             overlays = [(vertices, (0.0, 1.0, 1.0))]
-            if settings.cut_kind == "SYMMETRY":
-                axis = "XYZ".index(settings.symmetry_axis)
-                limits = project_bounds(obj, context.evaluated_depsgraph_get(), Matrix.Identity(3))
-                if limits is not None:
-                    center = (limits[0][axis] + limits[1][axis]) / 2 + settings.symmetry_center / unit
-                    mirror, translation = reflection(settings.symmetry_axis, center)
-                    translation += (mirror @ frame.col[2]) * (settings.symmetry_secondary / unit)
-                    overlays.append(([mirror @ point + translation for point in vertices],
-                                     (0.68, 0.48, 1.0)))
+            if reflected is not None:
+                overlays.append(([reflected @ point for point in vertices], (0.68, 0.48, 1.0)))
             for coordinates, color in overlays:
                 shader.bind()
                 if fill:

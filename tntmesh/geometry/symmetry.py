@@ -3,11 +3,12 @@ from dataclasses import dataclass
 from math import isfinite
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
-from .connector import Connector, add_connector
+from .connector import add_connector
+from .custom_connector import CustomConnector, add_custom_connector
 from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
 
@@ -18,6 +19,7 @@ class SymmetricCut:
     axis: str = "X"
     center_offset: float = 0.0
     secondary_offset: float = 0.0
+    secondary_rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
 def reflection(axis: str, center: float) -> tuple[Matrix, Vector]:
@@ -29,32 +31,47 @@ def reflection(axis: str, center: float) -> tuple[Matrix, Vector]:
     return mirror, translation
 
 
+def reflected_plane(
+    frame: Matrix, position: float, midpoint: Vector, axis: str, center: float, offset: float,
+    rotation: tuple[float, float, float],
+) -> tuple[Matrix, float, Matrix]:
+    if not all(map(isfinite, (*rotation, center, offset))):
+        raise MeshError("Check the symmetry center, shift and rotation.")
+    mirror, translation = reflection(axis, center)
+    normal = frame.col[2]
+    pivot = midpoint + normal * (position - normal.dot(midpoint))
+    pivot = mirror @ pivot + translation
+    unrotated = Matrix((-(mirror @ frame.col[0]), mirror @ frame.col[1],
+                        mirror @ normal)).transposed()
+    adjusted = unrotated @ Euler(rotation, "XYZ").to_matrix()
+    turn = adjusted @ unrotated.transposed()
+    shifted_pivot = pivot + adjusted.col[2] * offset
+    transform = (turn @ mirror).to_4x4()
+    transform.translation = shifted_pivot + turn @ (translation - pivot)
+    return adjusted, adjusted.col[2].dot(shifted_pivot), transform
+
+
 def split_symmetric(
     context: bpy.types.Context, transaction: GeometryTransaction, mesh: bpy.types.Mesh,
     config: SymmetricCut,
 ) -> tuple[bpy.types.Mesh, ...]:
     primary = config.primary
-    if primary.connector is not None and not isinstance(primary.connector, Connector):
-        raise MeshError("Symmetric cuts support round or hexagonal connectors.")
-    if not all(map(isfinite, (config.center_offset, config.secondary_offset))):
-        raise MeshError("Check the symmetry center and secondary offset.")
     lower, upper = bounds(vertex.co for vertex in mesh.vertices)
     midpoint = (lower + upper) / 2
     axis = "XYZ".index(config.axis)
-    midpoint[axis] += config.center_offset
-    mirror, translation = reflection(config.axis, midpoint[axis])
+    center = midpoint[axis] + config.center_offset
     frame = axis_frame(primary.axis, primary.rotation)
     normal = frame.col[2]
-    reflected = Matrix((-(mirror @ frame.col[0]), mirror @ frame.col[1],
-                        mirror @ normal)).transposed()
-    reflected_normal = reflected.col[2]
     initial = split_plane(
         context, transaction, mesh, frame, primary.kerf, offset=primary.offset,
     )
     position = initial.position
-    mirrored_position = reflected_normal.dot(mirror @ (normal * position) + translation)
-    mirrored_position += config.secondary_offset
+    reflected, mirrored_position, transform = reflected_plane(
+        frame, position, midpoint, config.axis, center, config.secondary_offset, config.secondary_rotation,
+    )
+    reflected_normal = reflected.col[2]
 
+    midpoint[axis] = center
     direction = normal.dot(midpoint) - position
     reflected_direction = reflected_normal.dot(midpoint) - mirrored_position
     gap = primary.kerf / 2
@@ -81,21 +98,32 @@ def split_symmetric(
         return outer, middle, mirrored_outer
 
     engine = ExactBoolean(context, transaction)
-    sides = (outer, middle) if middle_index else (middle, outer)
-    first_set = add_connector(
-        engine, *sides, frame, position, primary.kerf, connector, epsilon,
-    )
-    middle, outer = first_set.meshes[middle_index], first_set.meshes[outer_index]
-    requested = []
     inverse = reflected.transposed()
-    for center in first_set.centers:
+
+    def reflect_center(center: Vector) -> Vector:
         point = frame @ Vector((center.x, center.y, position))
-        point = inverse @ (mirror @ point + translation)
-        requested.append(Vector((point.x, point.y, 0)))
+        point = inverse @ (transform @ point)
+        return Vector((point.x, point.y, 0))
+
+    sides = (outer, middle) if middle_index else (middle, outer)
+    if isinstance(connector, CustomConnector):
+        first_custom = add_custom_connector(
+            engine, *sides, frame, position, primary.kerf, connector, epsilon,
+        )
+        middle, outer = first_custom.meshes[middle_index], first_custom.meshes[outer_index]
+        sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
+        second_custom = add_custom_connector(
+            engine, *sides, reflected, mirrored_position, primary.kerf, connector, secondary.epsilon,
+            reflected=True, requested=reflect_center(first_custom.center),
+        )
+        return outer, second_custom.meshes[middle_index], second_custom.meshes[outer_index]
+
+    first_set = add_connector(engine, *sides, frame, position, primary.kerf, connector, epsilon)
+    middle, outer = first_set.meshes[middle_index], first_set.meshes[outer_index]
     sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
     second_set = add_connector(
         engine, *sides, reflected, mirrored_position, primary.kerf, connector,
-        secondary.epsilon, requested=tuple(requested),
+        secondary.epsilon, requested=tuple(map(reflect_center, first_set.centers)),
         requested_error="The mirrored connector does not fit at its reflected position.",
     )
     middle, mirrored_outer = second_set.meshes[middle_index], second_set.meshes[outer_index]

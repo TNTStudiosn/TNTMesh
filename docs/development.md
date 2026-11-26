@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.4.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.5.zip
 ```
 
 The package entry point owns class registration. The sidebar uses Blender layouts and the translation catalog follows Blender's language preferences. Runtime operations run locally inside Blender.
@@ -40,7 +40,7 @@ In Easy mode, choose **Surface Region → By Material Slot → Separate by Mater
 
 Choose a **Cylindrical** or **Hexagonal** connector for a surface region. TNTMesh ranks planar inner faces by available area and checks the footprint, wall and insertion depth on both sides before carving the matching features. The cut can use built-in pins or separate printable pins. **Connect to the main body** fits each material insert against the retained body after all material cuts have run. If any interface has insufficient space, the operation leaves the source and previous results intact. The current search considers up to twelve candidate planes. Highly curved seams may have no suitable planar face.
 
-**Symmetric Cuts** reflects a straight plane around the chosen world axis and center. Move the first cut away from that center to create a middle piece and two outer pieces. The secondary offset can move the reflected plane along its normal. Round and hexagonal connector positions are reflected and must fit both cuts before results are published. Draft mode exposes the three bodies as separate targets for subsequent cuts.
+**Symmetric Cuts** reflects a straight plane around the chosen world axis and center. Move the first cut away from that center to create a middle piece and two outer pieces. Shift or rotate the second plane in its own axes from the cut details. Connector positions follow the adjusted plane and must fit both cuts before results are published. If you use custom templates, TNTMesh also reflects the shape of the pin and the socket. Draft mode exposes the three bodies as separate targets for subsequent cuts.
 
 **Separate Base** looks for closed support loops below the search height in world Z. Set the model upright and try **Find Base Contacts** to review the suggested outlines. A height of zero searches the lowest 22% of the model. The detected loops drive local cutters at their own heights and slopes, so a stepped base can separate at different heights under different feet. Contact settings can shift an individual cut and set whether to add a pin and its diameter. Increase the search height only enough to include the base and inspect the resulting separation, especially if feet broaden between the contact and the search ceiling. Draft copies keep the detected contact overrides for their source mesh.
 

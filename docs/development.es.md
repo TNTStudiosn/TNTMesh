@@ -9,7 +9,7 @@ ruff check .
 blender --background --factory-startup --python-exit-code 1 --python tests/integration.py
 mkdir -p dist
 blender --factory-startup --command extension build --source-dir tntmesh --output-dir dist
-blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.4.zip
+blender --factory-startup --command extension validate dist/tntmesh-0.3.0-alpha.5.zip
 ```
 
 ## Geometría y borradores
@@ -38,7 +38,7 @@ En modo Fácil, usa **Región de superficie → Por ranura de material → Separ
 
 Elige un conector **Cilíndrico** o **Hexagonal** en Región de superficie. TNTMesh ordena las caras interiores planas por área y comprueba el espacio, la pared y la profundidad a ambos lados antes de generar el pin y la cavidad. Puedes generar pines integrados o pasadores independientes. **Conectar al cuerpo principal** ajusta cada inserto al cuerpo retenido después de separar todos los materiales. Si una unión carece de espacio, se conservan el original y los resultados previos. La búsqueda considera hasta doce planos. Las uniones muy curvas pueden carecer de caras planas aptas.
 
-**Cortes simétricos** refleja un plano recto respecto al eje y centro elegidos. Separa el primer plano del centro para obtener dos piezas exteriores y una central. Puedes desplazar el segundo plano sobre su normal. Los conectores cilíndricos o hexagonales conservan sus posiciones reflejadas y ambas uniones deben pasar la comprobación de espacio. En Borrador puedes usar cada una de las tres piezas como entrada de cortes posteriores.
+**Cortes simétricos** refleja un plano recto respecto al eje y centro elegidos. Separa el primer plano del centro para obtener dos piezas exteriores y una central. Desde los detalles del corte puedes desplazar o girar el segundo plano sobre sus propios ejes. Los conectores siguen ese ajuste y ambas uniones deben pasar la comprobación de espacio. Si usas plantillas personalizadas, TNTMesh refleja también la forma del pin y de su cavidad. En Borrador puedes usar cada una de las tres piezas como entrada de cortes posteriores.
 
 **Separar base** busca contornos cerrados de apoyo cerca de la parte inferior del modelo sobre el eje Z global. Pon la figura de pie y usa **Detectar apoyos** para revisar los contornos. Una altura de búsqueda de cero analiza el 22% inferior. Cada apoyo conserva su altura e inclinación, incluso si los pies están sobre niveles distintos. En los ajustes puedes mover cada apoyo, activar su conector y cambiar el diámetro. Usa una altura suficiente para incluir la base y revisa el resultado si los pies se ensanchan por encima del contacto. Borrador copia los ajustes de los apoyos de la malla de origen.
 

@@ -1,10 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-alpha.5
 
 - Added closed-cavity and shell-orientation classification for disjoint closed surfaces.
 - Added positive-area coplanar overlap checks alongside crossing-surface checks.
 - Improved straight insertion checks with swept triangle contacts to find obstructions between fixed positions.
+- Added independent rotation for the second symmetric cut, including the live preview and saved drafts.
+- Added reflection of custom pin and socket templates for symmetric cuts.
+- Added a checksum-verified download fallback for macOS CI.
 
 ## 0.3.0-alpha.4
 

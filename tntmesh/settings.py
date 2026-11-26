@@ -187,6 +187,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Second cut shift (mm)", description="Shift the reflected cut along its own normal",
         precision=3,
     )
+    symmetry_rotation: FloatVectorProperty(
+        name="Second cut rotation", description="Rotate the reflected cut in its local axes",
+        subtype="EULER", unit="ROTATION", size=3,
+    )
     base_band: FloatProperty(
         name="Search height (mm)", description="Height above the model bottom to search, or zero for automatic",
         min=0, default=0, precision=2,
@@ -247,5 +251,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.standard_connector(self.connector, self.connector_count)
         cut = PlanarCut(self.axis, self.offset, self.kerf, connector, tuple(self.rotation))
         if self.cut_kind == "SYMMETRY":
-            return SymmetricCut(cut, self.symmetry_axis, self.symmetry_center, self.symmetry_secondary)
+            return SymmetricCut(
+                cut, self.symmetry_axis, self.symmetry_center,
+                self.symmetry_secondary, tuple(self.symmetry_rotation),
+            )
         return cut

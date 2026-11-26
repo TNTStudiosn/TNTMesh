@@ -107,6 +107,7 @@ def cut_details(
         return
     if settings.cut_kind == "SYMMETRY":
         layout.prop(settings, "symmetry_secondary")
+        layout.column(align=True).prop(settings, "symmetry_rotation")
     layout.prop(settings, "kerf")
     if settings.connector == "CUSTOM":
         layout.prop(settings, "wall")

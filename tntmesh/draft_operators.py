@@ -18,7 +18,7 @@ GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diame
                        "region_method", "region_depth", "region_slot", "region_attribute",
                        "region_color", "region_tolerance", "region_weight", "region_grow",
                        "region_smoothing", "region_connector",
-                       "symmetry_axis", "symmetry_center", "symmetry_secondary",
+                       "symmetry_axis", "symmetry_center", "symmetry_secondary", "symmetry_rotation",
                        "base_band", "base_area", "base_margin", "base_adjustment",
                        "base_pins", "base_shape", "base_contact_source")
 

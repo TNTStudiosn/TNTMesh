@@ -840,6 +840,35 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(source.hide_get())
         self.assertEqual(len(source.data.polygons), 6)
 
+    def test_symmetric_cuts_reflect_asymmetric_templates_without_editing_them(self):
+        source = self.cube(48)
+        pin = self.cube(3)
+        socket = self.cube(3.6)
+        for template in (pin, socket):
+            for vertex in template.data.vertices:
+                vertex.co.x += .35 * vertex.co.z
+            template.data.update()
+        originals = [[vertex.co.copy() for vertex in template.data.vertices] for template in (pin, socket)]
+        self.addon.operators.select_results(bpy.context, [source])
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.axis = "X"
+        self.settings.offset = 10
+        self.settings.connector = "CUSTOM"
+        self.settings.pin_template = pin
+        self.settings.socket_template = socket
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        first, central, second = self.parts()
+        outward = [vertex.co for vertex in central.data.vertices if vertex.co.x > 10.01]
+        reflected = [vertex.co for vertex in central.data.vertices if vertex.co.x < -10.01]
+        self.assertGreaterEqual(len(outward), 4)
+        self.assertEqual(sorted(tuple(round(co, 4) for co in point) for point in outward),
+                         sorted((round(-point.x, 4), round(point.y, 4), round(point.z, 4))
+                                for point in reflected))
+        self.assertAlmostEqual(self.checked(first), self.checked(second), delta=.001)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [first, central, second]))
+        for template, original in zip((pin, socket), originals, strict=True):
+            self.assertEqual([vertex.co for vertex in template.data.vertices], original)
+
     def test_base_analysis_and_cut_keep_two_different_contact_elevations(self):
         source = stepped_base_fixture(self.addon)
         self.settings.cut_kind = "BASE"
@@ -935,6 +964,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertAlmostEqual(self.parts()[1].dimensions.x, 22)
         self.assertAlmostEqual(self.parts()[2].dimensions.x, 12)
         self.assertAlmostEqual(sum(self.checked(part) for part in self.parts()), 48**3)
+
+    def test_symmetric_draft_rotates_only_the_second_cut_and_preserves_the_last_good_build(self):
+        source = self.cube(48)
+        source.location = (53, -29, 14)
+        self.settings.cut_kind = "SYMMETRY"
+        self.settings.axis = "X"
+        self.settings.offset = 10
+        self.settings.symmetry_rotation = (0, .18, 0)
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        cut = self.addon.draft.active_plan(bpy.context.scene).cuts[0]
+        self.assertAlmostEqual(cut.settings.symmetry_rotation[1], .18)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        outer, center, opposite = self.parts()
+        self.assertAlmostEqual(outer.dimensions.x, 14)
+        self.assertGreater(opposite.dimensions.x, 17)
+        self.assertTrue(any(abs(face.normal.x) > .9 and .17 < abs(face.normal.y) < .19
+                            for face in opposite.data.polygons))
+        self.assertAlmostEqual(sum(map(self.checked, (outer, center, opposite))), 48**3, delta=.02)
+        cut.settings.symmetry_rotation = (0, 1.2, 0)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), [outer, center, opposite])
 
     def test_coincident_symmetric_cuts_leave_no_parts(self):
         source = self.cube()

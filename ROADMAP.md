@@ -13,6 +13,6 @@ Straight cuts support axis selection, numeric offset, free rotation and drawing 
 
 Freehand drawing currently produces closed extraction contours. Open surface paths, vertex and edge snapping, and selective invalidation of draft operations are pending. Mesh diagnostics check crossings between triangles without shared vertices, positive-area coplanar overlaps and nesting of disjoint closed shells. Wall-thickness measurements and high-density profiling are pending.
 
-Surface Region extracts one chosen region at a time. Face masks and vertex groups can come from Blender painting tools. Separate by Material processes multiple slots in one operation. Symmetric Cuts reflects the first plane and offers a separate normal offset for the second plane. Custom template reflection and independent rotation of the second plane are pending.
+Surface Region extracts one chosen region at a time. Face masks and vertex groups can come from Blender painting tools. Separate by Material processes multiple slots in one operation. Symmetric Cuts reflects the first plane, including custom connector templates, and offers independent shift and rotation for the second plane.
 
 Base contact detection searches for closed loops where figures rise from upward-facing base surfaces. Open or ambiguous contact contours, organic transitions without a distinct rim, and merging footprints at very different heights need additional work.

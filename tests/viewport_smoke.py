@@ -168,6 +168,7 @@ def set_symmetry_preview():
     settings.axis = "X"
     settings.offset = 6.0
     settings.symmetry_axis = "X"
+    settings.symmetry_rotation = (0, .20, 0)
     viewport()[1].tag_redraw()
 
 

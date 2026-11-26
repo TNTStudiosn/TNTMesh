@@ -172,9 +172,9 @@ SPANISH = {
     "Second cut shift (mm)": "Desplazamiento del segundo corte (mm)",
     "Shift the reflected cut along its own normal": "Desplaza el corte reflejado sobre su normal",
     "Show both planes": "Mostrar ambos planos",
-    "Symmetric cuts support round or hexagonal connectors.":
-        "Los cortes simétricos admiten conectores cilíndricos o hexagonales.",
-    "Check the symmetry center and secondary offset.": "Revisa el centro de simetría y el segundo corte.",
+    "Second cut rotation": "Rotación del segundo corte",
+    "Rotate the reflected cut in its local axes": "Gira el corte reflejado sobre sus ejes locales",
+    "Check the symmetry center, shift and rotation.": "Revisa el centro, el desplazamiento y la rotación de simetría.",
     "Move the cut to one side of the symmetry center.": "Mueve el corte a un lado del centro de simetría.",
     "The two cuts cross within the model. Adjust the angle or offset.":
         "Los dos cortes se cruzan dentro del modelo. Ajusta el ángulo o el desplazamiento.",

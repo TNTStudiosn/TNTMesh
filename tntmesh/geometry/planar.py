@@ -92,7 +92,7 @@ def split(
     if isinstance(config.connector, CustomConnector):
         return add_custom_connector(
             engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon
-        )
+        ).meshes
     if config.connector is not None:
         return add_connector(engine, minus, plus, frame, cut.position, config.kerf,
                              config.connector, cut.epsilon).meshes
