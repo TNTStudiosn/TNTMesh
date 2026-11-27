@@ -200,10 +200,22 @@ def draw_plane() -> None:
             origin = model_pivot(obj.evaluated_get(context.evaluated_depsgraph_get()))
             center = frame.transposed() @ origin
             height = (lower.z + upper.z) / 2 + settings.offset / unit
+            color = (.78, .55, 1.0, 1.0)
             if settings.connector == "MAGNET":
                 outline = settings.magnet_config(1).profile()
             elif settings.connector == "DOVETAIL":
                 outline = settings.dovetail_config(1).footprint()
+            elif settings.connector == "SNAP_FIT":
+                hook = settings.snap_config(1)
+                try:
+                    hook.validate_dimensions()
+                except MeshError:
+                    return
+                outline = hook.footprint(settings.kerf)
+                try:
+                    hook.validate(settings.kerf)
+                except MeshError:
+                    color = (1.0, .36, .32, 1.0)
             else:
                 profile = settings.standard_connector(settings.connector, 1)
                 try:
@@ -212,7 +224,7 @@ def draw_plane() -> None:
                     return
             gpu.state.depth_test_set("NONE")
             shader.bind()
-            shader.uniform_float("color", (.78, .55, 1.0, 1.0))
+            shader.uniform_float("color", color)
             for point in settings.connector_points:
                 x, y = point.position
                 ring = [frame @ Vector((center.x + (x + a) / unit, center.y + (y + b) / unit, height))

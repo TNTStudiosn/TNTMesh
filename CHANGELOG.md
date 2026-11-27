@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.18
+
+- Added flexible snap-fit hooks and retaining pockets for straight and symmetric cuts, with a material strain limit, clearance checks and assembly guide instructions.
+
 ## 0.3.0-alpha.17
 
 - Added assembly guides with numbered assembled and exploded PNG views, cut relationships, loose connectors, recorded magnet sizes and a suggested build order in HTML and Markdown.

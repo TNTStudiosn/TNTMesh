@@ -227,10 +227,10 @@ def rebuild(
                 keys = cut_outputs(operation)
                 leaves.update(zip(keys, pieces[:len(keys)], strict=True))
                 inherited_path = paths.pop(operation.target)
-                stock = assembly_history.magnet_stock(config)
+                stock, snap_fit = assembly_history.connection_details(config)
                 for branch, key in enumerate(keys, 1):
                     paths[key] = inherited_path + (
-                        assembly_history.Branch(operation.uid, branch, len(keys), stock),
+                        assembly_history.Branch(operation.uid, branch, len(keys), stock, snap_fit),
                     )
                 if isinstance(config, PlanarCut):
                     normal = axis_frame(config.axis, config.rotation).col[2]

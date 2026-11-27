@@ -38,6 +38,7 @@ class Joint:
     branches: list[list[Piece]]
     connectors: list[Piece] = field(default_factory=list)
     magnet: assembly_history.StockMagnet | None = None
+    snap_fit: bool = False
 
     @property
     def incomplete(self) -> bool:
@@ -55,7 +56,9 @@ class Joint:
                 pieces=", ".join(piece.label for piece in self.connectors),
             ))
         if len(groups) >= 2:
-            notes.append(tr("Join {groups} in the assembled positions shown.").format(groups=" / ".join(groups)))
+            wording = ("Press {groups} together along the cut normal until the hooks seat." if self.snap_fit
+                       else "Join {groups} in the assembled positions shown.")
+            notes.append(tr(wording).format(groups=" / ".join(groups)))
         if self.incomplete:
             notes.append(tr("Some bodies from this cut are absent from the guide."))
         return notes
@@ -98,6 +101,7 @@ def collect(context: bpy.types.Context, title: str, objects: list[bpy.types.Obje
                 joint.connectors.append(piece)
             if branch.magnet:
                 joint.magnet = branch.magnet
+            joint.snap_fit |= branch.snap_fit
 
     stock: dict[tuple[str, tuple[float, ...]], int] = {}
     ordered = sorted(joints.values(), key=lambda joint: -joint.depth)

@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+from math import radians
+
 import bpy
 from bpy.props import (
     BoolProperty,
@@ -19,6 +21,7 @@ from .geometry.dovetail import Dovetail
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.region import RegionCut
+from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
 from .geometry.volume import Cut, VolumeCut
 from .model import millimeters_per_unit
@@ -27,6 +30,7 @@ MAGNET_SHAPES = (
     ("DISC", "Disc", "Create a circular magnet pocket"),
     ("BLOCK", "Block", "Create a rectangular magnet pocket"),
 )
+SNAP_FIT_FIELDS = ("width", "thickness", "reach", "hook", "ramp_angle", "angle", "material", "strain_limit")
 
 
 def is_mesh(self, obj: bpy.types.Object) -> bool:
@@ -114,6 +118,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("MAGNET", "Magnets", "Cut pockets on both sides for purchased magnets"),
             ("DOVETAIL", "Dovetail", "Add an integrated sliding rail and an open-ended groove"),
             *PROFILE_ITEMS,
+            ("SNAP_FIT", "Snap-fit", "Add a flexible hook and a matching retaining pocket"),
         ],
         default="ROUND",
     )
@@ -166,6 +171,21 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     dovetail_length: FloatProperty(name="Rail length (mm)", default=7, min=.01, precision=2)
     dovetail_angle: FloatProperty(name="Exit angle", subtype="ANGLE", unit="ROTATION",
                                   description="Rotate the groove opening from the positive local Y axis of the cut")
+    snap_width: FloatProperty(name="Beam width (mm)", default=5, min=.01, precision=2)
+    snap_thickness: FloatProperty(name="Beam thickness (mm)", default=1.4, min=.01, precision=2)
+    snap_reach: FloatProperty(name="Reach (mm)", default=12, min=.01, precision=2,
+                              description="Reach into the socket beyond the socket-side cut face")
+    snap_hook: FloatProperty(name="Hook height (mm)", default=.75, min=.01, precision=2)
+    snap_ramp_angle: FloatProperty(name="Ramp angle", default=radians(32), min=radians(10), max=radians(60),
+                                   subtype="ANGLE", unit="ROTATION")
+    snap_angle: FloatProperty(name="Hook rotation", subtype="ANGLE", unit="ROTATION",
+                              description="Rotate the direction the hook points in the cut plane")
+    snap_material: StringProperty(name="Print material", maxlen=128,
+                                  description="Material used for the flexible hook")
+    snap_strain_limit: FloatProperty(
+        name="Strain limit (%)", default=0, min=0, max=100, subtype="PERCENTAGE", precision=2,
+        description="Allowable strain measured for this print material and layer orientation",
+    )
     loose_pins: BoolProperty(
         name="Separate pins", description="Cut two sockets and generate removable pins",
     )
@@ -304,6 +324,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         return Dovetail(self.dovetail_neck, self.dovetail_head, self.dovetail_height, self.dovetail_length,
                         self.lateral, self.axial, self.wall, self.dovetail_angle, count)
 
+    def snap_config(self, count: int) -> SnapFit:
+        return SnapFit(
+            self.snap_width, self.snap_thickness, self.snap_reach, self.snap_hook, self.snap_ramp_angle,
+            self.lateral, self.axial, self.wall, self.snap_angle, count, self.snap_material, self.snap_strain_limit,
+        )
+
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
         connector = None
         if self.base_pins:
@@ -337,12 +363,14 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.magnet_config(len(positions) or self.connector_count)
         elif self.connector == "DOVETAIL":
             connector = self.dovetail_config(len(positions) or self.connector_count)
+        elif self.connector == "SNAP_FIT":
+            connector = self.snap_config(len(positions) or self.connector_count)
         elif self.connector != "NONE":
             connector = self.standard_connector(self.connector, len(positions) or self.connector_count)
         cut = PlanarCut(
             self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
             positions, self.cut_kind == "PLANAR" and self.pin_positive
-            and (self.connector == "DOVETAIL" or not self.loose_pins),
+            and (self.connector in {"DOVETAIL", "SNAP_FIT"} or not self.loose_pins),
         )
         if self.cut_kind == "SYMMETRY":
             return SymmetricCut(

@@ -324,6 +324,92 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), previous)
         self.assertEqual(tuple(bpy.data.meshes.keys()), meshes)
 
+    def test_snap_fit_seats_and_retains_six_rotated_hooks_with_kerf(self):
+        source = self.cube(80)
+        settings = self.settings
+        settings.connector = "SNAP_FIT"
+        settings.snap_material = "Test material"
+        settings.snap_strain_limit = 2.5
+        settings.snap_angle = .37
+        settings.pin_positive = True
+        settings.loose_pins = True
+        settings.kerf = .4
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(
+            pattern="LINE", count=6, spacing=10,
+        ), {"FINISHED"})
+        positions = tuple(tuple(item.position) for item in settings.connector_points)
+        self.assertEqual(len(positions), 6)
+        design = settings.snap_config(6)
+        ui = self.addon.connector_ui
+        decoded, copied, positive = ui.decode(ui.encode(design, positions, True))
+        self.assertEqual((decoded, copied, positive), (design, positions, True))
+        ui.check_positions(bpy.context, settings, decoded, copied, positive)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        female, male = self.parts()
+        before = 80**2 * (40 - settings.kerf / 2)
+        pin_volume = design.width * (
+            design.thickness * (design.reach + settings.kerf) + design.hook * (design.land + design.ramp / 2)
+        )
+        self.assertAlmostEqual(self.checked(male) - before, 6 * pin_volume, delta=.01)
+        self.assertLess(self.checked(female), before - 6 * pin_volume)
+        for obj in (female, male):
+            self.assertEqual(obj["tntmesh_part_kind"], "body")
+            self.assertTrue(self.addon.assembly_ui.assembly_history.path(obj)[0].snap_fit)
+        self.assertTrue(source.hide_get())
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [male, female]))
+        male.location.z += design.axial / 2
+        bpy.context.view_layer.update()
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [male, female]))
+        male.location.z += design.axial / 2 + design.land / 2
+        bpy.context.view_layer.update()
+        _, _, volume = self.addon.assembly.overlaps(bpy.context, [male, female])[0]
+        self.assertGreater(volume, 6)
+        guide = self.addon.assembly_ui.assembly_guide
+        report = guide.collect(bpy.context, "Snap", self.parts())
+        self.assertIn("until the hooks seat", guide.step_labels(report)[0])
+
+    def test_snap_fit_rejects_missing_strain_limit_and_thin_socket(self):
+        source = self.cube(20)
+        settings = self.settings
+        settings.connector = "SNAP_FIT"
+        state = set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.snap_material = "Test material"
+        settings.snap_strain_limit = .1
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"CANCELLED"})
+        settings.snap_strain_limit = 2.5
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), state)
+        self.assertFalse(source.hide_get())
+        self.assertEqual(bpy.context.active_object, source)
+        self.assertFalse(settings.connector_points)
+
+    def test_snap_fit_symmetric_draft_keeps_geometry_after_invalid_material_limit(self):
+        source = self.cube(80)
+        settings = self.settings
+        settings.cut_kind = "SYMMETRY"
+        settings.axis = settings.symmetry_axis = "X"
+        settings.offset = -17
+        settings.connector = "SNAP_FIT"
+        settings.snap_material = "Test material"
+        settings.snap_strain_limit = 2.5
+        settings.snap_angle = .31
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        cut = bpy.context.scene.tntmesh_drafts[0].cuts[0].settings
+        self.assertEqual(cut.snap_material, "Test material")
+        self.assertAlmostEqual(cut.snap_angle, .31, places=6)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        previous = self.parts()
+        self.assertEqual(len(previous), 3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, previous))
+        self.assertEqual(len(source.data.vertices), 8)
+        meshes = set(bpy.data.meshes.keys())
+        cut.snap_strain_limit = .1
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), previous)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+
     def test_dovetail_symmetric_cut_preserves_both_sliding_joints(self):
         self.cube(32)
         self.settings.connector = "DOVETAIL"

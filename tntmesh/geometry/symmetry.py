@@ -13,6 +13,7 @@ from .dovetail import Dovetail, add_dovetails
 from .magnet import Magnet, add_magnet_pockets
 from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
+from .snap_fit import SnapFit, add_snap_fits
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,16 @@ def split_symmetric(
             reflected=True, requested=reflect_center(first_custom.center),
         )
         return outer, second_custom.meshes[middle_index], second_custom.meshes[outer_index]
+
+    if isinstance(connector, SnapFit):
+        first_snap = add_snap_fits(engine, *sides, frame, position, primary.kerf, connector, epsilon, None)
+        middle, outer = first_snap.meshes[middle_index], first_snap.meshes[outer_index]
+        sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
+        second_snap = add_snap_fits(
+            engine, *sides, reflected, mirrored_position, primary.kerf, connector.reflected("X"),
+            secondary.epsilon, tuple(map(reflect_center, first_snap.centers)),
+        )
+        return outer, second_snap.meshes[middle_index], second_snap.meshes[outer_index]
 
     first_set = add_connector(engine, *sides, frame, position, primary.kerf, connector, epsilon)
     middle, outer = first_set.meshes[middle_index], first_set.meshes[outer_index]

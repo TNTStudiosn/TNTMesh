@@ -229,7 +229,7 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
                     direction=axis_frame(config.axis, config.rotation).col[2]
                     if isinstance(config, PlanarCut) else None,
                 )
-                assembly_history.record_cut(source, parts, body_count, assembly_history.magnet_stock(config))
+                assembly_history.record_cut(source, parts, body_count, config)
             select_new_parts(context, source, parts)
             wm.progress_update(3)
         except (MeshError, RuntimeError, ValueError) as error:

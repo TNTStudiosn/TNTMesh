@@ -8,6 +8,7 @@ from .diagnostics_ui import controls as diagnostics_controls
 from .geometry.connector_profiles import PROFILE_OVERLAYS, STANDARD_SHAPES
 from .localization import tr
 from .magnet_ui import magnet_details
+from .model import MeshError
 from .operators import active_mesh, managed_parts
 from .settings import TNTMESH_PG_settings
 
@@ -63,10 +64,12 @@ def cut_properties(
             layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
-        if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {"NONE", "DOVETAIL"}:
+        if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {"NONE", "DOVETAIL", "SNAP_FIT"}:
             tools = layout.row(align=True)
             if settings.connector == "DOVETAIL":
                 tools.operator("tntmesh.suggest_connectors", text="Find Rail Positions", icon="CONSTRAINT")
+            elif settings.connector == "SNAP_FIT":
+                tools.operator("tntmesh.suggest_connectors", text="Find Hooks", icon="CONSTRAINT")
             else:
                 tools.operator("tntmesh.suggest_connectors", icon="CONSTRAINT")
             if settings.connector != "NONE":
@@ -138,10 +141,41 @@ def cut_details(
         layout.prop(settings, "wall")
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
+    elif settings.connector == "SNAP_FIT":
+        snap_details(layout, settings)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
     elif settings.connector != "NONE":
         connector_details(layout, settings, settings.connector)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
+
+
+def snap_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    if settings.cut_kind != "PLANAR" or not settings.connector_points:
+        layout.prop(settings, "connector_count")
+    material = layout.box()
+    material.prop(settings, "snap_material", text="Material")
+    material.prop(settings, "snap_strain_limit")
+    design = settings.snap_config(1)
+    try:
+        design.validate_dimensions()
+    except MeshError:
+        material.label(text="Check hook and beam dimensions.", icon="ERROR")
+    else:
+        row = material.row()
+        strain = design.strain(settings.kerf)
+        row.alert = settings.snap_strain_limit > 0 and strain > settings.snap_strain_limit
+        row.label(text=tr("Estimated strain · {strain:.2f}%").format(strain=strain), translate=False,
+                  icon="ERROR" if row.alert else "INFO")
+        if not settings.snap_material.strip() or not settings.snap_strain_limit:
+            material.label(text="Enter a verified material limit.", icon="INFO")
+    beam = layout.column(align=True)
+    for name in ("width", "thickness", "reach", "hook", "ramp_angle", "angle"):
+        beam.prop(settings, f"snap_{name}")
+    fit = layout.column(align=True)
+    for name in ("lateral", "axial", "wall"):
+        fit.prop(settings, name)
 
 
 def connector_details(

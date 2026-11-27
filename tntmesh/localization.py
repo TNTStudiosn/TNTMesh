@@ -899,6 +899,43 @@ SPANISH = {
         "El historial de corte de algunas piezas está incompleto. Comprueba su ajuste con las vistas numeradas.",
     "The assembly has no visible faces to render.": "El ensamblaje no tiene caras visibles para generar la imagen.",
     "The assembly contains a piece with no faces.": "El ensamblaje contiene una pieza sin caras.",
+    "Snap-fit": "Cierre a presión flexible",
+    "Add a flexible hook and a matching retaining pocket":
+        "Añade un gancho flexible y un alojamiento con retención",
+    "Beam width (mm)": "Ancho del brazo (mm)",
+    "Beam thickness (mm)": "Grosor del brazo (mm)",
+    "Reach (mm)": "Alcance (mm)",
+    "Reach into the socket beyond the socket-side cut face":
+        "Distancia que entra el brazo desde la cara de corte del alojamiento",
+    "Hook height (mm)": "Altura del gancho (mm)",
+    "Ramp angle": "Ángulo de rampa",
+    "Hook rotation": "Giro del gancho",
+    "Rotate the direction the hook points in the cut plane": "Gira la dirección del gancho en el plano de corte",
+    "Material used for the flexible hook": "Material que se usará para imprimir el gancho flexible",
+    "Strain limit (%)": "Límite de deformación (%)",
+    "Allowable strain measured for this print material and layer orientation":
+        "Deformación admisible medida para este material y esta orientación de capas",
+    "Find Hooks": "Buscar ganchos",
+    "Hook on positive side": "Gancho en lado positivo",
+    "Estimated strain · {strain:.2f}%": "Deformación estimada · {strain:.2f}%",
+    "Enter a verified material limit.": "Indica el límite medido.",
+    "Check hook and beam dimensions.": "Revisa el brazo y el gancho.",
+    "Check the snap-fit beam, hook and ramp dimensions.": "Revisa las medidas del brazo, el gancho y la rampa.",
+    "Set positive side and axial clearances for the snap-fit.": "Usa holguras lateral y axial mayores que cero.",
+    "Keep a retaining shoulder by reducing clearance or increasing the hook or reach.":
+        "Reduce la holgura o aumenta la altura o el alcance del gancho para conservar la retención.",
+    "Lengthen the snap-fit beam or reduce its thickness or hook height.":
+        "Alarga el brazo o reduce su grosor o la altura del gancho.",
+    "Enter the print material and its verified strain limit for the snap-fit.":
+        "Indica el material de impresión y su límite de deformación verificado.",
+    "The snap-fit exceeds the configured strain limit. Lengthen or thin the beam.":
+        "El cierre supera el límite de deformación. Alarga el brazo o reduce su grosor.",
+    "The snap-fit beam or socket could not be cut cleanly.":
+        "No se pudo generar una malla válida para el brazo o su alojamiento.",
+    "The snap-fit blocks insertion or its hook does not retain the parts.":
+        "El cierre bloquea la inserción o el gancho no retiene las piezas.",
+    "Press {groups} together along the cut normal until the hooks seat.":
+        "Presiona {groups} en la dirección normal al corte hasta encajar los ganchos.",
 }
 CATALOG = {
     locale: {

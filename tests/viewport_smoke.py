@@ -670,6 +670,33 @@ def capture_shaped_connector():
     screenshot("29-keyed-profile.png")
 
 
+def setup_snap_fit():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        settings = bpy.context.scene.tntmesh_settings
+        settings.connector = "SNAP_FIT"
+        settings.snap_reach, settings.snap_thickness, settings.snap_hook = 9.8, 1.05, .65
+        settings.snap_angle = .31
+        settings.snap_material = "PETG"
+        settings.snap_strain_limit = 2.5
+        settings.show_cut_handle = False
+        bpy.context.preferences.view.language = "es"
+        bpy.context.preferences.view.use_translate_interface = True
+        assert bpy.ops.tntmesh.suggest_connectors() == {"FINISHED"}
+        assert len(settings.connector_points) == 1 and settings.show_plane
+    area.tag_redraw()
+
+
+def leave_snap_fit_panel():
+    window, _, region = viewport()
+    window.event_simulate(type="MOUSEMOVE", value="NOTHING", x=region.x + 20, y=region.y + 20)
+
+
+def invalidate_snap_fit():
+    bpy.context.scene.tntmesh_settings.snap_strain_limit = .25
+    viewport()[1].tag_redraw()
+
+
 def open_taper_calibration():
     window, area, region = viewport()
     with bpy.context.temp_override(window=window, area=area, region=region):
@@ -845,6 +872,13 @@ shaped_connector_steps = (
      open_taper_calibration, capture_taper_calibration, reset_dovetail_preview)
     if line_steps and os.environ.get("TNTMESH_TEST_PROFILES") == "1" else ()
 )
+snap_fit_steps = (
+    (setup_snap_fit, lambda: toggle_smoke_panel(597, 30), scroll_magnet_details, leave_snap_fit_panel,
+     lambda: screenshot("31-snap-fit.png"), invalidate_snap_fit,
+     lambda: screenshot("32-snap-fit-strain.png"), lambda: scroll_magnet_details(up=True),
+     lambda: toggle_smoke_panel(597, 30), reset_dovetail_preview)
+    if line_steps and os.environ.get("TNTMESH_TEST_SNAP_FIT") == "1" else ()
+)
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled,
      lambda: open_export_browser(True), lambda: check_export_browser(True),
@@ -899,7 +933,7 @@ resin_steps = (
 )
 steps = iter((
     setup, panel, *line_steps, *contour_steps, *path_steps, *snap_steps, *gizmo_steps, *connector_steps,
-    *magnet_steps, *dovetail_steps, *shaped_connector_steps, *phase3_steps,
+    *magnet_steps, *dovetail_steps, *shaped_connector_steps, *snap_fit_steps, *phase3_steps,
     split, undo, redo, spanish, panel,
     lambda: screenshot("03-spanish.png"),
     *estimate_steps, *resin_steps,

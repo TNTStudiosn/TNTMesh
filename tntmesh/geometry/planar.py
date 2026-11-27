@@ -14,6 +14,7 @@ from .dovetail import layout as dovetail_layout
 from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
 from .polygon import Point2
+from .snap_fit import SnapFit, add_snap_fits, snap_centers
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | Dovetail | Magnet | None = None
+    connector: Connector | CustomConnector | Dovetail | Magnet | SnapFit | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -63,7 +64,8 @@ def dovetail_positions(
 
 
 def validate_positions(
-    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector | Dovetail | Magnet,
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float,
+    design: Connector | Dovetail | Magnet | SnapFit,
     positions: tuple[Point2, ...], flip: bool,
 ) -> None:
     if isinstance(design, Magnet):
@@ -73,7 +75,21 @@ def validate_positions(
     if isinstance(design, Dovetail):
         dovetail_positions(engine, cut, frame, kerf, design, positions, flip)
         return
+    if isinstance(design, SnapFit):
+        snap_positions(engine, cut, frame, kerf, design, positions, flip)
+        return
     standard_positions(engine, cut, frame, kerf, design, positions, flip)
+
+
+def snap_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: SnapFit,
+    positions: tuple[Point2, ...], flip: bool,
+) -> tuple[Point2, ...]:
+    cut, frame, requested = connector_frame(cut, frame, positions, flip)
+    if flip:
+        design = design.reflected("Y")
+    points = snap_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
+    return tuple((point.x, -point.y if flip else point.y) for point in points)
 
 
 def standard_positions(
@@ -169,6 +185,11 @@ def split(
             if config.pin_positive:
                 design = replace(design, angle=pi - design.angle)
             result = add_dovetails(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
+                                   design, cut.epsilon, requested)
+        elif isinstance(design, SnapFit):
+            if config.pin_positive:
+                design = design.reflected("Y")
+            result = add_snap_fits(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
                                    design, cut.epsilon, requested)
         else:
             if config.pin_positive:
