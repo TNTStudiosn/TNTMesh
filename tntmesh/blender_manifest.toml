@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "tntmesh"
-version = "0.3.0-alpha.22"
+version = "0.3.0-alpha.23"
 name = "TNTMesh"
 tagline = "Prepare, split and connect models for 3D printing"
 maintainer = "TNTStudios"

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.23
+
+- Build the slotted press-fit pin before attaching it so rotation and offset do not cause false topology failures.
+
 ## 0.3.0-alpha.22
 
 - Added slotted press-fit pins with configurable radial interference, checked wall clearance and a material strain limit on straight and symmetric cuts.

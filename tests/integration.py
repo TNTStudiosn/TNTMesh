@@ -510,6 +510,31 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(source.matrix_world, world)
         self.assertEqual(len(source.data.polygons), 6)
 
+    def test_press_fit_preserves_closed_prongs_at_offset_positions(self):
+        settings = self.settings
+        settings.connector = "PRESS_FIT"
+        settings.press_material = "Test print coupon"
+        settings.press_strain_limit = 4
+        for diameter, reach, interference, slot, lateral, kerf, angle, positive in (
+            (5, 20, .18, 1.2, .15, 0, .63, True),
+            (4, 18, .1, .85, .16, .3, .17, False),
+            (7, 27, .26, 1.5, .15, 0, 3.11, False),
+        ):
+            with self.subTest(diameter=diameter, angle=angle, kerf=kerf, positive=positive):
+                self.cube(72)
+                settings.press_diameter, settings.press_reach = diameter, reach
+                settings.press_interference, settings.press_slot = interference, slot
+                settings.lateral, settings.kerf = lateral, kerf
+                settings.press_angle, settings.pin_positive = angle, positive
+                settings.connector_points.clear()
+                for point in ((-10, -6), (10, 5)):
+                    settings.connector_points.add().position = point
+                self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+                pieces = self.addon.assembly.members(bpy.context)
+                self.assertEqual(len(pieces), 2)
+                self.assertTrue(all(self.checked(piece) > 100 for piece in pieces))
+                self.assertGreater(self.addon.assembly.overlaps(bpy.context, pieces)[0][2], .5)
+
     def test_press_fit_symmetric_draft_retains_existing_build_on_failed_revalidation(self):
         source = self.cube(110)
         settings = self.settings

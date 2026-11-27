@@ -126,12 +126,17 @@ def add_press_fits(
     tx = engine.transaction
     tip = high + design.reach
     radius = design.pin_radius
-    root = design.section(radius, radius)
-    swelling = design.section(radius, design.radius + design.interference)
-    lead = design.section(radius * .8, radius * .8)
+    # Build the fork at the origin before rotation, translation or union with
+    # the body. Applying the slot to the large joined part can make Exact
+    # re-tessellate and collapse otherwise unrelated faces around the seam.
+    neutral = replace(design, angle=0)
+    root = neutral.section(radius, radius)
+    swelling = neutral.section(radius, design.radius + design.interference)
+    lead = neutral.section(radius * .8, radius * .8)
+    local_tip = kerf + design.reach
     blank_sections = (
-        (low - design.anchor, root), (high + .55 * design.reach, root),
-        (high + .76 * design.reach, swelling), (high + .86 * design.reach, swelling), (tip, lead),
+        (-design.anchor, root), (kerf + .55 * design.reach, root),
+        (kerf + .76 * design.reach, swelling), (kerf + .86 * design.reach, swelling), (local_tip, lead),
     )
     floor = tip + design.axial
     mouth = design.section(design.radius + design.travel, design.radius + design.travel)
@@ -142,28 +147,31 @@ def add_press_fits(
     inset = min(epsilon, design.wall / 20)
     cutter = ((high - inset, mouth), *socket_sections)
     slot_end = design.slot / 2
-    slot_center = low + design.slot * .625
+    slot_center = design.slot * .625
     # Round the bottom of the slot in the longitudinal plane of the flex.
     arc = tuple((slot_end * x, slot_center + slot_end * y) for x, y in RING[len(RING) // 2:])
-    arc += ((slot_end, slot_center), (slot_end, tip + inset), (-slot_end, tip + inset))
-    rotated = Matrix.Rotation(design.angle, 3, "Z")
-    slot_frame = Matrix((rotated.col[1], rotated.col[2], rotated.col[0])).transposed()
-    slot_x, slot_y = rotated.col[0], rotated.col[1]
+    arc += ((slot_end, slot_center), (slot_end, local_tip + inset), (-slot_end, local_tip + inset))
+    slot_frame = Matrix((identity.col[1], identity.col[2], identity.col[0])).transposed()
+    origin = Vector((0, 0, 0))
+    blank = profile_loft(tx, identity, origin, blank_sections)
+    slot = profile_prism(tx, slot_frame, origin, -design.radius, design.radius, arc)
+    fork = engine.run(blank, slot, "DIFFERENCE")
+    tx.remove_mesh(blank)
+    tx.remove_mesh(slot)
+    weld_collapsed_edges(fork)
+    pin_check = inspect(fork)
+    if pin_check.shells != 1:
+        raise MeshError("The press-fit prongs could not be cut as a single pin.")
+    transform = Matrix.Rotation(design.angle, 4, "Z")
 
-    expected_pin = 0.0
+    expected_pin = (pin_check.volume_mm3 - area(root) * design.anchor) * len(centers)
     expected_socket = section_volume(socket_sections) * len(centers)
     for center in centers:
-        blank = profile_loft(tx, identity, center, blank_sections)
-        x, y = slot_x.dot(center), slot_y.dot(center)
-        slot = profile_prism(tx, slot_frame, Vector((y, 0, 0)), x - design.radius, x + design.radius, arc)
-        pin = engine.run(blank, slot, "DIFFERENCE")
-        weld_collapsed_edges(pin)
-        pin_check = inspect(pin)
-        if pin_check.shells != 1:
-            raise MeshError("The press-fit prongs could not be cut as a single pin.")
-        expected_pin += pin_check.volume_mm3 - area(root) * design.anchor
-        joined_blank = engine.run(minus, blank, "UNION")
-        joined = engine.run(joined_blank, slot, "DIFFERENCE")
+        pin = tx.own_mesh(fork.copy())
+        transform.translation = Vector((center.x, center.y, low))
+        pin.transform(transform)
+        pin.update()
+        joined = engine.run(minus, pin, "UNION")
         socket = profile_loft(tx, identity, center, cutter)
         carved = engine.run(plus, socket, "DIFFERENCE")
         weld_collapsed_edges(joined)
@@ -177,9 +185,10 @@ def add_press_fits(
         if (measure_intersection(engine, approach, carved)
                 or measure_intersection(engine, pin, carved) <= BOOLEAN_VOLUME_NOISE):
             raise MeshError("The press-fit blocks assembly or has no retaining interference.")
-        for mesh in (minus, plus, blank, slot, pin, joined_blank, socket, approach):
+        for mesh in (minus, plus, pin, socket, approach):
             tx.remove_mesh(mesh)
         minus, plus = joined, carved
+    tx.remove_mesh(fork)
 
     after_minus, after_plus = inspect(minus), inspect(plus)
     deltas = ((after_minus.volume_mm3 - before_minus.volume_mm3, expected_pin),
