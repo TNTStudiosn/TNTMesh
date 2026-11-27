@@ -853,6 +853,51 @@ SPANISH = {
     "Apply enabled cuts and replace this draft's previously generated pieces":
         "Aplica los cortes activos y reemplaza las piezas generadas por este borrador",
     "Built {count} draft pieces.": "Se generaron {count} piezas del borrador.",
+    "Export Assembly Guide": "Exportar guía de ensamblaje",
+    "Save numbered assembly views and a suggested assembly order":
+        "Guarda vistas numeradas y un orden de montaje sugerido",
+    "Title": "Título",
+    "HTML and PNG": "HTML y PNG",
+    "Create a guide to open in a browser and two PNG images":
+        "Crea una guía para abrir en el navegador y dos imágenes PNG",
+    "Markdown and PNG": "Markdown y PNG",
+    "Create an editable Markdown guide and two PNG images":
+        "Crea una guía de Markdown editable y dos imágenes PNG",
+    "PNG images": "Imágenes PNG",
+    "Save the numbered assembled and exploded views": "Guarda las vistas numeradas armada y explosionada",
+    "HTML, Markdown and PNG": "HTML, Markdown y PNG",
+    "Save both documents and the numbered views": "Guarda ambos documentos y las vistas numeradas",
+    "Separation (mm)": "Separación (mm)",
+    "Set the explosion distance. Use zero for automatic spacing":
+        "Ajusta la distancia de la vista explosionada. Usa cero para calcularla automáticamente",
+    "Saved the assembly guide in {folder}.": "Se guardó la guía de ensamblaje en {folder}.",
+    "TNTMesh Assembly Guide": "Guía de ensamblaje TNTMesh",
+    "Assembled view": "Vista ensamblada",
+    "Exploded view": "Vista explosionada",
+    "Open full-size {view}": "Abrir {view} en tamaño completo",
+    "Assembly Parts": "Piezas del ensamblaje",
+    "External Components": "Componentes externos",
+    "No external components recorded.": "No hay componentes externos registrados.",
+    "Suggested Assembly Order": "Orden sugerido de montaje",
+    "Use the assembled view to match the pieces.": "Usa la vista ensamblada para identificar dónde va cada pieza.",
+    "No.": "Núm.",
+    "Piece Name": "Nombre de la pieza",
+    "Type": "Tipo",
+    "Size": "Medidas",
+    "Body piece": "Pieza del cuerpo",
+    "Loose connector": "Conector independiente",
+    "Disc magnet Ø{size} mm": "Imán de disco Ø{size} mm",
+    "Block magnet {size} mm": "Imán de bloque {size} mm",
+    "Fit {count} × {magnet} before joining. Check polarity against the mating pocket.":
+        "Coloca {count} × {magnet} antes de unir. Comprueba la polaridad con el imán del alojamiento opuesto.",
+    "Fit loose connectors {pieces} into their matching pockets.":
+        "Coloca los conectores independientes {pieces} en sus alojamientos.",
+    "Join {groups} in the assembled positions shown.": "Une {groups} en las posiciones de la vista ensamblada.",
+    "Some bodies from this cut are absent from the guide.": "Faltan piezas del cuerpo de este corte en la guía.",
+    "Some pieces lack recorded cut history. Use the numbered views to check their fit.":
+        "El historial de corte de algunas piezas está incompleto. Comprueba su ajuste con las vistas numeradas.",
+    "The assembly has no visible faces to render.": "El ensamblaje no tiene caras visibles para generar la imagen.",
+    "The assembly contains a piece with no faces.": "El ensamblaje contiene una pieza sin caras.",
 }
 CATALOG = {
     locale: {

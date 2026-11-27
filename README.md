@@ -10,6 +10,7 @@ TNTMesh is an early preview. It imports STL files, creates scaled or repaired co
 2. Open the 3D Viewport sidebar with **N**, select **TNTMesh** and import an STL or select a mesh.
 3. Set the cut type and position, then click **Split Model**. For a straight cut, choose the axis, enter an exact rotation, or draw a line in the viewport. TNTMesh keeps the source mesh and hides it by default.
 4. Use **Check Mesh** for topology and volume checks, then **Export Pieces** to save STL, OBJ, FBX, PLY or 3MF files. Export selected pieces, the current assembly or loose connectors. You can also bundle files in a ZIP and place exported pieces on the build plate.
+5. Open **Assembly → Export Assembly Guide** to save numbered PNG views with a parts list and suggested assembly order in HTML or Markdown.
 
 For a straight cut, open **Cut settings** to change clearances, connector count or generate separate pins. **Draft** stores a chain of cuts in the `.blend` file. Add the cuts, select each target piece, then click **Build Draft**.
 

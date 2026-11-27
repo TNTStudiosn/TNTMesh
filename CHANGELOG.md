@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.16
+
+- Added assembly guides with numbered assembled and exploded PNG views, cut relationships, loose connectors, recorded magnet sizes and a suggested build order in HTML and Markdown.
+
 ## 0.3.0-alpha.15
 
 - Added editable starting tolerances for common filament and resin materials in printer profiles.

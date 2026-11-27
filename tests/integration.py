@@ -7,12 +7,14 @@ import unittest
 from io import BytesIO
 from math import cos, pi, sin, sqrt, tau
 from pathlib import Path
+from struct import unpack
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
 import addon_utils
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Vector
 
 
@@ -1162,6 +1164,101 @@ class WorkflowTests(unittest.TestCase):
         with ZipFile(self.directory / "Bodies.zip") as bundle:
             self.assertEqual(len(bundle.namelist()), 2)
             self.assertTrue(all(name.startswith("Bodies_Cube · ") for name in bundle.namelist()))
+
+    def test_assembly_guide_exports_views_and_saved_cut_relationships(self):
+        original = self.cube(40)
+        original.name = "Fixture <unsafe>"
+        self.settings.connector = "MAGNET"
+        self.assertEqual(bpy.ops.tntmesh.magnet_library(action="PRESET", preset="DISC_6"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        first_body, second_body = self.parts()
+        self.addon.operators.select_results(bpy.context, [first_body])
+        self.settings.connector = "ROUND"
+        self.settings.loose_pins = True
+        self.settings.axis = "X"
+        self.settings.offset = 6
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual(len(parts), 4)
+        pin, = [obj for obj in parts if self.addon.operators.exporters.is_loose_connector(obj)]
+        pin_name = "Fastener | [renamed]"
+        pin.name = pin_name
+        bpy.context.scene.tntmesh_assembly.project = second_body["tntmesh_project_id"]
+        second_body.hide_set(True)
+        other_project = self.cube()
+        self.addon.operators.identify_part(other_project, "other project")
+        other_project.name = "Unrelated project"
+        before = [(obj.name, obj.matrix_world.copy(), obj.hide_get(), obj.select_get()) for obj in parts]
+        before_images = set(bpy.data.images.keys())
+
+        path = self.directory / "guide-project.blend"
+        self.assertEqual(bpy.ops.wm.save_as_mainfile(filepath=str(path)), {"FINISHED"})
+        self.assertEqual(bpy.ops.wm.open_mainfile(filepath=str(path), load_ui=False), {"FINISHED"})
+        parameters = dict(directory=str(self.directory), file_format="ALL", guide_title="Fixture & Guide")
+        self.assertEqual(bpy.ops.tntmesh.export_assembly_guide(**parameters), {"FINISHED"})
+        folder = self.directory / "Fixture & Guide"
+        self.assertEqual({entry.name for entry in folder.iterdir()},
+                         {"guide.html", "guide.md", "assembled.png", "exploded.png"})
+        report = (folder / "guide.html").read_text(encoding="utf-8")
+        self.assertIn("<title>Fixture &amp; Guide</title>", report)
+        self.assertIn("Fixture &lt;unsafe&gt;", report)
+        self.assertNotIn("Unrelated project", report)
+        self.assertIn("2 × Disc magnet Ø6 × 3 mm", report)
+        self.assertLess(report.index("Fit loose connectors"), report.index("Check polarity"))
+        self.assertEqual(report.count("<li>Join") + report.count(" Join "), 2)
+        markdown = (folder / "guide.md").read_text(encoding="utf-8")
+        self.assertIn(r"Fastener \| \[renamed\]", markdown)
+        self.assertIn("![Exploded view](exploded.png)", markdown)
+        self.assertIn("Loose connector", markdown)
+
+        guide_images = self.addon.assembly_ui.assembly_guide.guide_images
+        views = [(folder / name).read_bytes() for name in ("assembled.png", "exploded.png")]
+        self.assertNotEqual(*views)
+        for data in views:
+            self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertEqual(unpack(">II", data[16:24]), (guide_images.WIDTH, guide_images.HEIGHT))
+        pin_index = sorted((name for name, *_ in before), key=str.casefold).index(pin_name)
+        self.assertIn(pin_name, report)
+        color = np.array(guide_images.PALETTE[pin_index])
+        image = bpy.data.images.load(str(folder / "exploded.png"), check_existing=False)
+        try:
+            rgba = np.empty(len(image.pixels), dtype=np.float32)
+            image.pixels.foreach_get(rgba)
+            rgb = rgba.reshape(-1, 4)[:, :3]
+            matching = np.abs(rgb - rgb[:, 2:3] * (color / color[2])).max(axis=1) < .012
+            self.assertGreater(np.count_nonzero(matching & (rgb[:, 2] > .25)), 40)
+        finally:
+            bpy.data.images.remove(image)
+        self.assertEqual(set(bpy.data.images.keys()), before_images)
+        for name, matrix, hidden, selected in before:
+            obj = bpy.data.objects[name]
+            self.assertEqual(obj.matrix_world, matrix)
+            self.assertEqual(obj.hide_get(), hidden)
+            self.assertEqual(obj.select_get(), selected)
+
+        parameters["file_format"] = "PNG"
+        self.assertEqual(bpy.ops.tntmesh.export_assembly_guide(**parameters), {"FINISHED"})
+        other = self.directory / "Fixture & Guide_2"
+        self.assertEqual({entry.name for entry in other.iterdir()}, {"assembled.png", "exploded.png"})
+        self.assertEqual((folder / "guide.html").read_text(encoding="utf-8"), report)
+
+    def test_assembly_guide_groups_legacy_siblings_and_leaves_failed_output_empty(self):
+        self.cube()
+        self.settings.connector = "NONE"
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        guide = self.addon.assembly_ui.assembly_guide
+        for obj in parts:
+            del obj[guide.assembly_history.GUIDE_PATH]
+        data = guide.collect(bpy.context, "Legacy", parts)
+        self.assertTrue(data.has_legacy)
+        self.assertEqual(guide.step_labels(data), ["Join 01 / 02 in the assembled positions shown."])
+        part = parts[0]
+        part.data.clear_geometry()
+        self.assertEqual(bpy.ops.tntmesh.export_assembly_guide(
+            directory=str(self.directory),
+        ), {"CANCELLED"})
+        self.assertEqual(list(self.directory.iterdir()), [])
 
     def test_unsafe_connector_and_tangent_leave_no_geometry(self):
         source = self.cube()
@@ -2328,6 +2425,10 @@ class WorkflowTests(unittest.TestCase):
         draft = self.addon.draft.active_plan(bpy.context.scene)
         self.assertEqual([cut.uid for cut in draft.cuts], cuts)
         self.assertEqual(draft.cuts[1].name, "Second cut")
+        guide = self.addon.assembly_ui.assembly_guide
+        saved = guide.collect(bpy.context, "Draft", self.parts())
+        self.assertEqual([joint.depth for joint in saved.joints], [1, 0])
+        self.assertEqual(sorted(map(len, saved.joints[1].branches)), [1, 2])
         self.assertEqual(draft.cuts[1].settings.axis, "X")
         draft.cuts[1].settings.offset = 2.5
         self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})

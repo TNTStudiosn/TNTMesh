@@ -5,6 +5,7 @@ import bpy
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty, StringProperty
 from mathutils import Matrix, Vector
 
+from . import assembly_history
 from .geometry.mesh import evaluated_mm
 from .geometry.planar import PlanarCut, axis_frame
 from .geometry.volume import apply_cut, structural_parts
@@ -210,6 +211,7 @@ def rebuild(
                     source.hide_set(True)
             leaves = {SOURCE: mesh}
             directions = {SOURCE: Vector((0, 0, 0))}
+            paths = {SOURCE: ()}
             pins = {}
             for index, operation in enumerate(operations, 1):
                 target = leaves.pop(operation.target)
@@ -224,6 +226,12 @@ def rebuild(
                 transaction.remove_mesh(target)
                 keys = cut_outputs(operation)
                 leaves.update(zip(keys, pieces[:len(keys)], strict=True))
+                inherited_path = paths.pop(operation.target)
+                stock = assembly_history.magnet_stock(config)
+                for branch, key in enumerate(keys, 1):
+                    paths[key] = inherited_path + (
+                        assembly_history.Branch(operation.uid, branch, len(keys), stock),
+                    )
                 if isinstance(config, PlanarCut):
                     normal = axis_frame(config.axis, config.rotation).col[2]
                     directions[keys[0]] = inherited - normal
@@ -231,10 +239,10 @@ def rebuild(
                 else:
                     for key in keys:
                         directions[key] = inherited.copy()
-                pins.update(
-                    (f"{operation.uid}:pin:{number}", pin)
-                    for number, pin in enumerate(pieces[len(keys):], 1)
-                )
+                for number, pin in enumerate(pieces[len(keys):], 1):
+                    key = f"{operation.uid}:pin:{number}"
+                    pins[key] = pin
+                    paths[key] = inherited_path + (assembly_history.Branch(operation.uid, 0, len(keys)),)
                 wm.progress_update(index)
 
             collection = owned_collection(context.scene, "part")
@@ -249,6 +257,7 @@ def rebuild(
                 identify_part(obj, plan.uid, part_id)
                 obj[DRAFT_ID] = plan.uid
                 obj[PART_KIND] = "pin" if key in pins else "body"
+                assembly_history.set_path(obj, paths[key])
                 if key in directions and directions[key].length_squared:
                     obj[ASSEMBLY_DIRECTION] = tuple(directions[key])
                 created.append((obj, name))

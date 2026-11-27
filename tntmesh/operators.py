@@ -16,7 +16,7 @@ from bpy.props import (
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Matrix, Vector
 
-from . import draft, exporters, stl
+from . import assembly_history, draft, exporters, stl
 from .geometry.grid import fit_grid
 from .geometry.material_split import split_materials
 from .geometry.mesh import bounds, evaluated_mm, inspect
@@ -74,6 +74,7 @@ def publish_parts(
     project_id = source.get(PROJECT_ID) or uuid4().hex
     collection = owned_collection(context.scene, "part")
     parts = []
+    inherited = assembly_history.path(source)
     for index, mesh in enumerate(meshes, 1):
         mesh.transform(Matrix.Scale(1.0 / unit, 4))
         mesh.update()
@@ -85,7 +86,9 @@ def publish_parts(
         obj.location = origin
         identify_part(obj, project_id)
         obj[PART_KIND] = "pin" if bodies is not None and index > bodies else "body"
-        obj["tntmesh_parent_part_id"] = source.get(PART_ID, "")
+        obj[assembly_history.PARENT_PART] = source.get(PART_ID, "")
+        if inherited and index == 1:
+            assembly_history.set_path(obj, inherited)
         if direction is not None and index in (1, 2):
             inherited = Vector(source.get(ASSEMBLY_DIRECTION, (0, 0, 0)))
             obj[ASSEMBLY_DIRECTION] = tuple(inherited + (direction if index == 2 else -direction))
@@ -219,12 +222,14 @@ class TNTMESH_OT_split(bpy.types.Operator, MeshOperator):
                 config = settings.config(source)
                 meshes = apply_cut(context, transaction, mesh, config, origin, unit, source)
                 wm.progress_update(2)
+                body_count = structural_parts(settings.cut_kind)
                 parts = publish_parts(
                     context, transaction, source, meshes, origin, unit,
-                    bodies=structural_parts(settings.cut_kind),
+                    bodies=body_count,
                     direction=axis_frame(config.axis, config.rotation).col[2]
                     if isinstance(config, PlanarCut) else None,
                 )
+                assembly_history.record_cut(source, parts, body_count, assembly_history.magnet_stock(config))
             select_new_parts(context, source, parts)
             wm.progress_update(3)
         except (MeshError, RuntimeError, ValueError) as error:
@@ -274,6 +279,7 @@ class TNTMESH_OT_fit_grid(bpy.types.Operator, MeshOperator):
                     self.report({"INFO"}, tr("The model already fits in this orientation."))
                     return {"CANCELLED"}
                 parts = publish_parts(context, transaction, source, meshes, origin, unit)
+                assembly_history.record_cut(source, parts, len(parts))
             select_new_parts(context, source, parts)
             wm.progress_update(3)
         except (MeshError, RuntimeError, ValueError) as error:
@@ -351,6 +357,9 @@ class TNTMESH_OT_split_materials(bpy.types.Operator, MeshOperator):
                     material = mesh.materials[cut.slot - 1]
                     if material is not None:
                         obj.color = material.diffuse_color
+                bodies = [obj for obj, cut in zip(parts, cuts, strict=True) if not cut.pin]
+                pins = [obj for obj, cut in zip(parts, cuts, strict=True) if cut.pin]
+                assembly_history.record_cut(source, bodies + pins, len(bodies))
             select_new_parts(context, source, parts)
             wm.progress_update(3)
         except (MeshError, RuntimeError, ValueError) as error:

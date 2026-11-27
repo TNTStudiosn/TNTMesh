@@ -772,6 +772,24 @@ def check_export_cancelled():
     assert len(pieces()) == 2
 
 
+def open_guide_browser():
+    window, area, region = viewport()
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        assert bpy.ops.tntmesh.export_assembly_guide(
+            "INVOKE_DEFAULT", directory=str(output), file_format="ALL", guide_title="Guía de prueba",
+        ) == {"RUNNING_MODAL"}
+
+
+def check_guide_browser():
+    window, area = next(
+        (window, area) for window in bpy.context.window_manager.windows
+        for area in window.screen.areas if area.type == "FILE_BROWSER"
+    )
+    with bpy.context.temp_override(window=window, area=area):
+        assert bpy.ops.screen.screenshot(filepath=str(output / "06-assembly-guide.png")) == {"FINISHED"}
+    window.event_simulate(type="ESC", value="PRESS")
+
+
 line_steps = (start_line, click_start, click_end, verify_line, start_line, click_start,
               cancel_line, verify_cancel) if os.environ.get("TNTMESH_TEST_EVENTS") == "1" else ()
 contour_steps = (
@@ -830,6 +848,7 @@ shaped_connector_steps = (
 export_steps = (
     (open_export_browser, check_export_browser, check_export_cancelled,
      lambda: open_export_browser(True), lambda: check_export_browser(True),
+     check_export_cancelled, open_guide_browser, check_guide_browser,
      check_export_cancelled) if line_steps else ()
 )
 printer_steps = (

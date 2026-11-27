@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from math import degrees, tau
+from pathlib import Path
 
 import bpy
-from bpy.props import EnumProperty, FloatProperty, IntProperty
+from bpy.props import EnumProperty, FloatProperty, IntProperty, StringProperty
 from mathutils import Matrix, Vector
 
-from . import assembly
+from . import assembly, assembly_guide, assembly_history
 from .geometry.mesh import evaluated_mm, inspect
 from .localization import tr
 from .model import (
@@ -131,6 +132,9 @@ class TNTMESH_OT_assembly_action(bpy.types.Operator):
             collection.objects.link(obj)
             if DRAFT_ID in obj:
                 del obj[DRAFT_ID]
+            if assembly_history.PARENT_PART in obj:
+                del obj[assembly_history.PARENT_PART]
+            assembly_history.set_path(obj, ())
             world = source.matrix_world.copy()
             world.translation.x += max(source.dimensions.x, 1 / unit) + 2 / unit
             obj.matrix_world = world
@@ -284,6 +288,70 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class TNTMESH_OT_export_assembly_guide(bpy.types.Operator):
+    bl_idname = "tntmesh.export_assembly_guide"
+    bl_label = "Export Assembly Guide"
+    bl_description = "Save numbered assembly views and a suggested assembly order"
+
+    directory: StringProperty(subtype="DIR_PATH")
+    guide_title: StringProperty(name="Title", maxlen=120)
+    file_format: EnumProperty(
+        name="Format",
+        items=[
+            ("HTML", "HTML and PNG", "Create a guide to open in a browser and two PNG images"),
+            ("MARKDOWN", "Markdown and PNG", "Create an editable Markdown guide and two PNG images"),
+            ("PNG", "PNG images", "Save the numbered assembled and exploded views"),
+            ("ALL", "HTML, Markdown and PNG", "Save both documents and the numbered views"),
+        ],
+        default="HTML",
+    )
+    explosion: FloatProperty(
+        name="Separation (mm)", description="Set the explosion distance. Use zero for automatic spacing",
+        default=0, min=0, soft_max=100, max=10000, precision=2,
+    )
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.mode == "OBJECT" and bool(assembly.members(context))
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
+        if bpy.data.filepath and not self.directory:
+            self.directory = str(Path(bpy.data.filepath).parent)
+        if not self.is_property_set("explosion"):
+            self.explosion = context.scene.tntmesh_assembly.distance
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def draw(self, context: bpy.types.Context) -> None:
+        layout = self.layout
+        layout.prop(self, "guide_title")
+        layout.prop(self, "file_format")
+        layout.separator()
+        layout.label(text=tr("Separation (mm)"), translate=False)
+        layout.prop(self, "explosion", text="")
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        destination = Path(self.directory)
+        if not self.directory or not destination.is_dir():
+            return report_failure(self, MeshError("Choose an existing destination folder."))
+        pieces = assembly.members(context)
+        if not pieces:
+            return report_failure(self, MeshError("Select a generated piece to open its assembly."))
+        wm = context.window_manager
+        wm.progress_begin(0, 1)
+        try:
+            folder = assembly_guide.export(
+                context, pieces, destination, self.guide_title, self.file_format, self.explosion,
+            )
+            wm.progress_update(1)
+        except (MeshError, OSError, RuntimeError, ValueError, OverflowError) as error:
+            return report_failure(self, error)
+        finally:
+            wm.progress_end()
+        self.report({"INFO"}, tr("Saved the assembly guide in {folder}.").format(folder=folder.name))
+        return {"FINISHED"}
+
+
 class TNTMESH_PT_assembly(bpy.types.Panel):
     bl_label = "Assembly"
     bl_space_type = "VIEW_3D"
@@ -326,6 +394,7 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
                 layout.operator("tntmesh.assembly_action", text="Back to Assembly", icon="LOOP_BACK").action = "RESET"
             layout.operator("tntmesh.check_assembly", icon="VIEWZOOM")
             layout.operator("tntmesh.check_insertion", icon="PLAY")
+        layout.operator("tntmesh.export_assembly_guide", icon="FILE_TEXT")
 
         if obj is not None:
             header, body = layout.panel("tntmesh_assembly_details", default_closed=True)
@@ -339,4 +408,4 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
 
 CLASSES = (TNTMESH_OT_assembly_project, TNTMESH_OT_assembly_action,
            TNTMESH_OT_check_assembly, TNTMESH_OT_check_insertion, TNTMESH_UL_assembly_parts,
-           TNTMESH_PT_assembly)
+           TNTMESH_OT_export_assembly_guide, TNTMESH_PT_assembly)

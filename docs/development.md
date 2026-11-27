@@ -68,6 +68,10 @@ The **Assembly** panel groups generated pieces by their persistent project ID. I
 
 **Check Insertion Path** checks a straight translation of the selected piece toward its assembled position. Choose a starting direction and distance. The check estimates contact intervals between triangles and verifies solid overlap at their boundaries and intermediate positions using temporary copies in millimeters. The result names the first blocking part found and gives a distance where the obstruction occurs. The scene geometry and transforms stay intact. The check uses the same numerical tolerances as the assembled-position overlap check. Paths with rotation are pending.
 
+**Export Assembly Guide** creates a separate folder for the current project. Save HTML for browsers, Markdown for editing, both documents, or just the assembled and exploded PNG images. The numbers match the parts list. Direct cuts and draft builds record which pieces and loose connectors came from each cut. The suggested order groups the innermost subassemblies first. Magnet cuts record the dimensions and quantity of purchased magnets. Projects saved before guide history was added can recover direct cut groups when sibling records are available. Rebuild older drafts to capture full guide history.
+
+Use the separation field to change the exploded image, or enter zero for automatic spacing based on the size of the assembly. The images use current assembled geometry. Pieces fully hidden by other geometry appear in the parts list. Keep both PNG files next to the guide when moving it to another folder.
+
 ## Export
 
 **Export Pieces** saves closed meshes in millimeters. Choose selected pieces, all current pieces, or loose connectors only. For projects saved before connector types were recorded, keep the generated pin names to use the connector filter. STL, OBJ, FBX and PLY save one file per piece. 3MF can also keep all pieces as independent objects in one file. The slicer controls profiles, supports, materials and toolpaths. [3MF Core Specification](https://github.com/3MFConsortium/spec_core)
