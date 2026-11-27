@@ -11,6 +11,7 @@ from .connector import Connector, add_connector, safe_centers
 from .custom_connector import CustomConnector, add_custom_connector
 from .dovetail import Dovetail, add_dovetails
 from .dovetail import layout as dovetail_layout
+from .hinge import Hinge, add_hinge
 from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
 from .polygon import Point2
@@ -22,7 +23,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | Dovetail | Magnet | SnapFit | None = None
+    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | SnapFit | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -169,6 +170,8 @@ def split(
     cut = split_plane(context, transaction, mesh, frame, config.kerf, offset=config.offset)
     minus, plus = cut.minus, cut.plus
     engine = ExactBoolean(context, transaction)
+    if isinstance(config.connector, Hinge):
+        return add_hinge(engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon)
     if isinstance(config.connector, CustomConnector):
         return add_custom_connector(
             engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon

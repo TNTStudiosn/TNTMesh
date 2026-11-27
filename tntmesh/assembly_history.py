@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import bpy
 
+from .geometry.hinge import Hinge
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.snap_fit import SnapFit
@@ -37,20 +38,26 @@ class Branch:
     index: int
     count: int
     magnet: StockMagnet | None = None
-    snap_fit: bool = False
+    connector: str = ""
+
+    @property
+    def snap_fit(self) -> bool:
+        return self.connector == "SNAP_FIT"
 
 
-def connection_details(config: object) -> tuple[StockMagnet | None, bool]:
+def connection_details(config: object) -> tuple[StockMagnet | None, str]:
     primary = config.primary if isinstance(config, SymmetricCut) else config
     if not isinstance(primary, PlanarCut):
-        return None, False
+        return None, ""
+    if isinstance(primary.connector, Hinge):
+        return None, "HINGE"
     if not isinstance(primary.connector, Magnet):
-        return None, isinstance(primary.connector, SnapFit)
+        return None, "SNAP_FIT" if isinstance(primary.connector, SnapFit) else ""
     magnet = primary.connector
     size = (magnet.width, magnet.thickness) if magnet.shape == "DISC" else (
         magnet.width, magnet.length, magnet.thickness
     )
-    return StockMagnet(magnet.shape, size, magnet.count * (4 if isinstance(config, SymmetricCut) else 2)), False
+    return StockMagnet(magnet.shape, size, magnet.count * (4 if isinstance(config, SymmetricCut) else 2)), ""
 
 
 def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
@@ -59,10 +66,10 @@ def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
         return ()
     try:
         entries = []
-        for cut, index, count, stock, *snap in json.loads(raw):
+        for cut, index, count, stock, *connector in json.loads(raw):
             if not isinstance(cut, str) or type(index) is not int or type(count) is not int:
                 return ()
-            if not cut or not (0 <= index <= count <= 32767) or snap not in ([], ["SNAP_FIT"]):
+            if not cut or not (0 <= index <= count <= 32767) or connector not in ([], ["SNAP_FIT"], ["HINGE"]):
                 return ()
             magnet = None
             if stock is not None:
@@ -72,7 +79,7 @@ def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
                         or quantity <= 0 or not all(isfinite(value) and value > 0 for value in size)):
                     return ()
                 magnet = StockMagnet(shape, tuple(size), quantity)
-            entries.append(Branch(cut, index, count, magnet, bool(snap)))
+            entries.append(Branch(cut, index, count, magnet, connector[0] if connector else ""))
         return tuple(entries)
     except (TypeError, ValueError, OverflowError):
         return ()
@@ -82,7 +89,7 @@ def set_path(obj: bpy.types.Object, entries: tuple[Branch, ...]) -> None:
     obj[GUIDE_PATH] = json.dumps([
         (entry.cut, entry.index, entry.count,
          (entry.magnet.shape, entry.magnet.size, entry.magnet.count) if entry.magnet else None,
-         *(("SNAP_FIT",) if entry.snap_fit else ()))
+         *((entry.connector,) if entry.connector else ()))
         for entry in entries
     ], separators=(",", ":"))
 
@@ -92,10 +99,10 @@ def record_cut(
 ) -> None:
     inherited = path(source)
     cut = uuid4().hex
-    magnet, snap_fit = connection_details(config)
+    magnet, connector = connection_details(config)
     for index, part in enumerate(parts, 1):
         branch = index if index <= body_count else 0
-        set_path(part, inherited + (Branch(cut, branch, body_count, magnet, snap_fit),))
+        set_path(part, inherited + (Branch(cut, branch, body_count, magnet, connector),))
 
 
 def legacy_paths(

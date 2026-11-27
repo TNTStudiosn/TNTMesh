@@ -145,6 +145,20 @@ def cut_details(
         snap_details(layout, settings)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
+    elif settings.connector == "HINGE":
+        if settings.cut_kind != "PLANAR":
+            layout.label(text="Choose a straight cut for the pin hinge.", icon="ERROR")
+            return
+        layout.prop(settings, "hinge_opening")
+        placement = layout.column(align=True)
+        for name in ("angle", "shift", "stand_off"):
+            placement.prop(settings, f"hinge_{name}")
+        geometry = layout.column(align=True)
+        for name in ("diameter", "pin_diameter", "width", "knuckles"):
+            geometry.prop(settings, f"hinge_{name}")
+        tolerances = layout.column(align=True)
+        for name in ("lateral", "axial", "wall"):
+            tolerances.prop(settings, name)
     elif settings.connector != "NONE":
         connector_details(layout, settings, settings.connector)
         if settings.cut_kind == "PLANAR":

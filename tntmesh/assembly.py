@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from dataclasses import dataclass
-from math import isfinite, tau
+from math import isfinite, pi, tau
 
 import bpy
 from bpy.props import FloatProperty, IntProperty, StringProperty
 from mathutils import Matrix, Vector
 
-from .geometry.boolean import ExactBoolean
-from .geometry.mesh import BOOLEAN_VOLUME_NOISE, absolute_volume, bounds, evaluated_mm, inspect
+from .geometry.boolean import ExactBoolean, measure_intersection
+from .geometry.mesh import BOOLEAN_VOLUME_NOISE, bounds, evaluated_mm, inspect
 from .geometry.sweep import (
     ROTATION_LIMIT_ERROR,
     RotarySweep,
@@ -18,6 +18,9 @@ from .geometry.sweep import (
 from .geometry.triangle_bounds import hierarchy, triangles_from
 from .model import (
     ASSEMBLY_DIRECTION,
+    HINGE_AXIS,
+    HINGE_OPENING,
+    HINGE_PIVOT,
     PROJECT_ID,
     ROLE,
     SLIDE_DIRECTION,
@@ -27,8 +30,11 @@ from .model import (
 )
 
 CONTACT_EPSILON = 0.001
-MESH_FLOAT_EPSILON = 2 ** -23
 MAX_ROTARY_TESTS = 2048
+
+
+def clear_hinge_blocker(state, _context) -> None:
+    state.hinge_blocker = ""
 
 
 class TNTMESH_PG_assembly(bpy.types.PropertyGroup):
@@ -38,6 +44,11 @@ class TNTMESH_PG_assembly(bpy.types.PropertyGroup):
         name="Explosion (mm)", description="Move preview geometry away from the assembly",
         default=0, min=0, soft_max=100, max=10000, precision=2,
     )
+    hinge_fraction: FloatProperty(
+        name="Hinge Preview", description="Preview a fraction of the verified hinge opening",
+        min=0, max=1, subtype="FACTOR", update=clear_hinge_blocker,
+    )
+    hinge_blocker: StringProperty(options={"HIDDEN", "SKIP_SAVE"})
 
 
 def project_id(context: bpy.types.Context) -> str:
@@ -69,6 +80,39 @@ def current_member(context: bpy.types.Context) -> bpy.types.Object | None:
     if belongs(context.active_object, project):
         return context.active_object
     return next(iter(members(context)), None)
+
+
+@dataclass(frozen=True)
+class HingeMotion:
+    moving: bpy.types.Object
+    pivot: Vector
+    axis: Vector
+    opening: float
+
+    def matrix(self, fraction: float) -> Matrix:
+        rotation = Matrix.Rotation(self.opening * fraction, 4, self.axis)
+        return Matrix.Translation(self.pivot) @ rotation @ Matrix.Translation(-self.pivot)
+
+
+def hinge_motion(context: bpy.types.Context) -> HingeMotion | None:
+    candidates = [obj for obj in members(context) if HINGE_PIVOT in obj.data]
+    active = current_member(context)
+    moving = active if active in candidates else next(iter(candidates), None)
+    if moving is None:
+        return None
+    world = moving.evaluated_get(context.evaluated_depsgraph_get()).matrix_world
+    linear = world.to_3x3()
+    try:
+        opening = float(moving.data.get(HINGE_OPENING, 0))
+        pivot = world @ Vector(moving.data[HINGE_PIVOT])
+        axis = linear @ Vector(moving.data[HINGE_AXIS])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not all(map(isfinite, (*pivot, *axis, opening))) or not 0 < opening <= pi + 1e-6 or not axis.length_squared:
+        return None
+    if linear.determinant() < 0:
+        axis.negate()
+    return HingeMotion(moving, pivot, axis.normalized(), opening)
 
 
 def world_box(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph) -> tuple[Vector, Vector]:
@@ -153,23 +197,6 @@ def candidate_pair(
         max(first_lower[axis], second.lower[axis]) > CONTACT_EPSILON
         for axis in range(3)
     )
-
-
-def measure_intersection(
-    engine: ExactBoolean, first: bpy.types.Mesh, second: bpy.types.Mesh,
-) -> float:
-    intersection = engine.run(first, second, "INTERSECT")
-    try:
-        volume = absolute_volume(intersection)
-        if volume <= BOOLEAN_VOLUME_NOISE:
-            return 0.0
-        scale = max(abs(coordinate) for vertex in intersection.vertices for coordinate in vertex.co)
-        # A surface displaced by one mesh-coordinate ULP can report area times
-        # that displacement as volume, even where two assembled faces touch.
-        roundoff = sum(face.area for face in intersection.polygons) * scale * MESH_FLOAT_EPSILON
-        return volume if volume > roundoff else 0.0
-    finally:
-        engine.transaction.remove_mesh(intersection)
 
 
 def overlaps(

@@ -42,6 +42,10 @@ Indica el material de impresión y su deformación admisible medida con la orien
 
 El corte añade instrucciones de encaje a la guía de ensamblaje. **Revisar recorrido de inserción** usa mallas rígidas y puede identificar el contacto previsto al introducir el gancho.
 
+Elige **Bisagra de pasador** en un corte recto para generar dos hojas y un pasador con cabeza como tres piezas. Gira el borde de montaje en el plano de corte y desplaza la bisagra a lo largo de ese borde. El eje se sitúa hacia el exterior. Ajusta la cantidad de casquillos, sus diámetros y el del pasador, la holgura lateral alrededor del pasador, la separación axial entre casquillos y el ángulo de apertura. TNTMesh comprueba que todos los casquillos estén anclados y valida el espesor, el ajuste del pasador y el recorrido antes de publicar las piezas.
+
+En **Ensamblaje**, el deslizador **Apertura** muestra el recorrido comprobado y conserva la posición original de las piezas para la edición y exportación. Usa **Revisar apertura** después de añadir piezas o mover el ensamblaje. El control destaca en rojo la pieza que bloquea el giro en una de las poses evaluadas. La guía identifica el pasador y el paso para introducirlo. La prueba usa movimiento rígido con una separación estimada de hasta 1 mm de desplazamiento entre poses. El ajuste y la retención físicos dependen de la muestra impresa y sus holguras.
+
 La búsqueda de conectores comprueba que exista material alrededor del pin y la cavidad. La holgura lateral se mide por lado y la axial al fondo de la cavidad. Si la búsqueda no encuentra espacio para la cantidad solicitada, el corte se cancela. La reparación básica suelda vértices cercanos y puede cerrar agujeros simples sobre una copia.
 
 En **Reparar**, activa **Corregir orientación de caras** para corregir la orientación de caras vecinas y de las superficies cerradas según su profundidad de anidamiento. La copia conserva las cavidades y los sólidos separados. La reparación se detiene si las superficies se cruzan o si el anidamiento es ambiguo.

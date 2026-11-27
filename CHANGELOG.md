@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.19
+
+- Added pin hinges for straight cuts, with separate headed axles, sampled opening checks, collision highlights and a non-destructive assembly preview.
+
 ## 0.3.0-alpha.18
 
 - Added flexible snap-fit hooks and retaining pockets for straight and symmetric cuts, with a material strain limit, clearance checks and assembly guide instructions.

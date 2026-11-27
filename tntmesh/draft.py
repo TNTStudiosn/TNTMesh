@@ -3,7 +3,7 @@ from uuid import UUID, uuid5
 
 import bpy
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, PointerProperty, StringProperty
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 from . import assembly_history
 from .geometry.mesh import evaluated_mm
@@ -21,6 +21,7 @@ from .model import (
     identify_part,
     millimeters_per_unit,
     owned_collection,
+    restore_scene_units,
 )
 from .settings import TNTMESH_PG_settings
 
@@ -216,8 +217,8 @@ def rebuild(
             for index, operation in enumerate(operations, 1):
                 target = leaves.pop(operation.target)
                 inherited = directions.pop(operation.target)
-                config = operation.settings.config(source)
                 try:
+                    config = operation.settings.config(source)
                     pieces = apply_cut(
                         context, transaction, target, config, origin, unit, source,
                     )
@@ -227,10 +228,10 @@ def rebuild(
                 keys = cut_outputs(operation)
                 leaves.update(zip(keys, pieces[:len(keys)], strict=True))
                 inherited_path = paths.pop(operation.target)
-                stock, snap_fit = assembly_history.connection_details(config)
+                stock, connector = assembly_history.connection_details(config)
                 for branch, key in enumerate(keys, 1):
                     paths[key] = inherited_path + (
-                        assembly_history.Branch(operation.uid, branch, len(keys), stock, snap_fit),
+                        assembly_history.Branch(operation.uid, branch, len(keys), stock, connector),
                     )
                 if isinstance(config, PlanarCut):
                     normal = axis_frame(config.axis, config.rotation).col[2]
@@ -242,13 +243,13 @@ def rebuild(
                 for number, pin in enumerate(pieces[len(keys):], 1):
                     key = f"{operation.uid}:pin:{number}"
                     pins[key] = pin
-                    paths[key] = inherited_path + (assembly_history.Branch(operation.uid, 0, len(keys)),)
+                    paths[key] = inherited_path + (assembly_history.Branch(operation.uid, 0, len(keys),
+                                                                         connector=connector),)
                 wm.progress_update(index)
 
             collection = owned_collection(context.scene, "part")
             for index, (key, mesh) in enumerate((leaves | pins).items(), 1):
-                mesh.transform(Matrix.Scale(1.0 / unit, 4))
-                mesh.update()
+                restore_scene_units(mesh, unit)
                 part_id = uuid5(project, key).hex
                 label = tr("Pin {number}").format(number=index - len(leaves)) if key in pins else f"{index:02d}"
                 name = names.get(part_id, f"{plan.name} · {label}")

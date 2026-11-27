@@ -48,6 +48,10 @@ Enter the print material and an allowable strain measured for the intended print
 
 A recorded snap-fit adds joining instructions to the assembly guide. **Check Insertion Path** uses rigid meshes and can report the intended contact as the hook passes the throat.
 
+Choose **Pin Hinge** on a straight cut to generate two leaves and a headed axle as three pieces. Rotate the hinge edge in the cut plane and shift the span along it. The axis is offset outside that edge. Set the number of knuckles, the barrel and axle diameters, the lateral clearance around the axle, the axial clearance between knuckles, and the opening to test. TNTMesh requires a solid attachment under every knuckle and checks the bearing wall, the axle fit and the swing before publishing the pieces.
+
+In **Assembly**, use the **Opening** slider to preview the tested range. The preview keeps the scene and exports in their original positions. Use **Check Hinge Opening** after adding parts or moving the assembly. The check highlights an obstructing piece in red at a sampled collision pose. The assembly guide identifies the axle and its insertion step. The test samples rigid movement at an estimated maximum travel of 1 mm between poses. Physical fit and retention depend on the printed specimen and tolerances.
+
 Basic repair welds nearby vertices, dissolves short degenerate edges and optionally caps simple boundary loops on a copy. Enable **Correct face orientation** to make neighboring faces consistent and orient each closed shell according to its nesting depth. This preserves enclosed cavities and separate solids. The repair rejects crossing surfaces or ambiguous nesting. Review filled regions because caps add geometry.
 
 Printer profiles are saved with the scene and can be moved between projects as schema-versioned JSON. The fit check uses world-space dimensions and subtracts the configured margin on each side of each axis. Alternative orientations permute the three axes. Split to Fit applies successive straight cuts and validates the remaining dimensions before publishing the resulting pieces.

@@ -11,6 +11,9 @@ from .geometry.mesh import evaluated_mm, inspect
 from .localization import tr
 from .model import (
     DRAFT_ID,
+    HINGE_AXIS,
+    HINGE_OPENING,
+    HINGE_PIVOT,
     PROJECT_ID,
     GeometryTransaction,
     MeshError,
@@ -38,6 +41,7 @@ class TNTMESH_OT_assembly_project(bpy.types.Operator):
         obj = context.active_object
         state.project = obj[PROJECT_ID]
         state.index = context.scene.objects.find(obj.name)
+        state.hinge_fraction = 0
         return {"FINISHED"}
 
 
@@ -77,6 +81,7 @@ class TNTMESH_OT_assembly_action(bpy.types.Operator):
         state.project = obj[PROJECT_ID]
         if self.action == "RESET":
             state.distance = 0
+            state.hinge_fraction = 0
         elif self.action in {"SELECT", "FOCUS"}:
             region = None
             if self.action == "FOCUS":
@@ -134,6 +139,9 @@ class TNTMESH_OT_assembly_action(bpy.types.Operator):
                 del obj[DRAFT_ID]
             if assembly_history.PARENT_PART in obj:
                 del obj[assembly_history.PARENT_PART]
+            for key in (HINGE_AXIS, HINGE_OPENING, HINGE_PIVOT):
+                if key in obj.data:
+                    del obj.data[key]
             assembly_history.set_path(obj, ())
             world = source.matrix_world.copy()
             world.translation.x += max(source.dimensions.x, 1 / unit) + 2 / unit
@@ -288,6 +296,39 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class TNTMESH_OT_check_hinge(bpy.types.Operator):
+    bl_idname = "tntmesh.check_hinge"
+    bl_label = "Check Hinge Opening"
+    bl_description = "Check the current assembly for obstructions around the recorded hinge axis"
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context) -> bool:
+        return context.mode == "OBJECT" and assembly.hinge_motion(context) is not None
+
+    def execute(self, context: bpy.types.Context) -> set[str]:
+        motion = assembly.hinge_motion(context)
+        if motion is None:
+            return {"CANCELLED"}
+        try:
+            hit = assembly.insertion_hit(
+                context, motion.moving, assembly.members(context), Vector((0, 0, 0)), 0,
+                rotation_axis=motion.axis, rotation_radians=motion.opening, pivot_world=motion.pivot, sample_mm=1,
+            )
+        except (MeshError, RuntimeError, ValueError) as error:
+            return report_failure(self, error)
+        state = context.scene.tntmesh_assembly
+        if hit is not None:
+            state.hinge_fraction = hit.rotation_radians / motion.opening
+            state.hinge_blocker = hit.obstacle.name
+            self.report({"WARNING"}, tr("Hinge blocked by {name} near {angle:.1f}°.").format(
+                name=hit.obstacle.name, angle=degrees(hit.rotation_radians),
+            ))
+            return {"CANCELLED"}
+        state.hinge_blocker = ""
+        self.report({"INFO"}, tr("No overlap found at the sampled poses."))
+        return {"FINISHED"}
+
+
 class TNTMESH_OT_export_assembly_guide(bpy.types.Operator):
     bl_idname = "tntmesh.export_assembly_guide"
     bl_label = "Export Guide"
@@ -389,8 +430,17 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
                 layout.label(text=" × ".join(f"{axis:.1f}" for axis in size) + " mm", translate=False)
 
         if len(pieces) > 1:
-            layout.prop(state, "distance")
-            if state.distance > 0:
+            motion = assembly.hinge_motion(context)
+            explosion = layout.row()
+            previewing = motion is not None and (state.hinge_fraction > 0 or bool(state.hinge_blocker))
+            explosion.enabled = not previewing
+            explosion.prop(state, "distance")
+            if motion is not None:
+                angle = degrees(motion.opening * state.hinge_fraction)
+                layout.prop(state, "hinge_fraction", slider=True, translate=False,
+                            text=tr("Opening · {angle:.0f}°").format(angle=angle))
+                layout.operator("tntmesh.check_hinge", icon="CON_ROTLIKE")
+            if state.distance > 0 or previewing:
                 layout.operator("tntmesh.assembly_action", text="Back to Assembly", icon="LOOP_BACK").action = "RESET"
             layout.operator("tntmesh.check_assembly", icon="VIEWZOOM")
             layout.operator("tntmesh.check_insertion", icon="PLAY")
@@ -407,5 +457,5 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
 
 
 CLASSES = (TNTMESH_OT_assembly_project, TNTMESH_OT_assembly_action,
-           TNTMESH_OT_check_assembly, TNTMESH_OT_check_insertion, TNTMESH_UL_assembly_parts,
+           TNTMESH_OT_check_assembly, TNTMESH_OT_check_insertion, TNTMESH_OT_check_hinge, TNTMESH_UL_assembly_parts,
            TNTMESH_OT_export_assembly_guide, TNTMESH_PT_assembly)

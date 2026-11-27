@@ -63,7 +63,7 @@ def linear_settings(context: bpy.types.Context) -> TNTMESH_PG_settings | None:
         if cut is None:
             return None
         settings = cut.settings
-    return settings if settings.cut_kind == "PLANAR" and settings.connector != "CUSTOM" else None
+    return settings if settings.cut_kind == "PLANAR" and settings.connector not in {"CUSTOM", "HINGE"} else None
 
 
 def plane_available(context: bpy.types.Context, settings: TNTMESH_PG_settings | None) -> bool:

@@ -3,6 +3,7 @@ from contextlib import AbstractContextManager
 from uuid import uuid4
 
 import bpy
+from mathutils import Matrix, Vector
 
 ROLE = "tntmesh_role"
 PART_ID = "tntmesh_part_id"
@@ -13,6 +14,16 @@ DRAFT_ID = "tntmesh_draft_id"
 ASSEMBLY_DIRECTION = "tntmesh_assembly_direction"
 SLIDE_DIRECTION = "tntmesh_slide_direction"
 MATERIAL_SLOT = "tntmesh_material_slot"
+HINGE_PIVOT = "tntmesh_hinge_pivot"
+HINGE_AXIS = "tntmesh_hinge_axis"
+HINGE_OPENING = "tntmesh_hinge_opening"
+
+
+def restore_scene_units(mesh: bpy.types.Mesh, unit: float) -> None:
+    mesh.transform(Matrix.Scale(1 / unit, 4))
+    if HINGE_PIVOT in mesh:
+        mesh[HINGE_PIVOT] = tuple(Vector(mesh[HINGE_PIVOT]) / unit)
+    mesh.update()
 
 
 class MeshError(Exception):

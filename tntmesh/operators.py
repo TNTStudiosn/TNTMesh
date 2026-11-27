@@ -36,6 +36,7 @@ from .model import (
     identify_part,
     millimeters_per_unit,
     owned_collection,
+    restore_scene_units,
 )
 from .printer_props import selected_printer
 
@@ -76,8 +77,7 @@ def publish_parts(
     parts = []
     inherited = assembly_history.path(source)
     for index, mesh in enumerate(meshes, 1):
-        mesh.transform(Matrix.Scale(1.0 / unit, 4))
-        mesh.update()
+        restore_scene_units(mesh, unit)
         label = (tr("Pin {number}").format(number=index - bodies)
                  if bodies is not None and index > bodies else f"{index:02d}")
         if labels is not None:

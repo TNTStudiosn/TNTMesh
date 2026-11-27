@@ -39,6 +39,7 @@ class Joint:
     connectors: list[Piece] = field(default_factory=list)
     magnet: assembly_history.StockMagnet | None = None
     snap_fit: bool = False
+    hinge: bool = False
 
     @property
     def incomplete(self) -> bool:
@@ -51,11 +52,19 @@ class Joint:
             notes.append(tr("Fit {count} × {magnet} before joining. Check polarity against the mating pocket.").format(
                 count=self.magnet.count, magnet=self.magnet.label(),
             ))
-        if self.connectors:
+        if self.hinge and len(groups) >= 2 and self.connectors:
+            notes.append(tr("Align the hinge barrels of {groups} and slide in axle {pieces}.").format(
+                groups=" / ".join(groups), pieces=", ".join(piece.label for piece in self.connectors),
+            ))
+        elif self.hinge and len(groups) >= 2:
+            notes.append(tr("Align the hinge barrels of {groups}. The axle is missing from the guide.").format(
+                groups=" / ".join(groups),
+            ))
+        elif self.connectors:
             notes.append(tr("Fit loose connectors {pieces} into their matching pockets.").format(
                 pieces=", ".join(piece.label for piece in self.connectors),
             ))
-        if len(groups) >= 2:
+        if len(groups) >= 2 and not self.hinge:
             wording = ("Press {groups} together along the cut normal until the hooks seat." if self.snap_fit
                        else "Join {groups} in the assembled positions shown.")
             notes.append(tr(wording).format(groups=" / ".join(groups)))
@@ -102,6 +111,7 @@ def collect(context: bpy.types.Context, title: str, objects: list[bpy.types.Obje
             if branch.magnet:
                 joint.magnet = branch.magnet
             joint.snap_fit |= branch.snap_fit
+            joint.hinge |= branch.connector == "HINGE"
 
     stock: dict[tuple[str, tuple[float, ...]], int] = {}
     ordered = sorted(joints.values(), key=lambda joint: -joint.depth)

@@ -18,19 +18,21 @@ from .geometry.connector import Connector
 from .geometry.connector_profiles import PROFILE_ITEMS
 from .geometry.custom_connector import CustomConnector
 from .geometry.dovetail import Dovetail
+from .geometry.hinge import Hinge
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.region import RegionCut
 from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
 from .geometry.volume import Cut, VolumeCut
-from .model import millimeters_per_unit
+from .model import MeshError, millimeters_per_unit
 
 MAGNET_SHAPES = (
     ("DISC", "Disc", "Create a circular magnet pocket"),
     ("BLOCK", "Block", "Create a rectangular magnet pocket"),
 )
 SNAP_FIT_FIELDS = ("width", "thickness", "reach", "hook", "ramp_angle", "angle", "material", "strain_limit")
+HINGE_FIELDS = ("diameter", "pin_diameter", "width", "knuckles", "stand_off", "angle", "shift", "opening")
 
 
 def is_mesh(self, obj: bpy.types.Object) -> bool:
@@ -119,6 +121,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("DOVETAIL", "Dovetail", "Add an integrated sliding rail and an open-ended groove"),
             *PROFILE_ITEMS,
             ("SNAP_FIT", "Snap-fit", "Add a flexible hook and a matching retaining pocket"),
+            ("HINGE", "Pin Hinge", "Add interlocking hinge barrels and a separate axle"),
         ],
         default="ROUND",
     )
@@ -186,6 +189,17 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Strain limit (%)", default=0, min=0, max=100, subtype="PERCENTAGE", precision=2,
         description="Allowable strain measured for this print material and layer orientation",
     )
+    hinge_diameter: FloatProperty(name="Barrel diameter (mm)", default=6, min=.01, precision=2)
+    hinge_pin_diameter: FloatProperty(name="Axle diameter (mm)", default=2.4, min=.01, precision=2)
+    hinge_width: FloatProperty(name="Hinge span (mm)", default=18, min=.01, precision=2)
+    hinge_knuckles: IntProperty(name="Knuckles", default=3, min=3, max=32, soft_max=9)
+    hinge_stand_off: FloatProperty(name="Axis offset (mm)", default=2, min=.01, precision=2,
+                                   description="Distance from the model edge to the hinge axis")
+    hinge_angle: FloatProperty(name="Edge rotation", subtype="ANGLE", unit="ROTATION",
+                                description="Choose the mounting edge by rotating around the cut normal")
+    hinge_shift: FloatProperty(name="Shift along edge (mm)", precision=2)
+    hinge_opening: FloatProperty(name="Test opening", default=radians(90), min=radians(1), max=radians(180),
+                                  subtype="ANGLE", unit="ROTATION", description="Opening to check for collisions")
     loose_pins: BoolProperty(
         name="Separate pins", description="Cut two sockets and generate removable pins",
     )
@@ -330,6 +344,13 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.lateral, self.axial, self.wall, self.snap_angle, count, self.snap_material, self.snap_strain_limit,
         )
 
+    def hinge_config(self) -> Hinge:
+        return Hinge(
+            self.hinge_diameter, self.hinge_pin_diameter, self.hinge_width, self.hinge_knuckles,
+            self.hinge_stand_off, self.hinge_angle, self.hinge_shift, self.hinge_opening,
+            self.lateral, self.axial, self.wall,
+        )
+
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
         connector = None
         if self.base_pins:
@@ -365,6 +386,10 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.dovetail_config(len(positions) or self.connector_count)
         elif self.connector == "SNAP_FIT":
             connector = self.snap_config(len(positions) or self.connector_count)
+        elif self.connector == "HINGE":
+            if self.cut_kind != "PLANAR":
+                raise MeshError("Choose a straight cut for the pin hinge.")
+            connector = self.hinge_config()
         elif self.connector != "NONE":
             connector = self.standard_connector(self.connector, len(positions) or self.connector_count)
         cut = PlanarCut(

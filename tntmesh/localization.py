@@ -936,6 +936,49 @@ SPANISH = {
         "El cierre bloquea la inserción o el gancho no retiene las piezas.",
     "Press {groups} together along the cut normal until the hooks seat.":
         "Presiona {groups} en la dirección normal al corte hasta encajar los ganchos.",
+    "Pin Hinge": "Bisagra de pasador",
+    "Add interlocking hinge barrels and a separate axle": "Añade casquillos alternados y un pasador independiente",
+    "Barrel diameter (mm)": "Diámetro del casquillo (mm)",
+    "Axle diameter (mm)": "Diámetro del pasador (mm)",
+    "Hinge span (mm)": "Longitud de la bisagra (mm)",
+    "Knuckles": "Casquillos",
+    "Axis offset (mm)": "Distancia al borde (mm)",
+    "Distance from the model edge to the hinge axis": "Distancia entre el borde del modelo y el eje de la bisagra",
+    "Edge rotation": "Giro del borde",
+    "Choose the mounting edge by rotating around the cut normal":
+        "Elige el borde de montaje girando en el plano de corte",
+    "Shift along edge (mm)": "Desplazamiento lateral (mm)",
+    "Test opening": "Apertura a comprobar",
+    "Opening to check for collisions": "Ángulo de apertura que se revisará por colisiones",
+    "Choose a straight cut for the pin hinge.": "Elige un corte recto para la bisagra de pasador.",
+    "Check hinge dimensions, clearances and opening angle.":
+        "Revisa las medidas, las holguras y el ángulo de apertura de la bisagra.",
+    "Increase the hinge dimensions or reduce the clearances to preserve the bearing wall.":
+        "Aumenta las medidas de la bisagra o reduce las holguras para conservar la pared del casquillo.",
+    "Increase the hinge offset so the axle head clears the outside edge.":
+        "Aleja el eje para que la cabeza del pasador libre el borde.",
+    "Reduce cut separation so the hinge can reach both sides.":
+        "Reduce la separación del corte para que la bisagra alcance ambos lados.",
+    "The hinge span must fit inside the model's edge.": "La longitud de la bisagra debe caber en el borde del modelo.",
+    "The hinge needs solid material at every knuckle. Move it or reduce its span.":
+        "Todos los casquillos requieren material sólido. Mueve la bisagra o reduce su longitud.",
+    "A hinge knuckle detached or the axle bore broke through its housing.":
+        "Se separó un casquillo o la perforación del pasador atravesó su pared.",
+    "The axle does not clear the hinge bearings.": "Falta holgura entre el pasador y los casquillos.",
+    "The hinge bodies overlap at the assembled position.": "Las hojas de la bisagra se traslapan al cerrar.",
+    "The hinge collides near {angle:.1f}°. Reduce its opening or move the hinge.":
+        "Hay una colisión cerca de {angle:.1f}°. Reduce la apertura o mueve la bisagra.",
+    "Hinge Preview": "Vista de la bisagra",
+    "Preview a fraction of the verified hinge opening": "Muestra una parte del recorrido comprobado de la bisagra",
+    "Opening · {angle:.0f}°": "Apertura · {angle:.0f}°",
+    "Check Hinge Opening": "Revisar apertura",
+    "Check the current assembly for obstructions around the recorded hinge axis":
+        "Busca obstáculos en el ensamblaje alrededor del eje registrado",
+    "Hinge blocked by {name} near {angle:.1f}°.": "{name} bloquea la bisagra cerca de {angle:.1f}°.",
+    "Align the hinge barrels of {groups} and slide in axle {pieces}.":
+        "Alinea los casquillos de {groups} e introduce el pasador {pieces}.",
+    "Align the hinge barrels of {groups}. The axle is missing from the guide.":
+        "Alinea los casquillos de {groups}. Falta el pasador en la guía.",
 }
 CATALOG = {
     locale: {

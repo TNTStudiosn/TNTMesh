@@ -6,6 +6,7 @@ from bpy.app.handlers import persistent
 from mathutils import Matrix, Vector
 
 from .geometry.connector_profiles import PROFILE_OVERLAYS
+from .geometry.hinge import hinge_frame
 from .geometry.mesh import bounds
 from .geometry.planar import axis_frame
 from .geometry.polygon import extended_path
@@ -193,6 +194,9 @@ def draw_plane() -> None:
                     coordinates = [*coordinates, coordinates[0]]
                 shader.uniform_float("color", (*color, 0.9))
                 batch_for_shader(shader, "LINE_STRIP", {"pos": coordinates}).draw(shader)
+        if settings.cut_kind == "PLANAR" and settings.connector == "HINGE":
+            height = (lower.z + upper.z) / 2 + settings.offset / unit
+            draw_hinge_preview(context, obj, settings, frame, unit, height, shader)
         if (settings.cut_kind == "PLANAR" and settings.connector in PROFILE_OVERLAYS
                 and settings.connector_points):
             from .draw_cut import model_pivot
@@ -245,6 +249,45 @@ def draw_plane() -> None:
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)
+
+
+def draw_hinge_preview(context, obj, settings, frame, unit, height, shader) -> None:
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+
+    design = settings.hinge_config()
+    work = hinge_frame(frame, design.angle)
+    extent = project_bounds(obj, context.evaluated_depsgraph_get(), work)
+    if extent is None:
+        return
+    lower, upper = extent
+    center = (lower.y + upper.y) / 2 + design.shift / unit
+    start, end = center - design.width / (2 * unit), center + design.width / (2 * unit)
+    x = upper.x + design.stand_off / unit
+    valid = lower.y < start < end < upper.y
+    try:
+        design.validate(settings.kerf)
+    except MeshError:
+        valid = False
+    gpu.state.depth_test_set("NONE")
+    shader.bind()
+    shader.uniform_float("color", (0, 1, 1, .9) if valid else (1, .36, .32, 1))
+    axis = [work @ Vector((x, y, height)) for y in (start, end)]
+    batch_for_shader(shader, "LINES", {"pos": axis}).draw(shader)
+    if not valid:
+        return
+    projection = design.bearing / unit
+    for index in range(design.knuckles):
+        a = start + index * (design.knuckle_width + design.axial) / unit
+        b = a + design.knuckle_width / unit
+        shader.uniform_float("color", (.78, .55, 1, 1) if index % 2 else (0, 1, 1, 1))
+        line = (
+            (x - projection, a), (x + projection, a), (x + projection, b),
+            (x - projection, b), (x - projection, a),
+        )
+        batch_for_shader(shader, "LINE_STRIP", {
+            "pos": [work @ Vector((u, v, height)) for u, v in line],
+        }).draw(shader)
 
 
 def draw_region(context: bpy.types.Context, obj: bpy.types.Object, config: RegionCut) -> None:

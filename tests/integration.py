@@ -410,6 +410,63 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), previous)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
 
+    def test_hinge_preserves_pivot_units_and_detects_a_blocked_opening(self):
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .01
+        source = self.cube(2.4)
+        source.location = (2, 3, 4)
+        settings = self.settings
+        settings.connector = "HINGE"
+        settings.hinge_knuckles = 5
+        settings.hinge_angle = pi / 2
+        settings.kerf = .4
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        fixed, moving, axle = self.parts()
+        self.assertTrue(source.hide_get())
+        before = {obj.name: obj.matrix_world.copy() for obj in self.parts()}
+        self.assertEqual(axle["tntmesh_part_kind"], "pin")
+        self.assertGreater(self.checked(axle), 70)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [fixed, moving, axle]))
+        motion = self.addon.assembly.hinge_motion(bpy.context)
+        self.assertEqual(motion.moving, moving)
+        self.assertLess((motion.pivot - Vector((2, 4.4, 4))).length, 1e-5)
+        self.assertLess((motion.axis - Vector((-1, 0, 0))).length, 1e-5)
+        self.assertLess((motion.matrix(1) @ motion.pivot - motion.pivot).length, 1e-5)
+        scene.tntmesh_assembly.hinge_fraction = .6
+        self.assertEqual(bpy.ops.tntmesh.check_hinge(), {"FINISHED"})
+        self.assertEqual({obj.name: obj.matrix_world.copy() for obj in self.parts()}, before)
+        guide = self.addon.assembly_ui.assembly_guide
+        self.assertIn("slide in axle 03", guide.step_labels(guide.collect(bpy.context, "Hinge", self.parts()))[0])
+        blocker = self.cube(.28)
+        blocker.location = motion.matrix(.6) @ Vector((2, 3, 4.55))
+        self.addon.operators.identify_part(blocker, moving["tntmesh_project_id"])
+        bpy.context.view_layer.update()
+        self.assertEqual(bpy.ops.tntmesh.check_hinge(), {"CANCELLED"})
+        self.assertEqual(scene.tntmesh_assembly.hinge_blocker, blocker.name)
+        scene.tntmesh_assembly.hinge_fraction = .5
+        self.assertEqual(scene.tntmesh_assembly.hinge_blocker, "")
+
+    def test_hinge_draft_retains_the_last_build_when_a_knuckle_cannot_attach(self):
+        self.cube(24)
+        self.settings.connector = "HINGE"
+        self.settings.hinge_opening = pi / 6
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        draft = bpy.context.scene.tntmesh_drafts[0]
+        self.assertAlmostEqual(draft.cuts[0].settings.hinge_opening, pi / 6)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        previous = self.parts()
+        self.assertEqual(len(previous), 3)
+        snapshots = set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())
+        draft.cuts[0].settings.hinge_shift = 8
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        draft.cuts[0].settings.hinge_shift = 0
+        draft.cuts[0].settings.hinge_pin_diameter = 5.9
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), previous)
+        self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), snapshots)
+
     def test_dovetail_symmetric_cut_preserves_both_sliding_joints(self):
         self.cube(32)
         self.settings.connector = "DOVETAIL"

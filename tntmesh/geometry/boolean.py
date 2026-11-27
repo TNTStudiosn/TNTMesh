@@ -3,7 +3,9 @@ import bpy
 from mathutils import Matrix, Vector
 
 from ..model import GeometryTransaction
-from .mesh import primitive
+from .mesh import BOOLEAN_VOLUME_NOISE, absolute_volume, primitive
+
+MESH_FLOAT_EPSILON = 2 ** -23
 
 
 class ExactBoolean:
@@ -36,6 +38,20 @@ class ExactBoolean:
                 self.transaction.remove_object(tool)
         finally:
             self.transaction.remove_object(target)
+
+
+def measure_intersection(engine: ExactBoolean, first: bpy.types.Mesh, second: bpy.types.Mesh) -> float:
+    intersection = engine.run(first, second, "INTERSECT")
+    try:
+        volume = absolute_volume(intersection)
+        if volume <= BOOLEAN_VOLUME_NOISE:
+            return 0.0
+        scale = max(abs(coordinate) for vertex in intersection.vertices for coordinate in vertex.co)
+        # Close contact can leave one coordinate ULP of volume in the Boolean output.
+        roundoff = sum(face.area for face in intersection.polygons) * scale * MESH_FLOAT_EPSILON
+        return volume if volume > roundoff else 0.0
+    finally:
+        engine.transaction.remove_mesh(intersection)
 
 
 def half_box(
