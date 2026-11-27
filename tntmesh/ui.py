@@ -65,7 +65,7 @@ def cut_properties(
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
         if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {
-            "NONE", "DOVETAIL", "PRESS_FIT", "SNAP_FIT",
+            "NONE", "DOVETAIL", "PRESS_FIT", "ROD", "SNAP_FIT",
         }:
             tools = layout.row(align=True)
             if settings.connector == "DOVETAIL":
@@ -149,6 +149,10 @@ def cut_details(
             positions(layout, settings)
     elif settings.connector == "PRESS_FIT":
         press_details(layout, settings)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
+    elif settings.connector == "ROD":
+        rod_details(layout, settings)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
     elif settings.connector == "HINGE":
@@ -238,6 +242,30 @@ def press_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> 
               icon="ERROR" if row.alert else "INFO")
     if not settings.press_material.strip() or not settings.press_strain_limit:
         material.label(text="Enter a verified material limit.", icon="INFO")
+
+
+def rod_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    if settings.cut_kind != "PLANAR" or not settings.connector_points:
+        layout.prop(settings, "connector_count")
+    stock = layout.column(align=True)
+    stock.prop(settings, "rod_shape", text="Shape")
+    stock.prop(settings, "rod_size", text="Diameter (mm)" if settings.rod_shape == "ROUND" else "Side (mm)")
+    if settings.rod_shape == "SQUARE":
+        stock.prop(settings, "rod_angle")
+    insertion = layout.column(align=True)
+    insertion.prop(settings, "rod_depth_minus")
+    insertion.prop(settings, "rod_depth_plus")
+    fit = layout.column(align=True)
+    for name in ("lateral", "axial", "wall"):
+        fit.prop(settings, name)
+    design = settings.rod_config(1)
+    try:
+        design.validate()
+    except MeshError:
+        layout.label(text="Check insertion and axial clearance.", icon="ERROR")
+    else:
+        layout.label(text=tr("Rod length · {size:.3f} mm").format(size=design.length(settings.kerf)),
+                     translate=False, icon="INFO")
 
 
 def connector_details(

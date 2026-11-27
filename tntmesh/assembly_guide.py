@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from html import escape
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -38,6 +38,7 @@ class Joint:
     branches: list[list[Piece]]
     connectors: list[Piece] = field(default_factory=list)
     magnet: assembly_history.StockMagnet | None = None
+    rod: assembly_history.StockRod | None = None
     snap_fit: bool = False
     press_fit: bool = False
     hinge: bool = False
@@ -69,13 +70,17 @@ class Joint:
                 pieces=", ".join(piece.label for piece in self.connectors),
             ))
         if len(groups) >= 2 and not self.hinge:
+            values = {"groups": " / ".join(groups)}
             if self.press_fit:
                 wording = "Align {groups} and press straight along each cut normal until seated."
+            elif self.rod:
+                wording = "Insert {count} × {rod} in the matching sockets, then bring {groups} together along each cut."
+                values.update(count=self.rod.count, rod=self.rod.label())
             elif self.snap_fit:
                 wording = "Press {groups} together along the cut normal until the hooks seat."
             else:
                 wording = "Join {groups} in the assembled positions shown."
-            notes.append(tr(wording).format(groups=" / ".join(groups)))
+            notes.append(tr(wording).format(**values))
         if self.incomplete:
             notes.append(tr("Some bodies from this cut are absent from the guide."))
         return notes
@@ -86,7 +91,7 @@ class Guide:
     title: str
     pieces: list[Piece]
     joints: list[Joint]
-    stock: list[assembly_history.StockMagnet]
+    stock: list[assembly_history.StockMagnet | assembly_history.StockRod]
     has_legacy: bool
 
 
@@ -118,21 +123,22 @@ def collect(context: bpy.types.Context, title: str, objects: list[bpy.types.Obje
                 joint.connectors.append(piece)
             if branch.magnet:
                 joint.magnet = branch.magnet
+            if branch.rod:
+                joint.rod = branch.rod
             joint.snap_fit |= branch.snap_fit
             joint.press_fit |= branch.connector == "PRESS_FIT"
             joint.hinge |= branch.connector == "HINGE"
             joint.glue |= branch.connector == "GLUE"
 
-    stock: dict[tuple[str, tuple[float, ...]], int] = {}
+    stock: dict[tuple[str, tuple[float, ...]], assembly_history.StockMagnet | assembly_history.StockRod] = {}
     ordered = sorted(joints.values(), key=lambda joint: -joint.depth)
     for joint in ordered:
-        magnet = joint.magnet
-        if magnet:
-            key = (magnet.shape, magnet.size)
-            stock[key] = stock.get(key, 0) + magnet.count
-    return Guide(title, pieces, ordered, [
-        assembly_history.StockMagnet(shape, size, count) for (shape, size), count in stock.items()
-    ], legacy)
+        item = joint.magnet or joint.rod
+        if item:
+            size = tuple(round(value, 3) for value in item.size) if joint.rod else item.size
+            key = (item.shape, size)
+            stock[key] = replace(item, count=stock[key].count + item.count) if key in stock else item
+    return Guide(title, pieces, ordered, list(stock.values()), legacy)
 
 
 def views() -> tuple[tuple[str, str], ...]:
@@ -144,7 +150,7 @@ def piece_columns() -> tuple[str, ...]:
 
 
 def stock_labels(guide: Guide) -> list[str]:
-    return [f"{magnet.count} × {magnet.label()}" for magnet in guide.stock]
+    return [f"{item.count} × {item.label()}" for item in guide.stock]
 
 
 def step_labels(guide: Guide) -> list[str]:

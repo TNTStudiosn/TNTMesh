@@ -24,6 +24,7 @@ from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.press_fit import PressFit
 from .geometry.region import RegionCut
+from .geometry.rod import Rod
 from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
 from .geometry.volume import Cut, VolumeCut
@@ -35,6 +36,7 @@ MAGNET_SHAPES = (
 )
 SNAP_FIT_FIELDS = ("width", "thickness", "reach", "hook", "ramp_angle", "angle", "material", "strain_limit")
 PRESS_FIT_FIELDS = ("diameter", "reach", "interference", "slot", "angle", "material", "strain_limit")
+ROD_FIELDS = ("shape", "size", "depth_minus", "depth_plus", "angle")
 HINGE_FIELDS = ("diameter", "pin_diameter", "width", "knuckles", "stand_off", "angle", "shift", "opening")
 GLUE_FIELDS = ("channels", "reservoir", "vent", "chamfer", "texture", "relief", "angle")
 
@@ -127,6 +129,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("SNAP_FIT", "Snap-fit", "Add a flexible hook and a matching retaining pocket"),
             ("HINGE", "Pin Hinge", "Add interlocking hinge barrels and a separate axle"),
             ("PRESS_FIT", "Press-fit", "Add a split pin held by radial interference"),
+            ("ROD", "Rod Sockets", "Cut matching sockets for an external rod"),
         ],
         default="ROUND",
     )
@@ -194,6 +197,20 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Strain limit (%)", default=0, min=0, max=100, subtype="PERCENTAGE", precision=2,
         description="Allowable strain measured for this print material and layer orientation",
     )
+    rod_shape: EnumProperty(name="Stock shape", items=(
+        ("ROUND", "Round", "Use a round rod"),
+        ("SQUARE", "Square section", "Use a square rod"),
+    ))
+    rod_size: FloatProperty(name="Stock size (mm)", default=4, min=.01, precision=2)
+    rod_depth_minus: FloatProperty(
+        name="Negative side (mm)", default=6, min=.01, precision=2,
+        description="Nominal rod insertion on the negative side of the cut",
+    )
+    rod_depth_plus: FloatProperty(
+        name="Positive side (mm)", default=8, min=.01, precision=2,
+        description="Nominal rod insertion on the positive side of the cut",
+    )
+    rod_angle: FloatProperty(name="Profile rotation", subtype="ANGLE", unit="ROTATION")
     press_diameter: FloatProperty(name="Bore diameter (mm)", default=5, min=.01, precision=2)
     press_reach: FloatProperty(name="Insertion (mm)", default=20, min=.01, precision=2)
     press_interference: FloatProperty(
@@ -377,6 +394,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.lateral, self.axial, self.wall, self.press_angle, count, self.press_material, self.press_strain_limit,
         )
 
+    def rod_config(self, count: int) -> Rod:
+        return Rod(
+            self.rod_shape, self.rod_size, self.rod_depth_minus, self.rod_depth_plus,
+            self.rod_angle, self.lateral, self.axial, self.wall, count,
+        )
+
     def hinge_config(self) -> Hinge:
         return Hinge(
             self.hinge_diameter, self.hinge_pin_diameter, self.hinge_width, self.hinge_knuckles,
@@ -427,6 +450,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.snap_config(len(positions) or self.connector_count)
         elif self.connector == "PRESS_FIT":
             connector = self.press_config(len(positions) or self.connector_count)
+        elif self.connector == "ROD":
+            connector = self.rod_config(len(positions) or self.connector_count)
         elif self.connector == "HINGE":
             if self.cut_kind != "PLANAR":
                 raise MeshError("Choose a straight cut for the pin hinge.")
@@ -435,7 +460,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.standard_connector(self.connector, len(positions) or self.connector_count)
         cut = PlanarCut(
             self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
-            positions, self.cut_kind == "PLANAR" and self.pin_positive
+            positions, self.cut_kind == "PLANAR" and self.connector != "ROD" and self.pin_positive
             and (self.connector in {"DOVETAIL", "PRESS_FIT", "SNAP_FIT"} or not self.loose_pins),
             self.glue_config() if isinstance(connector, Connector) else None,
         )

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.24
+
+- Added blind sockets for external round or square rods with independent insertion depths, verified axial travel, and stock dimensions and counts in the assembly guide.
+
 ## 0.3.0-alpha.23
 
 - Build the slotted press-fit pin before attaching it so rotation and offset do not cause false topology failures.

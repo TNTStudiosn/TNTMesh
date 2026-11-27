@@ -14,6 +14,7 @@ from .magnet import Magnet, add_magnet_pockets
 from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
 from .press_fit import PressFit, add_press_fits
+from .rod import Rod, add_rod_sockets
 from .snap_fit import SnapFit, add_snap_fits
 
 
@@ -132,6 +133,15 @@ def split_symmetric(
             secondary.epsilon, requested=tuple(map(reflect_center, first_magnets.centers)),
         )
         return outer, second_magnets.meshes[middle_index], second_magnets.meshes[outer_index]
+    if isinstance(connector, Rod):
+        first_rods = add_rod_sockets(engine, *sides, frame, position, primary.kerf, connector, epsilon)
+        middle, outer = first_rods.meshes[middle_index], first_rods.meshes[outer_index]
+        sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
+        second_rods = add_rod_sockets(
+            engine, *sides, reflected, mirrored_position, primary.kerf, connector.reflected("X"),
+            secondary.epsilon, requested=tuple(map(reflect_center, first_rods.centers)),
+        )
+        return outer, second_rods.meshes[middle_index], second_rods.meshes[outer_index]
     if isinstance(connector, CustomConnector):
         first_custom = add_custom_connector(
             engine, *sides, frame, position, primary.kerf, connector, epsilon,

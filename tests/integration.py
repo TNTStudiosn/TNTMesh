@@ -566,6 +566,147 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), previous)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
 
+    def test_rod_sockets_measure_both_depths_clearance_and_stock(self):
+        from mathutils.bvhtree import BVHTree
+
+        model = self.addon.operators
+        boolean = importlib.import_module(f"{self.addon.__name__}.geometry.boolean")
+        geometry = importlib.import_module(f"{self.addon.__name__}.geometry.connector")
+        guide = self.addon.assembly_ui.assembly_guide
+        settings = self.settings
+        settings.connector = "ROD"
+        settings.rod_size = 4
+        settings.rod_depth_minus = 6
+        settings.rod_depth_plus = 10
+        settings.rod_angle = .47
+        settings.kerf = .4
+        settings.axial = .3
+        settings.lateral = .18
+        for shape, expected_stock in (
+            ("ROUND", "Round rod Ø4 × 16.4 mm"), ("SQUARE", "Square rod 4 × 4 × 16.4 mm"),
+        ):
+            with self.subTest(shape=shape):
+                source = self.cube(54)
+                settings.rod_shape = shape
+                settings.connector_count = 6
+                settings.connector_points.clear()
+                self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+                centers = tuple(tuple(item.position) for item in settings.connector_points)
+                self.assertEqual(len(centers), 6)
+                design = settings.rod_config(6)
+                ui = self.addon.connector_ui
+                self.assertEqual(ui.decode(ui.encode(design, centers, False)), (design, centers, False))
+                self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+                context = bpy.context
+                pieces = self.addon.assembly.members(context)
+                self.assertEqual(len(pieces), 2)
+                self.assertTrue(all(self.checked(piece) > 100 for piece in pieces))
+                self.assertFalse(self.addon.assembly.overlaps(context, pieces))
+                self.assertEqual(len(source.data.polygons), 6)
+                angle = pi / 64 if shape == "ROUND" else design.angle
+                side_normal = Vector((cos(angle), sin(angle), 0))
+                with model.GeometryTransaction() as transaction:
+                    meshes = [model.evaluated_mm(context, piece, transaction, 1, centered=False)[0]
+                              for piece in pieces]
+                    for mesh, direction, depth in zip(
+                        meshes, (-1, 1), (design.depth_minus, design.depth_plus), strict=True,
+                    ):
+                        tree = BVHTree.FromPolygons([v.co for v in mesh.vertices],
+                                                   [tuple(face.vertices) for face in mesh.polygons])
+                        for x, y in centers:
+                            seam = Vector((x, y, direction * settings.kerf / 2))
+                            away = Vector((0, 0, direction))
+                            self.assertAlmostEqual(tree.ray_cast(seam + away, side_normal)[3],
+                                                   design.size / 2 + design.lateral, places=4)
+                            self.assertAlmostEqual(tree.ray_cast(seam - away, away)[3],
+                                                   1 + depth + design.axial, places=4)
+                    x, y = centers[0]
+                    probe_engine = boolean.ExactBoolean(context, transaction)
+                    for shift in (-design.axial, 0, design.axial):
+                        probe = geometry.profile_prism(
+                            transaction, model.Matrix.Identity(3), Vector((x, y, 0)),
+                            -settings.kerf / 2 - design.depth_minus + shift,
+                            settings.kerf / 2 + design.depth_plus + shift, design.profile(0),
+                        )
+                        self.assertFalse(any(boolean.measure_intersection(probe_engine, probe, body) for body in meshes))
+                report = guide.collect(context, "Rod joint", pieces)
+                self.assertEqual(guide.stock_labels(report), [f"6 × {expected_stock}"])
+                self.assertIn(expected_stock, guide.render_markdown(report))
+                self.assertIn(expected_stock, guide.render_html(report, "en-US"))
+
+    def test_rod_socket_on_a_tilted_mirrored_metric_model(self):
+        source = self.cube(50)
+        source.location = (200, -42, 86)
+        source.scale = (-1.2, .92, 1)
+        source.rotation_euler = (.33, .45, .20)
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .001
+        bpy.context.view_layer.update()
+        world = source.matrix_world.copy()
+        settings = self.settings
+        settings.axis = "FREE"
+        settings.rotation = tuple(source.rotation_euler)
+        settings.connector = "ROD"
+        settings.rod_shape = "SQUARE"
+        settings.rod_angle = .45
+        settings.kerf = .3
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="LINE", count=3, spacing=12), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual(len(parts), 2)
+        self.assertTrue(all(self.checked(part) > 100 for part in parts))
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
+        self.assertEqual(source.matrix_world, world)
+        self.assertEqual(len(source.data.polygons), 6)
+
+    def test_invalid_rod_sockets_leave_source_and_objects_intact(self):
+        source = self.cube(30)
+        settings = self.settings
+        settings.connector = "ROD"
+        state = set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())
+        settings.rod_depth_minus = 14.6
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.rod_depth_minus = 4
+        settings.axial = 4
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.axial = .2
+        for x in (-1, 1):
+            settings.connector_points.add().position = (x, 0)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), state)
+        self.assertFalse(source.hide_get())
+
+    def test_symmetric_rod_draft_lists_four_rods_and_rejects_crossing_sockets(self):
+        self.cube(80)
+        settings = self.settings
+        settings.connector = "ROD"
+        settings.rod_shape = "SQUARE"
+        settings.rod_angle = .41
+        settings.connector_count = 2
+        settings.cut_kind = "SYMMETRY"
+        settings.axis = settings.symmetry_axis = "X"
+        settings.offset = -16
+        settings.kerf = .4
+        settings.symmetry_rotation = (0, .03, .04)
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        previous = self.parts()
+        self.assertEqual(len(previous), 3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, previous))
+        guide = self.addon.assembly_ui.assembly_guide
+        report = guide.collect(bpy.context, "Mirrored rod fixture", previous)
+        self.assertEqual(guide.stock_labels(report), ["4 × Square rod 4 × 4 × 14.4 mm"])
+        plan = bpy.context.scene.tntmesh_drafts[0]
+        cut = plan.cuts[0].settings
+        self.assertEqual(cut.rod_config(2), settings.rod_config(2))
+        meshes = set(bpy.data.meshes.keys())
+        cut.offset = -7
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), previous)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+
     def test_hinge_preserves_pivot_units_and_detects_a_blocked_opening(self):
         scene = bpy.context.scene
         scene.unit_settings.system = "METRIC"

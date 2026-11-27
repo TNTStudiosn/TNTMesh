@@ -2,6 +2,30 @@
 import bpy
 
 SPANISH = {
+    "Rod Sockets": "Encastre para varillas",
+    "Cut matching sockets for an external rod": "Genera alojamientos alineados para una varilla externa",
+    "Stock shape": "Forma de la varilla",
+    "Round": "Redonda",
+    "Square section": "Cuadrada",
+    "Use a round rod": "Usa una varilla redonda",
+    "Use a square rod": "Usa una varilla cuadrada",
+    "Stock size (mm)": "Medida de la varilla (mm)",
+    "Negative side (mm)": "Lado negativo (mm)",
+    "Positive side (mm)": "Lado positivo (mm)",
+    "Nominal rod insertion on the negative side of the cut": "Inserción nominal de la varilla en el lado negativo",
+    "Nominal rod insertion on the positive side of the cut": "Inserción nominal de la varilla en el lado positivo",
+    "Check the rod size, insertion depths and clearances.": "Revisa la medida, las inserciones y las holguras de la varilla.",
+    "Reduce the rod's axial clearance so it still engages both pieces.":
+        "Reduce la holgura axial para que la varilla siga entrando en ambas piezas.",
+    "The rod sockets could not be cut cleanly.": "No se pudieron generar los alojamientos de la varilla.",
+    "The rod cannot pass through both sockets along the cut normal.":
+        "La varilla no entra en ambos alojamientos en perpendicular al corte.",
+    "Check insertion and axial clearance.": "Revisa la inserción y la holgura axial.",
+    "Rod length · {size:.3f} mm": "Largo de varilla · {size:.3f} mm",
+    "Round rod Ø{width} × {length} mm": "Varilla redonda Ø{width} × {length} mm",
+    "Square rod {width} × {width} × {length} mm": "Varilla cuadrada {width} × {width} × {length} mm",
+    "Insert {count} × {rod} in the matching sockets, then bring {groups} together along each cut.":
+        "Inserta {count} × {rod} en los alojamientos y une {groups} en perpendicular a cada corte.",
     "Press-fit": "Encaje a presión",
     "Add a split pin held by radial interference": "Añade un pasador ranurado que se sujeta por interferencia radial",
     "Bore diameter (mm)": "Diámetro del alojamiento (mm)",

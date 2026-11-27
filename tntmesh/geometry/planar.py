@@ -17,6 +17,7 @@ from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
 from .polygon import Point2
 from .press_fit import PressFit, add_press_fits, press_centers
+from .rod import Rod, add_rod_sockets, rod_centers
 from .snap_fit import SnapFit, add_snap_fits, snap_centers
 
 
@@ -25,7 +26,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | PressFit | SnapFit | None = None
+    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | PressFit | Rod | SnapFit | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -69,12 +70,15 @@ def dovetail_positions(
 
 def validate_positions(
     engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float,
-    design: Connector | Dovetail | Magnet | PressFit | SnapFit,
+    design: Connector | Dovetail | Magnet | PressFit | Rod | SnapFit,
     positions: tuple[Point2, ...], flip: bool, glue: GlueAssist | None = None,
 ) -> None:
     if isinstance(design, Magnet):
         _, _, requested = connector_frame(cut, frame, positions, False)
         magnet_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
+        return
+    if isinstance(design, Rod):
+        rod_positions(engine, cut, frame, kerf, design, positions)
         return
     if isinstance(design, Dovetail):
         dovetail_positions(engine, cut, frame, kerf, design, positions, flip)
@@ -83,6 +87,15 @@ def validate_positions(
         flex_positions(engine, cut, frame, kerf, design, positions, flip)
         return
     standard_positions(engine, cut, frame, kerf, design, positions, flip, glue)
+
+
+def rod_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Rod,
+    positions: tuple[Point2, ...],
+) -> tuple[Point2, ...]:
+    _, _, requested = connector_frame(cut, frame, positions, False)
+    centers = rod_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
+    return tuple(tuple(center.xy) for center in centers)
 
 
 def flex_positions(
@@ -189,6 +202,11 @@ def split(
     if isinstance(config.connector, Magnet):
         _, _, requested = connector_frame(cut, frame, config.connector_positions, False)
         return add_magnet_pockets(
+            engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon, requested,
+        ).meshes
+    if isinstance(config.connector, Rod):
+        _, _, requested = connector_frame(cut, frame, config.connector_positions, False)
+        return add_rod_sockets(
             engine, minus, plus, frame, cut.position, config.kerf, config.connector, cut.epsilon, requested,
         ).meshes
     if config.connector is not None:

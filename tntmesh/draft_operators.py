@@ -12,6 +12,7 @@ from .settings import (
     GLUE_FIELDS,
     HINGE_FIELDS,
     PRESS_FIT_FIELDS,
+    ROD_FIELDS,
     SNAP_FIT_FIELDS,
     TNTMESH_PG_settings,
 )
@@ -25,6 +26,7 @@ GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diame
                        "dovetail_neck", "dovetail_head", "dovetail_height", "dovetail_length", "dovetail_angle",
                        *(f"snap_{name}" for name in SNAP_FIT_FIELDS),
                        *(f"press_{name}" for name in PRESS_FIT_FIELDS),
+                       *(f"rod_{name}" for name in ROD_FIELDS),
                        *(f"hinge_{name}" for name in HINGE_FIELDS),
                        *(f"glue_{name}" for name in GLUE_FIELDS),
                        "cut_kind", "cutter", "profile_size",

@@ -210,6 +210,13 @@ def draw_plane() -> None:
             slot = ()
             if settings.connector == "MAGNET":
                 outline = settings.magnet_config(1).profile()
+            elif settings.connector == "ROD":
+                rod = settings.rod_config(1)
+                outline = rod.profile(rod.lateral)
+                try:
+                    rod.validate()
+                except MeshError:
+                    color = (1.0, .36, .32, 1.0)
             elif settings.connector == "DOVETAIL":
                 outline = settings.dovetail_config(1).footprint()
                 angle = settings.dovetail_angle
