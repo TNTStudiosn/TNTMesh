@@ -11,6 +11,7 @@ from .connector import Connector, add_connector, safe_centers
 from .custom_connector import CustomConnector, add_custom_connector
 from .dovetail import Dovetail, add_dovetails
 from .dovetail import layout as dovetail_layout
+from .glue import GlueAssist
 from .hinge import Hinge, add_hinge
 from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
@@ -27,6 +28,7 @@ class PlanarCut:
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
+    glue: GlueAssist | None = None
 
 
 @dataclass(frozen=True)
@@ -67,7 +69,7 @@ def dovetail_positions(
 def validate_positions(
     engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float,
     design: Connector | Dovetail | Magnet | SnapFit,
-    positions: tuple[Point2, ...], flip: bool,
+    positions: tuple[Point2, ...], flip: bool, glue: GlueAssist | None = None,
 ) -> None:
     if isinstance(design, Magnet):
         _, _, requested = connector_frame(cut, frame, positions, False)
@@ -79,7 +81,7 @@ def validate_positions(
     if isinstance(design, SnapFit):
         snap_positions(engine, cut, frame, kerf, design, positions, flip)
         return
-    standard_positions(engine, cut, frame, kerf, design, positions, flip)
+    standard_positions(engine, cut, frame, kerf, design, positions, flip, glue)
 
 
 def snap_positions(
@@ -95,12 +97,18 @@ def snap_positions(
 
 def standard_positions(
     engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Connector,
-    positions: tuple[Point2, ...], flip: bool,
+    positions: tuple[Point2, ...], flip: bool, glue: GlueAssist | None = None,
 ) -> tuple[Point2, ...]:
     design.validate()
     cut, frame, requested = connector_frame(cut, frame, positions, flip)
     if flip:
         design = design.reflected("Y")
+    if glue is not None:
+        result = add_connector(
+            engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon,
+            requested=requested, glue=glue.reflected("Y") if flip else glue,
+        )
+        return tuple((point.x, -point.y if flip else point.y) for point in result.centers)
     points = safe_centers(
         engine, cut.minus, cut.plus, frame, (cut.position - kerf / 2, cut.position + kerf / 2),
         design.depths, design.profile(design.lateral + design.wall), cut.epsilon,
@@ -197,8 +205,11 @@ def split(
         else:
             if config.pin_positive:
                 design = design.reflected("Y")
+            glue = config.glue
+            if glue is not None and config.pin_positive:
+                glue = glue.reflected("Y")
             result = add_connector(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
-                                   design, cut.epsilon, requested=requested)
+                                   design, cut.epsilon, requested=requested, glue=glue)
         first, second, *pins = result.meshes
         return (second, first, *pins) if config.pin_positive else (first, second, *pins)
     return minus, plus

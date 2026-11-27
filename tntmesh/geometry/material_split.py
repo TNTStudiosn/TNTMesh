@@ -7,8 +7,8 @@ import bpy
 from ..model import GeometryTransaction, MeshError
 from .boolean import ExactBoolean
 from .connector import Connector
-from .mesh import inspect
-from .region import RegionCut, RegionTool, clean_region_result, cutter_for_region, edge_map
+from .mesh import inspect, weld_collapsed_edges
+from .region import RegionCut, RegionTool, cutter_for_region, edge_map
 from .region_connector import connect_region
 
 
@@ -49,8 +49,8 @@ def split_materials(
         cutter = tool.mesh
         extracted = engine.run(remainder, cutter, "INTERSECT")
         leftover = engine.run(remainder, cutter, "DIFFERENCE")
-        clean_region_result(extracted)
-        clean_region_result(leftover)
+        weld_collapsed_edges(extracted)
+        weld_collapsed_edges(leftover)
         if connector is None:
             transaction.remove_mesh(cutter)
         else:

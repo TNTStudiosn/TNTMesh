@@ -18,6 +18,7 @@ from .geometry.connector import Connector
 from .geometry.connector_profiles import PROFILE_ITEMS
 from .geometry.custom_connector import CustomConnector
 from .geometry.dovetail import Dovetail
+from .geometry.glue import GlueAssist
 from .geometry.hinge import Hinge
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
@@ -33,6 +34,7 @@ MAGNET_SHAPES = (
 )
 SNAP_FIT_FIELDS = ("width", "thickness", "reach", "hook", "ramp_angle", "angle", "material", "strain_limit")
 HINGE_FIELDS = ("diameter", "pin_diameter", "width", "knuckles", "stand_off", "angle", "shift", "opening")
+GLUE_FIELDS = ("channels", "reservoir", "vent", "chamfer", "texture", "relief", "angle")
 
 
 def is_mesh(self, obj: bpy.types.Object) -> bool:
@@ -203,6 +205,15 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     loose_pins: BoolProperty(
         name="Separate pins", description="Cut two sockets and generate removable pins",
     )
+    glue_channels: BoolProperty(name="Adhesive Channels", description="Cut two shallow channels along the socket wall")
+    glue_reservoir: BoolProperty(name="Glue Reservoir", description="Reserve space for excess adhesive below the pin")
+    glue_vent: BoolProperty(name="Air Outlet", description="Open a narrow path from the socket to an outside edge")
+    glue_chamfer: BoolProperty(name="Entry Chamfer", description="Widen the entrance to guide the pin into the socket")
+    glue_texture: BoolProperty(name="Internal Texture", description="Add three shallow grooves inside the socket")
+    glue_relief: FloatProperty(name="Relief (mm)", min=.05, default=.35, precision=2,
+                               description="Size of the selected glue relief features")
+    glue_angle: FloatProperty(name="Relief rotation", subtype="ANGLE", unit="ROTATION",
+                              description="Aim the air outlet in the cut plane and rotate the internal channels")
     pin_template: PointerProperty(name="Pin template", type=bpy.types.Object, poll=is_mesh)
     socket_template: PointerProperty(name="Socket template", type=bpy.types.Object, poll=is_mesh)
     hide_source: BoolProperty(name="Hide input after split", default=True)
@@ -351,6 +362,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.lateral, self.axial, self.wall,
         )
 
+    def glue_config(self) -> GlueAssist | None:
+        values = {name: getattr(self, f"glue_{name}") for name in GLUE_FIELDS}
+        if any(values[name] for name in GLUE_FIELDS[:5]):
+            return GlueAssist(**values)
+        return None
+
     def base_config(self, source: bpy.types.Object | None = None) -> BaseCut:
         connector = None
         if self.base_pins:
@@ -396,6 +413,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
             positions, self.cut_kind == "PLANAR" and self.pin_positive
             and (self.connector in {"DOVETAIL", "SNAP_FIT"} or not self.loose_pins),
+            self.glue_config() if isinstance(connector, Connector) else None,
         )
         if self.cut_kind == "SYMMETRY":
             return SymmetricCut(

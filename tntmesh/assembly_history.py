@@ -51,6 +51,8 @@ def connection_details(config: object) -> tuple[StockMagnet | None, str]:
         return None, ""
     if isinstance(primary.connector, Hinge):
         return None, "HINGE"
+    if primary.glue is not None:
+        return None, "GLUE"
     if not isinstance(primary.connector, Magnet):
         return None, "SNAP_FIT" if isinstance(primary.connector, SnapFit) else ""
     magnet = primary.connector
@@ -69,7 +71,9 @@ def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
         for cut, index, count, stock, *connector in json.loads(raw):
             if not isinstance(cut, str) or type(index) is not int or type(count) is not int:
                 return ()
-            if not cut or not (0 <= index <= count <= 32767) or connector not in ([], ["SNAP_FIT"], ["HINGE"]):
+            if not cut or not (0 <= index <= count <= 32767) or connector not in (
+                [], ["SNAP_FIT"], ["HINGE"], ["GLUE"],
+            ):
                 return ()
             magnet = None
             if stock is not None:

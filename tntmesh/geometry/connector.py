@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from itertools import chain
 from math import cos, hypot, isfinite, pi, sin
+from typing import TYPE_CHECKING
 
 import bpy
 from mathutils import Matrix, Vector
@@ -21,6 +22,9 @@ from .connector_profiles import (
 )
 from .mesh import VOLUME_EPSILON, bounds, inspect, primitive
 from .polygon import Point2
+
+if TYPE_CHECKING:
+    from .glue import GlueAssist
 
 Section = tuple[float, tuple[Point2, ...]]
 
@@ -107,9 +111,14 @@ class Connector:
         if self.loose:
             stops = (low - self.insertion, low, *stops)
         levels = (start, *sorted({z for z in stops if start < z < end}), end)
-        return tuple((z, self.profile(clearance, 1 - self.taper * min(1, max(
+        return tuple((z, self.profile_at(z, low, high, clearance)) for z in levels)
+
+    def profile_at(self, z: float, low: float, high: float, clearance: float) -> tuple[Point2, ...]:
+        if self.shape != "TAPER" or not self.taper:
+            return self.profile(clearance)
+        return self.profile(clearance, 1 - self.taper * min(1, max(
             0, (z - high) / self.insertion, (low - z) / self.insertion if self.loose else 0,
-        )))) for z in levels)
+        )))
 
 
 @dataclass(frozen=True)
@@ -241,17 +250,22 @@ def add_connector(
     requested: tuple[Vector, ...] | None = None,
     requested_error: str = "The requested connector positions do not fit.",
     preferred: tuple[Vector, ...] = (),
+    glue: "GlueAssist | None" = None,
 ) -> ConnectorResult:
+    from .glue import carve_socket
+
     config.validate()
     low = position - kerf / 2
     high = position + kerf / 2
     anchor = config.anchor
     # Keep the probe inside the cut plane. The applied tool crosses the seam.
     inset = min(epsilon, anchor / 10, config.wall / 10)
-    guard = config.profile(config.lateral + config.wall)
+    if glue is not None:
+        glue.validate(config)
+    guard = glue.guard(config) if glue else config.profile(config.lateral + config.wall)
     centers = safe_centers(
         engine, minus, plus, frame, (low, high),
-        config.depths, guard, epsilon, inset, config.count,
+        glue.depths(config) if glue else config.depths, guard, epsilon, inset, config.count,
         requested, requested_error, preferred, footprint_spacing=config.uses_footprint,
     )
 
@@ -259,33 +273,50 @@ def add_connector(
     pin_data = config.sections(low - (config.insertion if config.loose else anchor), high + config.insertion, low, high)
     positive_socket = config.sections(high - inset, high + socket_depth, low, high, config.lateral)
     negative_socket = config.sections(low - socket_depth, low + inset, low, high, config.lateral) if config.loose else ()
-    socket_volume = section_volume(config.sections(high, high + socket_depth, low, high, config.lateral)) * len(centers)
+    socket_volume = section_volume(config.sections(high, high + socket_depth, low, high, config.lateral))
     pin_volume = section_volume(config.sections(low, high + config.insertion, low, high)) * len(centers)
     before_minus, before_plus = inspect(minus), inspect(plus)
     separate_pins = []
+    removed_minus = removed_plus = 0.0
+    backward = frame @ Matrix.Diagonal(Vector((1, -1, -1)))
+    reflected_centers = [Vector((point.x, -point.y, 0)) for point in centers] if glue and config.loose else []
 
-    for center in centers:
+    for index, center in enumerate(centers):
         pin = profile_loft(engine.transaction, frame, center, pin_data)
         if config.loose:
             inspect(pin)
             separate_pins.append(pin)
-            negative_tool = profile_loft(engine.transaction, frame, center, negative_socket)
-            new_minus = engine.run(minus, negative_tool, "DIFFERENCE")
-            engine.transaction.remove_mesh(negative_tool)
+            if glue:
+                new_minus, volume = carve_socket(
+                    engine, minus, backward, reflected_centers[index], -low,
+                    config.reflected("Y"), glue.reflected("Y"), reflected_centers, inset,
+                )
+            else:
+                negative_tool = profile_loft(engine.transaction, frame, center, negative_socket)
+                new_minus = engine.run(minus, negative_tool, "DIFFERENCE")
+                engine.transaction.remove_mesh(negative_tool)
+                volume = socket_volume
+            removed_minus += volume
         else:
             new_minus = engine.run(minus, pin, "UNION")
             engine.transaction.remove_mesh(pin)
-        socket = profile_loft(engine.transaction, frame, center, positive_socket)
-        new_plus = engine.run(plus, socket, "DIFFERENCE")
-        for mesh in (minus, plus, socket):
+        if glue:
+            new_plus, volume = carve_socket(engine, plus, frame, center, high, config, glue, centers, inset)
+        else:
+            socket = profile_loft(engine.transaction, frame, center, positive_socket)
+            new_plus = engine.run(plus, socket, "DIFFERENCE")
+            engine.transaction.remove_mesh(socket)
+            volume = socket_volume
+        removed_plus += volume
+        for mesh in (minus, plus):
             engine.transaction.remove_mesh(mesh)
         minus, plus = new_minus, new_plus
 
     after_minus, after_plus = inspect(minus), inspect(plus)
     deltas = (
         (after_minus.volume_mm3 - before_minus.volume_mm3,
-         -socket_volume if config.loose else pin_volume),
-        (before_plus.volume_mm3 - after_plus.volume_mm3, socket_volume),
+         -removed_minus if config.loose else pin_volume),
+        (before_plus.volume_mm3 - after_plus.volume_mm3, removed_plus),
     )
     if (after_minus.shells != before_minus.shells or after_plus.shells != before_plus.shells
             or any(abs(actual - expected) > max(VOLUME_EPSILON, abs(expected) * .01)

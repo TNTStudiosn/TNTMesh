@@ -979,6 +979,36 @@ SPANISH = {
         "Alinea los casquillos de {groups} e introduce el pasador {pieces}.",
     "Align the hinge barrels of {groups}. The axle is missing from the guide.":
         "Alinea los casquillos de {groups}. Falta el pasador en la guía.",
+    "Glue Assist": "Ayudas de pegado",
+    "Adhesive Channels": "Canales de adhesivo",
+    "Cut two shallow channels along the socket wall": "Abre dos canales poco profundos en la pared del alojamiento",
+    "Glue Reservoir": "Depósito de adhesivo",
+    "Reserve space for excess adhesive below the pin": "Deja espacio para el exceso de adhesivo bajo el pasador",
+    "Air Outlet": "Salida de aire",
+    "Open a narrow path from the socket to an outside edge": "Abre un paso estrecho del alojamiento al exterior",
+    "Entry Chamfer": "Chaflán de entrada",
+    "Widen the entrance to guide the pin into the socket": "Ensancha la entrada para guiar el pasador",
+    "Internal Texture": "Textura interna",
+    "Add three shallow grooves inside the socket": "Añade tres ranuras poco profundas dentro del alojamiento",
+    "Relief (mm)": "Alivio (mm)",
+    "Size of the selected glue relief features": "Tamaño de los rebajes de pegado seleccionados",
+    "Relief rotation": "Giro del alivio",
+    "Aim the air outlet in the cut plane and rotate the internal channels":
+        "Orienta la salida de aire y los canales internos en el plano de corte",
+    "Set glue relief between 0.05 mm and one quarter of the insertion depth.":
+        "Ajusta el alivio entre 0.05 mm y un cuarto de la profundidad de inserción.",
+    "The glue channel could not find the socket wall.": "El canal no encontró la pared del alojamiento.",
+    "The glue vent needs a direct path to an outside edge.": "La salida de aire requiere una ruta directa al exterior.",
+    "The glue vent passes too close to another socket. Rotate or move it.":
+        "La salida pasa demasiado cerca de otro alojamiento. Gírala o muévela.",
+    "The glue vent leaves too little material next to the socket.":
+        "La salida de aire deja poco material junto al alojamiento.",
+    "The glue vent leaves too little material below or beside the outlet.":
+        "Falta material debajo o a los lados de la salida de aire.",
+    "The glue features did not remove material from the socket.":
+        "Los rebajes de pegado no retiraron material del alojamiento.",
+    "Apply adhesive to the prepared sockets. Keep air outlets clear.":
+        "Aplica adhesivo en los alojamientos preparados. Mantén libres las salidas de aire.",
 }
 CATALOG = {
     locale: {

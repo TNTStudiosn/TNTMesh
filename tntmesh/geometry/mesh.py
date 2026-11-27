@@ -75,6 +75,31 @@ def bounds(coordinates: Iterable[Vector]) -> tuple[Vector, Vector]:
     return lower, upper
 
 
+def weld_collapsed_edges(mesh: bpy.types.Mesh) -> None:
+    # Exact Booleans can put adjacent vertices at the same float coordinate.
+    # Only weld edges on collapsed faces to preserve nearby source detail.
+    epsilon = .00001
+    if not any(face.area <= 0 for face in mesh.polygons):
+        return
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(mesh)
+        for _ in range(3):
+            affected = {
+                vertex for face in bm.faces if face.calc_area() <= 0
+                for edge in face.edges if edge.calc_length() <= epsilon
+                for vertex in edge.verts
+            }
+            if not affected:
+                break
+            bmesh.ops.remove_doubles(bm, verts=list(affected), dist=epsilon)
+            bm.normal_update()
+        bm.to_mesh(mesh)
+        mesh.update()
+    finally:
+        bm.free()
+
+
 def evaluated_mm(
     context: bpy.types.Context,
     source: bpy.types.Object,

@@ -40,6 +40,7 @@ class Joint:
     magnet: assembly_history.StockMagnet | None = None
     snap_fit: bool = False
     hinge: bool = False
+    glue: bool = False
 
     @property
     def incomplete(self) -> bool:
@@ -48,6 +49,8 @@ class Joint:
     def directions(self) -> list[str]:
         notes = []
         groups = [", ".join(piece.label for piece in group) for group in self.branches if group]
+        if self.glue:
+            notes.append(tr("Apply adhesive to the prepared sockets. Keep air outlets clear."))
         if self.magnet:
             notes.append(tr("Fit {count} × {magnet} before joining. Check polarity against the mating pocket.").format(
                 count=self.magnet.count, magnet=self.magnet.label(),
@@ -112,6 +115,7 @@ def collect(context: bpy.types.Context, title: str, objects: list[bpy.types.Obje
                 joint.magnet = branch.magnet
             joint.snap_fit |= branch.snap_fit
             joint.hinge |= branch.connector == "HINGE"
+            joint.glue |= branch.connector == "GLUE"
 
     stock: dict[tuple[str, tuple[float, ...]], int] = {}
     ordered = sorted(joints.values(), key=lambda joint: -joint.depth)

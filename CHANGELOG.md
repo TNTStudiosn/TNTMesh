@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.20
+
+- Added optional glue channels, reservoirs, exterior air outlets, entry chamfers and internal texture for standard pin sockets, with wall and outlet checks.
+
 ## 0.3.0-alpha.19
 
 - Added pin hinges for straight cuts, with separate headed axles, sampled opening checks, collision highlights and a non-destructive assembly preview.

@@ -3,7 +3,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from math import isfinite
 
-import bmesh
 import bpy
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
@@ -169,31 +168,6 @@ def smooth_boundary(
 def reject_self_intersections(mesh: bpy.types.Mesh) -> None:
     if next(nonadjacent_overlaps(mesh), None) is not None:
         raise MeshError("The region cutter folds into itself. Reduce the depth or change the region.")
-
-
-def clean_region_result(mesh: bpy.types.Mesh) -> None:
-    # The exact solver can introduce coincident float coordinates where the
-    # cutter follows source edges. Limit the weld to vertices of zero-area faces.
-    epsilon = .00001
-    if not any(face.area <= 0 for face in mesh.polygons):
-        return
-    bm = bmesh.new()
-    try:
-        bm.from_mesh(mesh)
-        for _ in range(3):
-            affected = {
-                vertex for face in bm.faces if face.calc_area() <= 0
-                for edge in face.edges if edge.calc_length() <= epsilon
-                for vertex in edge.verts
-            }
-            if not affected:
-                break
-            bmesh.ops.remove_doubles(bm, verts=list(affected), dist=epsilon)
-            bm.normal_update()
-        bm.to_mesh(mesh)
-        mesh.update()
-    finally:
-        bm.free()
 
 
 def cutter_for_region(

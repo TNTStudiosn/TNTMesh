@@ -153,13 +153,14 @@ def split_symmetric(
         )
         return outer, second_snap.meshes[middle_index], second_snap.meshes[outer_index]
 
-    first_set = add_connector(engine, *sides, frame, position, primary.kerf, connector, epsilon)
+    first_set = add_connector(engine, *sides, frame, position, primary.kerf, connector, epsilon, glue=primary.glue)
     middle, outer = first_set.meshes[middle_index], first_set.meshes[outer_index]
     sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
     second_set = add_connector(
         engine, *sides, reflected, mirrored_position, primary.kerf, connector.reflected("X"),
         secondary.epsilon, requested=tuple(map(reflect_center, first_set.centers)),
         requested_error="The mirrored connector does not fit at its reflected position.",
+        glue=primary.glue.reflected("X") if primary.glue else None,
     )
     middle, mirrored_outer = second_set.meshes[middle_index], second_set.meshes[outer_index]
     return outer, middle, mirrored_outer, *first_set.meshes[2:], *second_set.meshes[2:]

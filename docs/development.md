@@ -48,6 +48,10 @@ Enter the print material and an allowable strain measured for the intended print
 
 A recorded snap-fit adds joining instructions to the assembly guide. **Check Insertion Path** uses rigid meshes and can report the intended contact as the hook passes the throat.
 
+**Glue Assist** is in **Cut Settings** for standard pin profiles on straight or symmetric cuts. Choose adhesive channels, a reservoir under the pin, an exterior air outlet, an entry chamfer or grooves for internal texture. Each option starts off. Loose pins keep their dimensions and prepare both sockets. Edit **Relief** to change the size of the features and **Relief rotation** to aim the air outlet and rotate the wall channels. The viewport arrow shows the outlet direction.
+
+The cut checks the material around every socket and along the outlet. It rejects a route near another socket or through an internal void. Before printing, check that your process can reproduce the smallest relief. The outlet is narrower than the internal channels. The assembly guide identifies joins with prepared sockets.
+
 Choose **Pin Hinge** on a straight cut to generate two leaves and a headed axle as three pieces. Rotate the hinge edge in the cut plane and shift the span along it. The axis is offset outside that edge. Set the number of knuckles, the barrel and axle diameters, the lateral clearance around the axle, the axial clearance between knuckles, and the opening to test. TNTMesh requires a solid attachment under every knuckle and checks the bearing wall, the axle fit and the swing before publishing the pieces.
 
 In **Assembly**, use the **Opening** slider to preview the tested range. The preview keeps the scene and exports in their original positions. Use **Check Hinge Opening** after adding parts or moving the assembly. The check highlights an obstructing piece in red at a sampled collision pose. The assembly guide identifies the axle and its insertion step. The test samples rigid movement at an estimated maximum travel of 1 mm between poses. Physical fit and retention depend on the printed specimen and tolerances.

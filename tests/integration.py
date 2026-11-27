@@ -467,6 +467,108 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), previous)
         self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), snapshots)
 
+    def test_glue_socket_has_channels_chamfer_reservoir_texture_and_open_air_route(self):
+        from mathutils.bvhtree import BVHTree
+
+        source = self.cube(32)
+        settings = self.settings
+        for name in ("channels", "reservoir", "vent", "chamfer", "texture"):
+            setattr(settings, f"glue_{name}", True)
+        settings.kerf = .4
+        settings.connector_points.add().position = (0, 0)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        male, female = self.parts()
+        self.checked(male)
+        self.checked(female)
+        self.assertTrue(source.hide_get())
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, [male, female]))
+        mesh = female.data
+        mesh.calc_loop_triangles()
+        tree = BVHTree.FromPolygons([v.co for v in mesh.vertices], [tuple(t.vertices) for t in mesh.loop_triangles],
+                                    all_triangles=True)
+        face = settings.kerf / 2
+
+        def level(z):
+            return Vector((0, 0, face + z))
+
+        direction = Vector((1, 1, 0)).normalized()
+        radius = settings.standard_connector("ROUND", 1).socket_radius
+        # Rays measure each added feature in the final socket, away from the other cuts.
+        chamfer = tree.ray_cast(level(.08), direction)[3]
+        self.assertGreater(chamfer - radius, .23)
+        self.assertAlmostEqual(tree.ray_cast(level(1.55), direction)[3], radius, places=4)
+        self.assertAlmostEqual(tree.ray_cast(level(1.55), Vector((0, 1, 0)))[3],
+                               radius + settings.glue_relief, places=4)
+        self.assertAlmostEqual(tree.ray_cast(level(1.0), direction)[3],
+                               radius + settings.glue_relief / 3, places=3)
+        target = settings.insertion + settings.axial + settings.glue_relief
+        self.assertAlmostEqual(tree.ray_cast(level(2), Vector((0, 0, 1)))[3], target - 2, places=4)
+        # Test the exterior opening and the axial return path beside a seated pin.
+        self.assertIsNone(tree.ray_cast(Vector((18, 0, face + .14)), Vector((-1, 0, 0)), 15)[0])
+        self.assertIsNone(tree.ray_cast(Vector((radius + .2, 0, face + .15)), Vector((0, 0, 1)), 4)[0])
+        guide = self.addon.assembly_ui.assembly_guide
+        check = guide.step_labels(guide.collect(bpy.context, "Glue", self.parts()))
+        self.assertIn("Keep air outlets clear.", check[0])
+
+    def test_glue_tools_keep_tapered_separate_pins_and_reject_crossing_outlets(self):
+        source = self.cube(40)
+        settings = self.settings
+        settings.connector = "TAPER"
+        settings.loose_pins = True
+        settings.glue_vent = settings.glue_channels = settings.glue_reservoir = True
+        settings.glue_chamfer = settings.glue_texture = True
+        settings.glue_angle = .15
+        settings.kerf = .4
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual(len(parts), 3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
+        self.assertEqual(sum(obj["tntmesh_part_kind"] == "pin" for obj in parts), 1)
+        self.assertTrue(source.hide_get())
+        fresh = self.cube(40)
+        settings.glue_angle = 0
+        settings.connector_points.clear()
+        for x in (-6, 6):
+            settings.connector_points.add().position = (x, 0)
+        snapshots = set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), snapshots)
+        self.assertFalse(fresh.hide_get())
+        settings.connector = "STAR"
+        settings.connector_angle = .25
+        settings.loose_pins = False
+        settings.glue_angle = .15
+        settings.connector_points.clear()
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        shaped = self.addon.assembly.members(bpy.context)
+        self.assertEqual(len(shaped), 2)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, shaped))
+
+    def test_symmetric_glue_draft_preserves_the_previous_build_on_invalid_relief(self):
+        self.cube(40)
+        settings = self.settings
+        settings.cut_kind = "SYMMETRY"
+        settings.axis = settings.symmetry_axis = "X"
+        settings.offset = -10
+        settings.glue_chamfer = settings.glue_reservoir = settings.glue_vent = True
+        settings.glue_angle = .15
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        draft = bpy.context.scene.tntmesh_drafts[0]
+        cut = draft.cuts[0].settings
+        self.assertTrue(cut.glue_reservoir)
+        self.assertTrue(cut.glue_vent)
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        before = self.parts()
+        self.assertEqual(len(before), 3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, before))
+        cut.glue_relief = 2
+        meshes = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), before)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+
     def test_dovetail_symmetric_cut_preserves_both_sliding_joints(self):
         self.cube(32)
         self.settings.connector = "DOVETAIL"

@@ -132,7 +132,8 @@ def check_positions(
     with preview_split(context, settings) as (engine, cut, frame):
         flip = positive and (isinstance(design, (Dovetail, SnapFit))
                              or (isinstance(design, Connector) and not design.loose))
-        validate_positions(engine, cut, frame, settings.kerf, design, positions, flip)
+        glue = settings.glue_config() if isinstance(design, Connector) else None
+        validate_positions(engine, cut, frame, settings.kerf, design, positions, flip, glue)
 
 
 class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
@@ -161,10 +162,14 @@ class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
                     design = settings.snap_config(settings.connector_count)
                     positive = settings.pin_positive
                     positions = snap_positions(engine, plane, frame, settings.kerf, design, (), positive)
-                elif settings.connector in STANDARD_SHAPES - {"ROUND", "HEX"}:
+                elif settings.connector in STANDARD_SHAPES and (
+                    settings.connector not in {"ROUND", "HEX"} or settings.glue_config() is not None
+                ):
                     design = settings.standard_connector(settings.connector, settings.connector_count)
                     positive = settings.pin_positive and not design.loose
-                    positions = standard_positions(engine, plane, frame, settings.kerf, design, (), positive)
+                    positions = standard_positions(
+                        engine, plane, frame, settings.kerf, design, (), positive, settings.glue_config(),
+                    )
                 else:
                     baseline = settings.standard_connector("ROUND", 1)
                     baseline.validate()
@@ -363,6 +368,7 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
                         engine, cut, frame, settings.kerf, design, positions,
                         settings.pin_positive and (isinstance(design, (Dovetail, SnapFit))
                                                    or (isinstance(design, Connector) and not design.loose)),
+                        settings.glue_config() if isinstance(design, Connector) else None,
                     )
                 set_positions(settings, positions)
             else:

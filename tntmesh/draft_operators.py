@@ -8,7 +8,7 @@ from . import draft
 from .localization import tr
 from .model import DRAFT_ID, MeshError
 from .operators import MeshOperator, active_mesh, report_failure, select_results
-from .settings import HINGE_FIELDS, SNAP_FIT_FIELDS, TNTMESH_PG_settings
+from .settings import GLUE_FIELDS, HINGE_FIELDS, SNAP_FIT_FIELDS, TNTMESH_PG_settings
 
 GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diameter", "insertion",
                        "connector_width", "connector_height", "connector_angle", "connector_taper",
@@ -19,6 +19,7 @@ GEOMETRY_PROPERTIES = ("axis", "rotation", "offset", "kerf", "connector", "diame
                        "dovetail_neck", "dovetail_head", "dovetail_height", "dovetail_length", "dovetail_angle",
                        *(f"snap_{name}" for name in SNAP_FIT_FIELDS),
                        *(f"hinge_{name}" for name in HINGE_FIELDS),
+                       *(f"glue_{name}" for name in GLUE_FIELDS),
                        "cut_kind", "cutter", "profile_size",
                        "profile_shift", "curve_controls", "curve_samples", "contour_depth", "path_smoothing",
                        "region_method", "region_depth", "region_slot", "region_attribute",

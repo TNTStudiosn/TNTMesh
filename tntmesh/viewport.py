@@ -205,10 +205,14 @@ def draw_plane() -> None:
             center = frame.transposed() @ origin
             height = (lower.z + upper.z) / 2 + settings.offset / unit
             color = (.78, .55, 1.0, 1.0)
+            arrow_color = (0, 1, 1, 1)
+            arrow = None
             if settings.connector == "MAGNET":
                 outline = settings.magnet_config(1).profile()
             elif settings.connector == "DOVETAIL":
                 outline = settings.dovetail_config(1).footprint()
+                angle = settings.dovetail_angle
+                arrow = Vector((-sin(angle), cos(angle), 0)), settings.dovetail_length / 2 + 3
             elif settings.connector == "SNAP_FIT":
                 hook = settings.snap_config(1)
                 try:
@@ -222,10 +226,21 @@ def draw_plane() -> None:
                     color = (1.0, .36, .32, 1.0)
             else:
                 profile = settings.standard_connector(settings.connector, 1)
+                glue = settings.glue_config()
                 try:
-                    outline = profile.profile(profile.lateral)
+                    extra = glue.relief if glue and glue.chamfer else 0
+                    outline = profile.profile(profile.lateral + extra)
+                    if glue and glue.vent:
+                        angle = glue.angle
+                        arrow = Vector((cos(angle), sin(angle), 0)), profile.socket_radius + 3
                 except MeshError:
                     return
+                if glue is not None:
+                    try:
+                        glue.validate(profile)
+                    except MeshError:
+                        color = (1.0, .36, .32, 1.0)
+                        arrow_color = color
             gpu.state.depth_test_set("NONE")
             shader.bind()
             shader.uniform_float("color", color)
@@ -234,18 +249,18 @@ def draw_plane() -> None:
                 ring = [frame @ Vector((center.x + (x + a) / unit, center.y + (y + b) / unit, height))
                         for a, b in outline]
                 batch_for_shader(shader, "LINE_STRIP", {"pos": [*ring, ring[0]]}).draw(shader)
-                if settings.connector == "DOVETAIL":
-                    angle = settings.dovetail_angle
-                    direction = frame @ Vector((-sin(angle), cos(angle), 0))
-                    across = frame @ Vector((cos(angle), sin(angle), 0))
+                if arrow is not None:
+                    direction, length = arrow
+                    across = frame @ Vector((direction.y, -direction.x, 0))
+                    direction = frame @ direction
                     root = frame @ Vector((center.x + x / unit, center.y + y / unit, height))
-                    tip = root + direction * (settings.dovetail_length / 2 + 3) / unit
+                    tip = root + direction * length / unit
                     back = tip - direction * 1.25 / unit
-                    shader.uniform_float("color", (0, 1, 1, 1))
+                    shader.uniform_float("color", arrow_color)
                     batch_for_shader(shader, "LINES", {"pos": (
                         root, tip, tip, back + across * .75 / unit, tip, back - across * .75 / unit,
                     )}).draw(shader)
-                    shader.uniform_float("color", (.78, .55, 1, 1))
+                    shader.uniform_float("color", color)
     finally:
         gpu.state.depth_test_set(previous_depth)
         gpu.state.blend_set(previous_blend)

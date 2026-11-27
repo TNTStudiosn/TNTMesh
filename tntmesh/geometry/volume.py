@@ -10,10 +10,10 @@ from ..model import GeometryTransaction, MeshError
 from .base import BaseCut, split_base
 from .boolean import ExactBoolean
 from .custom_connector import CustomConnector
-from .mesh import bounds, evaluated_mm, inspect, primitive
+from .mesh import bounds, evaluated_mm, inspect, primitive, weld_collapsed_edges
 from .planar import PlanarCut, axis_frame, split
 from .polygon import Point2, closed_outline, path_outline
-from .region import RegionCut, clean_region_result, cutter_for_region
+from .region import RegionCut, cutter_for_region
 from .region_connector import connect_region
 from .symmetry import SymmetricCut, split_symmetric
 
@@ -166,8 +166,8 @@ def apply_cut(
     outside = engine.run(mesh, cutter, "DIFFERENCE")
     inside = engine.run(mesh, cutter, "INTERSECT")
     if isinstance(config, RegionCut):
-        clean_region_result(outside)
-        clean_region_result(inside)
+        weld_collapsed_edges(outside)
+        weld_collapsed_edges(inside)
     if not outside.polygons or not inside.polygons:
         raise MeshError("The cutter must leave material on both sides of the cut.")
     total = inspect(outside).volume_mm3 + inspect(inside).volume_mm3

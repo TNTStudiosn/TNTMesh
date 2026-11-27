@@ -160,9 +160,24 @@ def cut_details(
         for name in ("lateral", "axial", "wall"):
             tolerances.prop(settings, name)
     elif settings.connector != "NONE":
+        glue_details(layout, settings)
         connector_details(layout, settings, settings.connector)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
+
+
+def glue_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    header, body = layout.panel("tntmesh_glue_assist", default_closed=True)
+    header.label(text="Glue Assist")
+    if body is None:
+        return
+    controls = body.column(align=True)
+    for name in ("channels", "reservoir", "vent", "chamfer", "texture"):
+        controls.prop(settings, f"glue_{name}")
+    if settings.glue_config() is not None:
+        controls.prop(settings, "glue_relief")
+    if settings.glue_channels or settings.glue_vent:
+        controls.prop(settings, "glue_angle")
 
 
 def snap_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
