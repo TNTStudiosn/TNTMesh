@@ -254,6 +254,20 @@ def add_connector(
 ) -> ConnectorResult:
     from .glue import carve_socket
 
+    # The narrow reliefs share several planes with the socket. Keep these
+    # planes axis aligned during the Booleans, then restore the cut orientation.
+    restore_frame = None
+    if glue and frame != Matrix.Identity(3):
+        restore_frame = frame.to_4x4()
+        inverse = frame.transposed().to_4x4()
+        for body, boundary in ((minus, position - kerf / 2), (plus, position + kerf / 2)):
+            body.transform(inverse)
+            for vertex in body.vertices:
+                if abs(vertex.co.z - boundary) < epsilon:
+                    vertex.co.z = boundary
+            body.update()
+        frame = Matrix.Identity(3)
+
     config.validate()
     low = position - kerf / 2
     high = position + kerf / 2
@@ -322,4 +336,9 @@ def add_connector(
             or any(abs(actual - expected) > max(VOLUME_EPSILON, abs(expected) * .01)
                    for actual, expected in deltas)):
         raise MeshError("The connector could not be joined or the socket could not be cut.")
-    return ConnectorResult((minus, plus, *separate_pins), tuple(centers))
+    pieces = minus, plus, *separate_pins
+    if restore_frame is not None:
+        for piece in pieces:
+            piece.transform(restore_frame)
+            piece.update()
+    return ConnectorResult(pieces, tuple(centers))

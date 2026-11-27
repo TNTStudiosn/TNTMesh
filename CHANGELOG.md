@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.21
+
+- Fixed false glue socket failures on tilted cuts by evaluating the relief Booleans in the cut's local frame.
+
 ## 0.3.0-alpha.20
 
 - Added optional glue channels, reservoirs, exterior air outlets, entry chamfers and internal texture for standard pin sockets, with wall and outlet checks.

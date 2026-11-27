@@ -569,6 +569,35 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), before)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
 
+    def test_glue_parallel_outlets_on_a_tilted_mirrored_metric_model(self):
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .001
+        source = self.cube(36)
+        source.location = (200, -42, 86)
+        source.scale = (-1.2, .92, 1)
+        source.rotation_euler = (.33, .45, .20)
+        bpy.context.view_layer.update()
+        original = source.matrix_world.copy()
+        settings = self.settings
+        settings.axis = "FREE"
+        settings.rotation = tuple(source.rotation_euler)
+        settings.connector = "RECTANGLE"
+        settings.pin_positive = True
+        settings.kerf = .3
+        settings.glue_angle = pi / 2
+        for name in ("channels", "reservoir", "vent", "chamfer", "texture"):
+            setattr(settings, f"glue_{name}", True)
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(
+            pattern="LINE", count=2, spacing=12,
+        ), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        pieces = self.parts()
+        self.assertEqual(len(pieces), 2)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, pieces))
+        self.assertEqual(source.matrix_world, original)
+        self.assertEqual(len(source.data.polygons), 6)
+
     def test_dovetail_symmetric_cut_preserves_both_sliding_joints(self):
         self.cube(32)
         self.settings.connector = "DOVETAIL"
