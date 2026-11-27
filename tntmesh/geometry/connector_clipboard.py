@@ -7,18 +7,21 @@ from ..model import MeshError
 from .connector import Connector
 from .dovetail import Dovetail
 from .polygon import Point2
+from .press_fit import PressFit
 from .snap_fit import SnapFit
 
 PROFILE_FIELDS = ("width", "height", "angle", "taper")
 
 
-def encode(design: Connector | Dovetail | SnapFit, positions: tuple[Point2, ...], positive: bool) -> str:
+def encode(design: Connector | Dovetail | PressFit | SnapFit, positions: tuple[Point2, ...], positive: bool) -> str:
     settings = asdict(design)
     if isinstance(design, Dovetail):
         version = 2
     elif isinstance(design, SnapFit):
         settings.pop("reverse_flex")
         version = 4
+    elif isinstance(design, PressFit):
+        version = 5
     else:
         settings.pop("mirror_profile")
         version = 1 if design.shape == "ROUND" or (design.shape == "HEX" and not design.angle) else 3
@@ -31,19 +34,19 @@ def encode(design: Connector | Dovetail | SnapFit, positions: tuple[Point2, ...]
     }, separators=(",", ":"))
 
 
-def decode(text: str) -> tuple[Connector | Dovetail | SnapFit, tuple[Point2, ...], bool]:
+def decode(text: str) -> tuple[Connector | Dovetail | PressFit | SnapFit, tuple[Point2, ...], bool]:
     error = MeshError("The clipboard does not contain a valid TNTMesh connector setup.")
     if not text or len(text) > 65536:
         raise error
     try:
         data = json.loads(text)
         version = data["tntmesh_connector"]
-        if type(version) is not int or version not in (1, 2, 3, 4):
+        if type(version) is not int or version not in (1, 2, 3, 4, 5):
             raise ValueError
         settings = data["settings"]
         if not isinstance(settings, dict) or {"mirror_profile", "reverse_flex"} & settings.keys():
             raise ValueError
-        design = {1: Connector, 2: Dovetail, 3: Connector, 4: SnapFit}[version](**settings)
+        design = {1: Connector, 2: Dovetail, 3: Connector, 4: SnapFit, 5: PressFit}[version](**settings)
         if version == 1 and (design.shape not in {"ROUND", "HEX"} or any(key in settings for key in PROFILE_FIELDS)):
             raise ValueError
         positive = data["pin_positive"]
@@ -64,6 +67,11 @@ def decode(text: str) -> tuple[Connector | Dovetail | SnapFit, tuple[Point2, ...
                 raise ValueError
             dimensions = design.width, design.thickness, design.reach, design.hook, design.wall
             extra = design.ramp_angle, design.strain_limit
+        elif isinstance(design, PressFit):
+            if not isinstance(design.material, str) or len(design.material) > 128:
+                raise ValueError
+            dimensions = design.diameter, design.reach, design.interference, design.slot, design.wall
+            extra = (design.strain_limit,)
         elif isinstance(design, Connector):
             dimensions = design.diameter, design.width, design.height, design.insertion, design.wall
             extra = (design.taper,)
@@ -75,7 +83,7 @@ def decode(text: str) -> tuple[Connector | Dovetail | SnapFit, tuple[Point2, ...
             raise ValueError
         if min(dimensions) < .01:
             raise ValueError
-        if isinstance(design, SnapFit):
+        if isinstance(design, (PressFit, SnapFit)):
             if not 0 <= design.strain_limit <= 100:
                 raise ValueError
             design.validate_dimensions()

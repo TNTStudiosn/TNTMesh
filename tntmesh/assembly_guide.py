@@ -39,6 +39,7 @@ class Joint:
     connectors: list[Piece] = field(default_factory=list)
     magnet: assembly_history.StockMagnet | None = None
     snap_fit: bool = False
+    press_fit: bool = False
     hinge: bool = False
     glue: bool = False
 
@@ -68,8 +69,12 @@ class Joint:
                 pieces=", ".join(piece.label for piece in self.connectors),
             ))
         if len(groups) >= 2 and not self.hinge:
-            wording = ("Press {groups} together along the cut normal until the hooks seat." if self.snap_fit
-                       else "Join {groups} in the assembled positions shown.")
+            if self.press_fit:
+                wording = "Align {groups} and press straight along each cut normal until seated."
+            elif self.snap_fit:
+                wording = "Press {groups} together along the cut normal until the hooks seat."
+            else:
+                wording = "Join {groups} in the assembled positions shown."
             notes.append(tr(wording).format(groups=" / ".join(groups)))
         if self.incomplete:
             notes.append(tr("Some bodies from this cut are absent from the guide."))
@@ -114,6 +119,7 @@ def collect(context: bpy.types.Context, title: str, objects: list[bpy.types.Obje
             if branch.magnet:
                 joint.magnet = branch.magnet
             joint.snap_fit |= branch.snap_fit
+            joint.press_fit |= branch.connector == "PRESS_FIT"
             joint.hinge |= branch.connector == "HINGE"
             joint.glue |= branch.connector == "GLUE"
 

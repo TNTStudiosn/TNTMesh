@@ -444,6 +444,9 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
                 layout.operator("tntmesh.assembly_action", text="Back to Assembly", icon="LOOP_BACK").action = "RESET"
             layout.operator("tntmesh.check_assembly", icon="VIEWZOOM")
             layout.operator("tntmesh.check_insertion", icon="PLAY")
+            if any(branch.connector == "PRESS_FIT" for part in pieces for branch in assembly_history.path(part)):
+                notice = layout.column(align=True)
+                notice.label(text="Rigid checks include press-fit contact.", icon="INFO")
         layout.operator("tntmesh.export_assembly_guide", text="Export Assembly Guide", icon="FILE_TEXT")
 
         if obj is not None:

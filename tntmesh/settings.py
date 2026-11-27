@@ -22,6 +22,7 @@ from .geometry.glue import GlueAssist
 from .geometry.hinge import Hinge
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
+from .geometry.press_fit import PressFit
 from .geometry.region import RegionCut
 from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
@@ -33,6 +34,7 @@ MAGNET_SHAPES = (
     ("BLOCK", "Block", "Create a rectangular magnet pocket"),
 )
 SNAP_FIT_FIELDS = ("width", "thickness", "reach", "hook", "ramp_angle", "angle", "material", "strain_limit")
+PRESS_FIT_FIELDS = ("diameter", "reach", "interference", "slot", "angle", "material", "strain_limit")
 HINGE_FIELDS = ("diameter", "pin_diameter", "width", "knuckles", "stand_off", "angle", "shift", "opening")
 GLUE_FIELDS = ("channels", "reservoir", "vent", "chamfer", "texture", "relief", "angle")
 
@@ -124,6 +126,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             *PROFILE_ITEMS,
             ("SNAP_FIT", "Snap-fit", "Add a flexible hook and a matching retaining pocket"),
             ("HINGE", "Pin Hinge", "Add interlocking hinge barrels and a separate axle"),
+            ("PRESS_FIT", "Press-fit", "Add a split pin held by radial interference"),
         ],
         default="ROUND",
     )
@@ -190,6 +193,19 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
     snap_strain_limit: FloatProperty(
         name="Strain limit (%)", default=0, min=0, max=100, subtype="PERCENTAGE", precision=2,
         description="Allowable strain measured for this print material and layer orientation",
+    )
+    press_diameter: FloatProperty(name="Bore diameter (mm)", default=5, min=.01, precision=2)
+    press_reach: FloatProperty(name="Insertion (mm)", default=20, min=.01, precision=2)
+    press_interference: FloatProperty(
+        name="Radial interference (mm)", default=.18, min=.01, precision=2,
+        description="Amount by which each relaxed prong extends beyond the bore radius",
+    )
+    press_slot: FloatProperty(name="Slot width (mm)", default=1.2, min=.01, precision=2)
+    press_angle: FloatProperty(name="Slot rotation", subtype="ANGLE", unit="ROTATION")
+    press_material: StringProperty(name="Print material", maxlen=128)
+    press_strain_limit: FloatProperty(
+        name="Allowable strain (%)", subtype="PERCENTAGE", min=0, max=100, precision=2,
+        description="Verified elastic strain limit for the printed material and layer orientation",
     )
     hinge_diameter: FloatProperty(name="Barrel diameter (mm)", default=6, min=.01, precision=2)
     hinge_pin_diameter: FloatProperty(name="Axle diameter (mm)", default=2.4, min=.01, precision=2)
@@ -355,6 +371,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.lateral, self.axial, self.wall, self.snap_angle, count, self.snap_material, self.snap_strain_limit,
         )
 
+    def press_config(self, count: int) -> PressFit:
+        return PressFit(
+            self.press_diameter, self.press_reach, self.press_interference, self.press_slot,
+            self.lateral, self.axial, self.wall, self.press_angle, count, self.press_material, self.press_strain_limit,
+        )
+
     def hinge_config(self) -> Hinge:
         return Hinge(
             self.hinge_diameter, self.hinge_pin_diameter, self.hinge_width, self.hinge_knuckles,
@@ -403,6 +425,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.dovetail_config(len(positions) or self.connector_count)
         elif self.connector == "SNAP_FIT":
             connector = self.snap_config(len(positions) or self.connector_count)
+        elif self.connector == "PRESS_FIT":
+            connector = self.press_config(len(positions) or self.connector_count)
         elif self.connector == "HINGE":
             if self.cut_kind != "PLANAR":
                 raise MeshError("Choose a straight cut for the pin hinge.")
@@ -412,7 +436,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         cut = PlanarCut(
             self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
             positions, self.cut_kind == "PLANAR" and self.pin_positive
-            and (self.connector in {"DOVETAIL", "SNAP_FIT"} or not self.loose_pins),
+            and (self.connector in {"DOVETAIL", "PRESS_FIT", "SNAP_FIT"} or not self.loose_pins),
             self.glue_config() if isinstance(connector, Connector) else None,
         )
         if self.cut_kind == "SYMMETRY":

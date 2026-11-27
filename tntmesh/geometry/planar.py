@@ -16,6 +16,7 @@ from .hinge import Hinge, add_hinge
 from .magnet import Magnet, add_magnet_pockets, magnet_centers
 from .mesh import bounds, inspect
 from .polygon import Point2
+from .press_fit import PressFit, add_press_fits, press_centers
 from .snap_fit import SnapFit, add_snap_fits, snap_centers
 
 
@@ -24,7 +25,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | SnapFit | None = None
+    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | PressFit | SnapFit | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -68,7 +69,7 @@ def dovetail_positions(
 
 def validate_positions(
     engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float,
-    design: Connector | Dovetail | Magnet | SnapFit,
+    design: Connector | Dovetail | Magnet | PressFit | SnapFit,
     positions: tuple[Point2, ...], flip: bool, glue: GlueAssist | None = None,
 ) -> None:
     if isinstance(design, Magnet):
@@ -78,20 +79,21 @@ def validate_positions(
     if isinstance(design, Dovetail):
         dovetail_positions(engine, cut, frame, kerf, design, positions, flip)
         return
-    if isinstance(design, SnapFit):
-        snap_positions(engine, cut, frame, kerf, design, positions, flip)
+    if isinstance(design, (PressFit, SnapFit)):
+        flex_positions(engine, cut, frame, kerf, design, positions, flip)
         return
     standard_positions(engine, cut, frame, kerf, design, positions, flip, glue)
 
 
-def snap_positions(
-    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: SnapFit,
+def flex_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: PressFit | SnapFit,
     positions: tuple[Point2, ...], flip: bool,
 ) -> tuple[Point2, ...]:
     cut, frame, requested = connector_frame(cut, frame, positions, flip)
     if flip:
         design = design.reflected("Y")
-    points = snap_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
+    find_centers = press_centers if isinstance(design, PressFit) else snap_centers
+    points = find_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
     return tuple((point.x, -point.y if flip else point.y) for point in points)
 
 
@@ -197,11 +199,12 @@ def split(
                 design = replace(design, angle=pi - design.angle)
             result = add_dovetails(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
                                    design, cut.epsilon, requested)
-        elif isinstance(design, SnapFit):
+        elif isinstance(design, (PressFit, SnapFit)):
             if config.pin_positive:
                 design = design.reflected("Y")
-            result = add_snap_fits(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
-                                   design, cut.epsilon, requested)
+            add_flex = add_press_fits if isinstance(design, PressFit) else add_snap_fits
+            result = add_flex(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
+                              design, cut.epsilon, requested)
         else:
             if config.pin_positive:
                 design = design.reflected("Y")

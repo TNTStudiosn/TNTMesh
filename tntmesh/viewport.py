@@ -207,12 +207,28 @@ def draw_plane() -> None:
             color = (.78, .55, 1.0, 1.0)
             arrow_color = (0, 1, 1, 1)
             arrow = None
+            slot = ()
             if settings.connector == "MAGNET":
                 outline = settings.magnet_config(1).profile()
             elif settings.connector == "DOVETAIL":
                 outline = settings.dovetail_config(1).footprint()
                 angle = settings.dovetail_angle
                 arrow = Vector((-sin(angle), cos(angle), 0)), settings.dovetail_length / 2 + 3
+            elif settings.connector == "PRESS_FIT":
+                press = settings.press_config(1)
+                try:
+                    press.validate_dimensions()
+                except MeshError:
+                    return
+                radius = press.radius + press.travel
+                outline = press.section(radius, radius)
+                c, s = cos(press.angle), sin(press.angle)
+                slot = tuple((x * c - y * s, x * s + y * c)
+                             for y in (-press.slot / 2, press.slot / 2) for x in (-press.pin_radius, press.pin_radius))
+                try:
+                    press.validate(settings.kerf)
+                except MeshError:
+                    color = (1.0, .36, .32, 1.0)
             elif settings.connector == "SNAP_FIT":
                 hook = settings.snap_config(1)
                 try:
@@ -249,6 +265,10 @@ def draw_plane() -> None:
                 ring = [frame @ Vector((center.x + (x + a) / unit, center.y + (y + b) / unit, height))
                         for a, b in outline]
                 batch_for_shader(shader, "LINE_STRIP", {"pos": [*ring, ring[0]]}).draw(shader)
+                if slot:
+                    lines = [frame @ Vector((center.x + (x + a) / unit, center.y + (y + b) / unit, height))
+                             for a, b in slot]
+                    batch_for_shader(shader, "LINES", {"pos": lines}).draw(shader)
                 if arrow is not None:
                     direction, length = arrow
                     across = frame @ Vector((direction.y, -direction.x, 0))

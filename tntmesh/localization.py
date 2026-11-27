@@ -2,6 +2,37 @@
 import bpy
 
 SPANISH = {
+    "Press-fit": "Encaje a presión",
+    "Add a split pin held by radial interference": "Añade un pasador ranurado que se sujeta por interferencia radial",
+    "Bore diameter (mm)": "Diámetro del alojamiento (mm)",
+    "Radial interference (mm)": "Interferencia radial (mm)",
+    "Amount by which each relaxed prong extends beyond the bore radius":
+        "Distancia que sobresale cada brazo en reposo respecto al radio del alojamiento",
+    "Slot width (mm)": "Ancho de ranura (mm)",
+    "Slot rotation": "Giro de la ranura",
+    "Allowable strain (%)": "Deformación admisible (%)",
+    "Verified elastic strain limit for the printed material and layer orientation":
+        "Límite elástico de deformación verificado para el material impreso y la orientación de sus capas",
+    "Check interference and slot dimensions.": "Revisa la interferencia y la ranura.",
+    "Set positive press-fit dimensions, interference and clearances.":
+        "Configura dimensiones, interferencia y holguras positivas para el encaje a presión.",
+    "The press-fit slot must leave room for compression and two printable prongs.":
+        "La ranura del encaje debe permitir la compresión de ambos brazos y dejarles grosor para imprimir.",
+    "Enter the print material and its verified strain limit for the press-fit.":
+        "Indica el material de impresión y su límite de deformación verificado para el encaje a presión.",
+    "Lengthen the press-fit pin or reduce its interference.":
+        "Alarga el pasador o reduce la interferencia.",
+    "The press-fit exceeds the configured strain limit. Reduce interference or increase reach.":
+        "El encaje a presión supera el límite de deformación. Reduce la interferencia o aumenta la profundidad.",
+    "The press-fit prongs could not be cut as a single pin.":
+        "No se pudo generar el pasador con ambos brazos unidos.",
+    "The press-fit blocks assembly or has no retaining interference.":
+        "El pasador bloquea el montaje o falta interferencia para que sujete.",
+    "The press-fit pin or socket could not be cut cleanly.":
+        "No se pudo generar el pasador a presión o su alojamiento.",
+    "Align {groups} and press straight along each cut normal until seated.":
+        "Alinea {groups} y presiona en perpendicular a cada corte hasta asentar las piezas.",
+    "Rigid checks include press-fit contact.": "La prueba rígida incluye la interferencia.",
     "Standard Resin": "Resina estándar",
     "ABS-like Resin": "Resina tipo ABS",
     "Flexible Resin": "Resina flexible",

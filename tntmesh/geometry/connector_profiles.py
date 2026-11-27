@@ -19,7 +19,7 @@ PROFILE_ITEMS = (
 STANDARD_SHAPES = frozenset(("ROUND", "HEX", *(item[0] for item in PROFILE_ITEMS)))
 DIAMETER_SHAPES = {"ROUND", "TAPER", "HEX", "OCTAGON", "D", "STAR"}
 TWO_DIMENSION_SHAPES = {"RECTANGLE", "OVAL", "TONGUE"}
-PROFILE_OVERLAYS = STANDARD_SHAPES | {"MAGNET", "DOVETAIL", "SNAP_FIT"}
+PROFILE_OVERLAYS = STANDARD_SHAPES | {"MAGNET", "DOVETAIL", "PRESS_FIT", "SNAP_FIT"}
 
 
 def regular_profile(radius: float, sides: int) -> tuple[Point2, ...]:

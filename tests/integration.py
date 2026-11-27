@@ -410,6 +410,137 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), previous)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
 
+    def test_press_fit_generates_six_rotated_interference_joints(self):
+        from mathutils.bvhtree import BVHTree
+
+        source = self.cube(52)
+        settings = self.settings
+        settings.connector = "PRESS_FIT"
+        settings.press_material = "Test print coupon"
+        settings.press_strain_limit = 3
+        settings.press_angle = .37
+        settings.kerf = .4
+        settings.pin_positive = True
+        settings.loose_pins = True
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="LINE", count=6, spacing=8), {"FINISHED"})
+        positions = tuple(tuple(item.position) for item in settings.connector_points)
+        design = settings.press_config(6)
+        ui = self.addon.connector_ui
+        self.assertEqual(ui.decode(ui.encode(design, positions, True)), (design, positions, True))
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        female, male = self.parts()
+        before = 52**2 * (26 - settings.kerf / 2)
+        self.assertLess(self.checked(female), before)
+        self.assertGreater(self.checked(male), before)
+        self.assertTrue(source.hide_get())
+        self.assertEqual(len(source.data.vertices), 8)
+
+        def tree_for(obj):
+            mesh = obj.data
+            return BVHTree.FromPolygons(
+                [obj.matrix_world @ vertex.co for vertex in mesh.vertices],
+                [tuple(face.vertices) for face in mesh.polygons],
+            )
+
+        bore, pin = map(tree_for, (female, male))
+        radial = Vector((-sin(design.angle), cos(design.angle), 0))
+        for x, y in positions:
+            seat = Vector((x, y, -settings.kerf / 2 - .8 * design.reach))
+            self.assertAlmostEqual(bore.ray_cast(seat, radial)[3], design.radius, places=4)
+            start = seat + radial * (design.radius + 1)
+            hit = pin.ray_cast(start, -radial)[0]
+            self.assertAlmostEqual((hit - seat).length, design.radius + design.interference, places=4)
+            self.assertIsNone(pin.ray_cast(Vector((x, y, -settings.kerf / 2 - design.reach - 1)),
+                                           Vector((0, 0, 1)), design.reach - 1)[0])
+        _, _, volume = self.addon.assembly.overlaps(bpy.context, [male, female])[0]
+        self.assertGreater(volume, 6)
+        guide = self.addon.assembly_ui.assembly_guide
+        report = guide.collect(bpy.context, "Press", [female, male])
+        self.assertIn("press straight along each cut normal", guide.step_labels(report)[0])
+
+    def test_press_fit_validates_material_slot_socket_and_spacing_without_publishing(self):
+        source = self.cube(48)
+        settings = self.settings
+        settings.connector = "PRESS_FIT"
+        state = set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.press_material = "Test print coupon"
+        settings.press_strain_limit = .1
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"CANCELLED"})
+        settings.press_strain_limit = 3
+        settings.press_slot = .3
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.press_slot = 1.2
+        settings.offset = 7
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.offset = 0
+        for x in (-1, 1):
+            settings.connector_points.add().position = (x, 0)
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), state)
+        self.assertEqual(bpy.context.active_object, source)
+        self.assertFalse(source.hide_get())
+
+    def test_press_fit_on_a_tilted_mirrored_metric_model(self):
+        source = self.cube(56)
+        source.location = (200, -42, 86)
+        source.scale = (-1.2, .92, 1)
+        source.rotation_euler = (.33, .45, .20)
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .001
+        bpy.context.view_layer.update()
+        world = source.matrix_world.copy()
+        settings = self.settings
+        settings.axis = "FREE"
+        settings.rotation = tuple(source.rotation_euler)
+        settings.connector = "PRESS_FIT"
+        settings.press_material = "Test print coupon"
+        settings.press_strain_limit = 3
+        settings.press_angle = .45
+        settings.pin_positive = True
+        settings.kerf = .3
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="LINE", count=2, spacing=12), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual(len(parts), 2)
+        self.assertTrue(all(self.checked(part) > 100 for part in parts))
+        _, _, volume = self.addon.assembly.overlaps(bpy.context, parts)[0]
+        self.assertGreater(volume, 2)
+        self.assertEqual(source.matrix_world, world)
+        self.assertEqual(len(source.data.polygons), 6)
+
+    def test_press_fit_symmetric_draft_retains_existing_build_on_failed_revalidation(self):
+        source = self.cube(110)
+        settings = self.settings
+        settings.connector = "PRESS_FIT"
+        settings.cut_kind = "SYMMETRY"
+        settings.axis = settings.symmetry_axis = "X"
+        settings.offset = -25
+        settings.press_material = "Test print coupon"
+        settings.press_strain_limit = 3
+        settings.press_angle = .31
+        settings.symmetry_rotation = (0, .06, .1)
+        settings.kerf = .43
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        previous = self.parts()
+        self.assertEqual(len(previous), 3)
+        self.assertTrue(all(self.checked(body) > 100 for body in previous))
+        self.assertEqual(len(self.addon.assembly.overlaps(bpy.context, previous)), 2)
+        self.assertEqual(len(source.data.vertices), 8)
+        cut = bpy.context.scene.tntmesh_drafts[0].cuts[0].settings
+        self.assertEqual(cut.press_config(1), settings.press_config(1))
+        meshes = set(bpy.data.meshes.keys())
+        cut.press_strain_limit = .1
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        cut.press_strain_limit = 3
+        cut.offset = -15
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), previous)
+        self.assertEqual(set(bpy.data.meshes.keys()), meshes)
+
     def test_hinge_preserves_pivot_units_and_detects_a_blocked_opening(self):
         scene = bpy.context.scene
         scene.unit_settings.system = "METRIC"

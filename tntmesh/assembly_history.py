@@ -10,6 +10,7 @@ import bpy
 from .geometry.hinge import Hinge
 from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
+from .geometry.press_fit import PressFit
 from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
 from .localization import tr
@@ -51,6 +52,8 @@ def connection_details(config: object) -> tuple[StockMagnet | None, str]:
         return None, ""
     if isinstance(primary.connector, Hinge):
         return None, "HINGE"
+    if isinstance(primary.connector, PressFit):
+        return None, "PRESS_FIT"
     if primary.glue is not None:
         return None, "GLUE"
     if not isinstance(primary.connector, Magnet):
@@ -72,7 +75,7 @@ def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
             if not isinstance(cut, str) or type(index) is not int or type(count) is not int:
                 return ()
             if not cut or not (0 <= index <= count <= 32767) or connector not in (
-                [], ["SNAP_FIT"], ["HINGE"], ["GLUE"],
+                [], ["SNAP_FIT"], ["PRESS_FIT"], ["HINGE"], ["GLUE"],
             ):
                 return ()
             magnet = None

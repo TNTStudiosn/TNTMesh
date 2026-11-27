@@ -48,6 +48,10 @@ Enter the print material and an allowable strain measured for the intended print
 
 A recorded snap-fit adds joining instructions to the assembly guide. **Check Insertion Path** uses rigid meshes and can report the intended contact as the hook passes the throat.
 
+Choose **Press-fit** on a straight or symmetric cut for an integrated slotted pin and a blind, chamfered bore. **Radial interference** is how far each relaxed prong extends past the bore radius. The total interference across both prongs is twice that value. Side clearance sets the gap at the unexpanded root and sides. Axial clearance sets the gap at the floor. On straight cuts you can set or suggest positions, use placement patterns and switch the pin side.
+
+Enter the printed material and its verified elastic strain limit for the chosen layer orientation. TNTMesh estimates strain with an end-loaded beam model with a factor of two on the nominal estimate. It checks the free slot gap, the surrounding wall, the intended contact and the clear axial route for the compressed envelope. Use a printed sample to measure insertion force, retention and wear with the same process and orientation. The generic assembly and insertion checks include the intended overlap of the uncompressed parts. [Beam deflection reference](https://courses.grainger.illinois.edu/tam251/fa2017/BeamDeflectionTables.pdf)
+
 **Glue Assist** is in **Cut Settings** for standard pin profiles on straight or symmetric cuts. Choose adhesive channels, a reservoir under the pin, an exterior air outlet, an entry chamfer or grooves for internal texture. Each option starts off. Loose pins keep their dimensions and prepare both sockets. Edit **Relief** to change the size of the features and **Relief rotation** to aim the air outlet and rotate the wall channels. The viewport arrow shows the outlet direction.
 
 The cut checks the material around every socket and along the outlet. It rejects a route near another socket or through an internal void. Before printing, check that your process can reproduce the smallest relief. The outlet is narrower than the internal channels. The assembly guide identifies joins with prepared sockets.

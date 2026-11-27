@@ -13,6 +13,7 @@ from .dovetail import Dovetail, add_dovetails
 from .magnet import Magnet, add_magnet_pockets
 from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
+from .press_fit import PressFit, add_press_fits
 from .snap_fit import SnapFit, add_snap_fits
 
 
@@ -143,15 +144,16 @@ def split_symmetric(
         )
         return outer, second_custom.meshes[middle_index], second_custom.meshes[outer_index]
 
-    if isinstance(connector, SnapFit):
-        first_snap = add_snap_fits(engine, *sides, frame, position, primary.kerf, connector, epsilon, None)
-        middle, outer = first_snap.meshes[middle_index], first_snap.meshes[outer_index]
+    if isinstance(connector, (PressFit, SnapFit)):
+        add_flex = add_press_fits if isinstance(connector, PressFit) else add_snap_fits
+        first_joint = add_flex(engine, *sides, frame, position, primary.kerf, connector, epsilon, None)
+        middle, outer = first_joint.meshes[middle_index], first_joint.meshes[outer_index]
         sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
-        second_snap = add_snap_fits(
+        second_joint = add_flex(
             engine, *sides, reflected, mirrored_position, primary.kerf, connector.reflected("X"),
-            secondary.epsilon, tuple(map(reflect_center, first_snap.centers)),
+            secondary.epsilon, tuple(map(reflect_center, first_joint.centers)),
         )
-        return outer, second_snap.meshes[middle_index], second_snap.meshes[outer_index]
+        return outer, second_joint.meshes[middle_index], second_joint.meshes[outer_index]
 
     first_set = add_connector(engine, *sides, frame, position, primary.kerf, connector, epsilon, glue=primary.glue)
     middle, outer = first_set.meshes[middle_index], first_set.meshes[outer_index]

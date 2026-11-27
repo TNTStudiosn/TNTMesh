@@ -64,7 +64,9 @@ def cut_properties(
             layout.prop(settings, "symmetry_center")
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
-        if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {"NONE", "DOVETAIL", "SNAP_FIT"}:
+        if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {
+            "NONE", "DOVETAIL", "PRESS_FIT", "SNAP_FIT",
+        }:
             tools = layout.row(align=True)
             if settings.connector == "DOVETAIL":
                 tools.operator("tntmesh.suggest_connectors", text="Find Rail Positions", icon="CONSTRAINT")
@@ -145,6 +147,10 @@ def cut_details(
         snap_details(layout, settings)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
+    elif settings.connector == "PRESS_FIT":
+        press_details(layout, settings)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
     elif settings.connector == "HINGE":
         if settings.cut_kind != "PLANAR":
             layout.label(text="Choose a straight cut for the pin hinge.", icon="ERROR")
@@ -205,6 +211,33 @@ def snap_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> N
     fit = layout.column(align=True)
     for name in ("lateral", "axial", "wall"):
         fit.prop(settings, name)
+
+
+def press_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    if settings.cut_kind != "PLANAR" or not settings.connector_points:
+        layout.prop(settings, "connector_count")
+    geometry = layout.column(align=True)
+    for name in ("diameter", "reach", "interference", "slot", "angle"):
+        geometry.prop(settings, f"press_{name}")
+    fit = layout.column(align=True)
+    for name in ("lateral", "axial", "wall"):
+        fit.prop(settings, name)
+    material = layout.box()
+    material.prop(settings, "press_material", text="Material")
+    material.prop(settings, "press_strain_limit")
+    design = settings.press_config(1)
+    try:
+        design.validate_dimensions()
+    except MeshError:
+        material.label(text="Check interference and slot dimensions.", icon="ERROR")
+        return
+    strain = design.strain(settings.kerf)
+    row = material.row()
+    row.alert = settings.press_strain_limit > 0 and strain > settings.press_strain_limit
+    row.label(text=tr("Estimated strain · {strain:.2f}%").format(strain=strain), translate=False,
+              icon="ERROR" if row.alert else "INFO")
+    if not settings.press_material.strip() or not settings.press_strain_limit:
+        material.label(text="Enter a verified material limit.", icon="INFO")
 
 
 def connector_details(

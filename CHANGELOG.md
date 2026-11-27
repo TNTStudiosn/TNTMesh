@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.22
+
+- Added slotted press-fit pins with configurable radial interference, checked wall clearance and a material strain limit on straight and symmetric cuts.
+
 ## 0.3.0-alpha.21
 
 - Fixed false glue socket failures on tilted cuts by evaluating the relief Booleans in the cut's local frame.
