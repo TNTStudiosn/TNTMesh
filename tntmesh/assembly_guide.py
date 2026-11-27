@@ -37,8 +37,7 @@ class Joint:
     depth: int
     branches: list[list[Piece]]
     connectors: list[Piece] = field(default_factory=list)
-    magnet: assembly_history.StockMagnet | None = None
-    rod: assembly_history.StockRod | None = None
+    stock: assembly_history.Stock | None = None
     snap_fit: bool = False
     press_fit: bool = False
     hinge: bool = False
@@ -53,9 +52,9 @@ class Joint:
         groups = [", ".join(piece.label for piece in group) for group in self.branches if group]
         if self.glue:
             notes.append(tr("Apply adhesive to the prepared sockets. Keep air outlets clear."))
-        if self.magnet:
+        if isinstance(self.stock, assembly_history.StockMagnet):
             notes.append(tr("Fit {count} × {magnet} before joining. Check polarity against the mating pocket.").format(
-                count=self.magnet.count, magnet=self.magnet.label(),
+                count=self.stock.count, magnet=self.stock.label(),
             ))
         if self.hinge and len(groups) >= 2 and self.connectors:
             notes.append(tr("Align the hinge barrels of {groups} and slide in axle {pieces}.").format(
@@ -73,9 +72,11 @@ class Joint:
             values = {"groups": " / ".join(groups)}
             if self.press_fit:
                 wording = "Align {groups} and press straight along each cut normal until seated."
-            elif self.rod:
+            elif isinstance(self.stock, assembly_history.StockRod):
                 wording = "Insert {count} × {rod} in the matching sockets, then bring {groups} together along each cut."
-                values.update(count=self.rod.count, rod=self.rod.label())
+                values.update(count=self.stock.count, rod=self.stock.label())
+            elif isinstance(self.stock, assembly_history.StockScrew):
+                wording = "Align {groups}, seat each hex nut and insert its screw from the opposite side."
             elif self.snap_fit:
                 wording = "Press {groups} together along the cut normal until the hooks seat."
             else:
@@ -91,7 +92,7 @@ class Guide:
     title: str
     pieces: list[Piece]
     joints: list[Joint]
-    stock: list[assembly_history.StockMagnet | assembly_history.StockRod]
+    stock: list[assembly_history.Stock]
     has_legacy: bool
 
 
@@ -121,21 +122,19 @@ def collect(context: bpy.types.Context, title: str, objects: list[bpy.types.Obje
                 joint.branches[branch.index - 1].append(piece)
             elif not branch.index:
                 joint.connectors.append(piece)
-            if branch.magnet:
-                joint.magnet = branch.magnet
-            if branch.rod:
-                joint.rod = branch.rod
+            if branch.stock:
+                joint.stock = branch.stock
             joint.snap_fit |= branch.snap_fit
             joint.press_fit |= branch.connector == "PRESS_FIT"
             joint.hinge |= branch.connector == "HINGE"
             joint.glue |= branch.connector == "GLUE"
 
-    stock: dict[tuple[str, tuple[float, ...]], assembly_history.StockMagnet | assembly_history.StockRod] = {}
+    stock: dict[tuple[str, tuple[float, ...]], assembly_history.Stock] = {}
     ordered = sorted(joints.values(), key=lambda joint: -joint.depth)
     for joint in ordered:
-        item = joint.magnet or joint.rod
+        item = joint.stock
         if item:
-            size = tuple(round(value, 3) for value in item.size) if joint.rod else item.size
+            size = item.size if isinstance(item, assembly_history.StockMagnet) else tuple(round(v, 3) for v in item.size)
             key = (item.shape, size)
             stock[key] = replace(item, count=stock[key].count + item.count) if key in stock else item
     return Guide(title, pieces, ordered, list(stock.values()), legacy)

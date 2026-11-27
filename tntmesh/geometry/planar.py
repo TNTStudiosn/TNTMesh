@@ -18,6 +18,8 @@ from .mesh import bounds, inspect
 from .polygon import Point2
 from .press_fit import PressFit, add_press_fits, press_centers
 from .rod import Rod, add_rod_sockets, rod_centers
+from .screw import Screw, add_screws, local_bodies
+from .screw import layout as screw_layout
 from .snap_fit import SnapFit, add_snap_fits, snap_centers
 
 
@@ -26,7 +28,7 @@ class PlanarCut:
     axis: str = "Z"
     offset: float = 0.0
     kerf: float = 0.0
-    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | PressFit | Rod | SnapFit | None = None
+    connector: Connector | CustomConnector | Dovetail | Hinge | Magnet | PressFit | Rod | Screw | SnapFit | None = None
     rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     connector_positions: tuple[Point2, ...] = ()
     pin_positive: bool = False
@@ -70,7 +72,7 @@ def dovetail_positions(
 
 def validate_positions(
     engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float,
-    design: Connector | Dovetail | Magnet | PressFit | Rod | SnapFit,
+    design: Connector | Dovetail | Magnet | PressFit | Rod | Screw | SnapFit,
     positions: tuple[Point2, ...], flip: bool, glue: GlueAssist | None = None,
 ) -> None:
     if isinstance(design, Magnet):
@@ -79,6 +81,9 @@ def validate_positions(
         return
     if isinstance(design, Rod):
         rod_positions(engine, cut, frame, kerf, design, positions)
+        return
+    if isinstance(design, Screw):
+        screw_positions(engine, cut, frame, kerf, design, positions, flip)
         return
     if isinstance(design, Dovetail):
         dovetail_positions(engine, cut, frame, kerf, design, positions, flip)
@@ -96,6 +101,21 @@ def rod_positions(
     _, _, requested = connector_frame(cut, frame, positions, False)
     centers = rod_centers(engine, cut.minus, cut.plus, frame, cut.position, kerf, design, cut.epsilon, requested)
     return tuple(tuple(center.xy) for center in centers)
+
+
+def screw_positions(
+    engine: ExactBoolean, cut: PlaneSplit, frame: Matrix, kerf: float, design: Screw,
+    positions: tuple[Point2, ...], flip: bool,
+) -> tuple[Point2, ...]:
+    cut, frame, requested = connector_frame(cut, frame, positions, flip)
+    if flip:
+        design = design.reflected("Y")
+    tx = engine.transaction
+    local = local_bodies(tx, (cut.minus, cut.plus), frame, cut.position, kerf, cut.epsilon)
+    seats, _ = screw_layout(engine, local, cut.position, kerf, design, cut.epsilon, requested)
+    for body in local:
+        tx.remove_mesh(body)
+    return tuple((seat.center.x, -seat.center.y if flip else seat.center.y) for seat in seats)
 
 
 def flex_positions(
@@ -223,6 +243,11 @@ def split(
             add_flex = add_press_fits if isinstance(design, PressFit) else add_snap_fits
             result = add_flex(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
                               design, cut.epsilon, requested)
+        elif isinstance(design, Screw):
+            if config.pin_positive:
+                design = design.reflected("Y")
+            result = add_screws(engine, cut.minus, cut.plus, frame, cut.position, config.kerf,
+                                design, cut.epsilon, requested)
         else:
             if config.pin_positive:
                 design = design.reflected("Y")

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0-alpha.25
+
+- Added through-screw joints with recessed cylindrical heads, hex nut seats, exterior access and bearing checks, and hardware counts in assembly guides.
+
 ## 0.3.0-alpha.24
 
 - Added blind sockets for external round or square rods with independent insertion depths, verified axial travel, and stock dimensions and counts in the assembly guide.

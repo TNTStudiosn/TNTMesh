@@ -23,6 +23,7 @@ from .geometry.planar import (
     dovetail_positions,
     flex_positions,
     rod_positions,
+    screw_positions,
     split_plane,
     standard_positions,
     validate_positions,
@@ -30,11 +31,18 @@ from .geometry.planar import (
 from .geometry.polygon import Point2
 from .geometry.press_fit import PressFit
 from .geometry.rod import Rod
+from .geometry.screw import Screw
 from .geometry.snap_fit import SnapFit
 from .localization import tr
 from .model import GeometryTransaction, MeshError, millimeters_per_unit
 from .operators import active_mesh, report_failure
-from .settings import PRESS_FIT_FIELDS, ROD_FIELDS, SNAP_FIT_FIELDS, TNTMESH_PG_settings
+from .settings import (
+    PRESS_FIT_FIELDS,
+    ROD_FIELDS,
+    SCREW_FIELDS,
+    SNAP_FIT_FIELDS,
+    TNTMESH_PG_settings,
+)
 
 MAX_EDITABLE_POINTS = 64
 
@@ -80,7 +88,7 @@ def plane_available(context: bpy.types.Context, settings: TNTMESH_PG_settings | 
 
 def connector_design(
     settings: TNTMESH_PG_settings, count: int,
-) -> Connector | Dovetail | Magnet | PressFit | Rod | SnapFit:
+) -> Connector | Dovetail | Magnet | PressFit | Rod | Screw | SnapFit:
     if settings.connector == "MAGNET":
         return settings.magnet_config(count)
     if settings.connector == "DOVETAIL":
@@ -91,6 +99,8 @@ def connector_design(
         return settings.press_config(count)
     if settings.connector == "ROD":
         return settings.rod_config(count)
+    if settings.connector == "SCREW":
+        return settings.screw_config(count)
     return settings.standard_connector(settings.connector, count)
 
 
@@ -136,11 +146,11 @@ def set_valid_positions(
 
 def check_positions(
     context: bpy.types.Context, settings: TNTMESH_PG_settings,
-    design: Connector | Dovetail | Magnet | PressFit | Rod | SnapFit,
+    design: Connector | Dovetail | Magnet | PressFit | Rod | Screw | SnapFit,
     positions: tuple[Point2, ...], positive: bool,
 ) -> None:
     with preview_split(context, settings) as (engine, cut, frame):
-        flip = positive and (isinstance(design, (Dovetail, PressFit, SnapFit))
+        flip = positive and (isinstance(design, (Dovetail, PressFit, Screw, SnapFit))
                              or (isinstance(design, Connector) and not design.loose))
         glue = settings.glue_config() if isinstance(design, Connector) else None
         validate_positions(engine, cut, frame, settings.kerf, design, positions, flip, glue)
@@ -176,6 +186,10 @@ class TNTMESH_OT_suggest_connectors(bpy.types.Operator):
                     design = settings.rod_config(settings.connector_count)
                     positions = rod_positions(engine, plane, frame, settings.kerf, design, ())
                     positive = False
+                elif settings.connector == "SCREW":
+                    design = settings.screw_config(settings.connector_count)
+                    positive = settings.pin_positive
+                    positions = screw_positions(engine, plane, frame, settings.kerf, design, (), positive)
                 elif settings.connector in STANDARD_SHAPES and (
                     settings.connector not in {"ROUND", "HEX"} or settings.glue_config() is not None
                 ):
@@ -256,7 +270,7 @@ class TNTMESH_UL_connector_points(bpy.types.UIList):
 
 
 def apply_setup(
-    settings: TNTMESH_PG_settings, design: Connector | Dovetail | PressFit | Rod | SnapFit,
+    settings: TNTMESH_PG_settings, design: Connector | Dovetail | PressFit | Rod | Screw | SnapFit,
     positions: tuple[Point2, ...], positive: bool,
 ) -> None:
     if isinstance(design, Dovetail):
@@ -277,6 +291,10 @@ def apply_setup(
         for name in ROD_FIELDS:
             setattr(settings, f"rod_{name}", getattr(design, name))
         positive = False
+    elif isinstance(design, Screw):
+        settings.connector = "SCREW"
+        for name in SCREW_FIELDS:
+            setattr(settings, f"screw_{name}", getattr(design, name))
     else:
         settings.connector = design.shape
         settings.diameter, settings.insertion, settings.loose_pins = design.diameter, design.insertion, design.loose
@@ -314,7 +332,7 @@ class TNTMESH_OT_connector_transfer(bpy.types.Operator):
         settings = linear_settings(context)
         current = tuple(tuple(point.position) for point in settings.connector_points)
         if self.action == "COPY":
-            if settings.connector not in STANDARD_SHAPES | {"DOVETAIL", "PRESS_FIT", "ROD", "SNAP_FIT"}:
+            if settings.connector not in STANDARD_SHAPES | {"DOVETAIL", "PRESS_FIT", "ROD", "SCREW", "SNAP_FIT"}:
                 return {"CANCELLED"}
             design = connector_design(settings, len(current) or settings.connector_count)
             context.window_manager.clipboard = encode(design, current, settings.pin_positive)
@@ -388,7 +406,7 @@ class TNTMESH_OT_connector_pattern(bpy.types.Operator):
                     positions = contour_points(cut, frame, settings.kerf, self.count, self.setback, self.angle)
                     validate_positions(
                         engine, cut, frame, settings.kerf, design, positions,
-                        settings.pin_positive and (isinstance(design, (Dovetail, PressFit, SnapFit))
+                        settings.pin_positive and (isinstance(design, (Dovetail, PressFit, Screw, SnapFit))
                                                    or (isinstance(design, Connector) and not design.loose)),
                         settings.glue_config() if isinstance(design, Connector) else None,
                     )
@@ -406,6 +424,8 @@ def positions(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None
     points = settings.connector_points
     if settings.connector == "SNAP_FIT":
         layout.prop(settings, "pin_positive", text="Hook on positive side")
+    elif settings.connector == "SCREW":
+        layout.prop(settings, "pin_positive", text="Screw head on positive side")
     elif settings.connector in {"DOVETAIL", "PRESS_FIT"} or (
         settings.connector not in {"MAGNET", "ROD"} and not settings.loose_pins
     ):

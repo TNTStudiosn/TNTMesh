@@ -15,6 +15,7 @@ from .mesh import bounds
 from .planar import PlanarCut, axis_frame, split_plane
 from .press_fit import PressFit, add_press_fits
 from .rod import Rod, add_rod_sockets
+from .screw import Screw, add_screws
 from .snap_fit import SnapFit, add_snap_fits
 
 
@@ -142,6 +143,17 @@ def split_symmetric(
             secondary.epsilon, requested=tuple(map(reflect_center, first_rods.centers)),
         )
         return outer, second_rods.meshes[middle_index], second_rods.meshes[outer_index]
+    if isinstance(connector, Screw):
+        first_screws = add_screws(
+            engine, *sides, frame, position, primary.kerf, connector, epsilon, obstacle=mirrored_outer,
+        )
+        middle, outer = first_screws.meshes[middle_index], first_screws.meshes[outer_index]
+        sides = (mirrored_outer, middle) if middle_index else (middle, mirrored_outer)
+        second_screws = add_screws(
+            engine, *sides, reflected, mirrored_position, primary.kerf, connector.reflected("X"),
+            secondary.epsilon, tuple(map(reflect_center, first_screws.centers)), obstacle=outer,
+        )
+        return outer, second_screws.meshes[middle_index], second_screws.meshes[outer_index]
     if isinstance(connector, CustomConnector):
         first_custom = add_custom_connector(
             engine, *sides, frame, position, primary.kerf, connector, epsilon,

@@ -25,6 +25,7 @@ from .geometry.planar import PlanarCut
 from .geometry.press_fit import PressFit
 from .geometry.region import RegionCut
 from .geometry.rod import Rod
+from .geometry.screw import Screw
 from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
 from .geometry.volume import Cut, VolumeCut
@@ -37,6 +38,7 @@ MAGNET_SHAPES = (
 SNAP_FIT_FIELDS = ("width", "thickness", "reach", "hook", "ramp_angle", "angle", "material", "strain_limit")
 PRESS_FIT_FIELDS = ("diameter", "reach", "interference", "slot", "angle", "material", "strain_limit")
 ROD_FIELDS = ("shape", "size", "depth_minus", "depth_plus", "angle")
+SCREW_FIELDS = ("diameter", "length", "pitch", "head_width", "head_height", "nut_width", "nut_height", "angle")
 HINGE_FIELDS = ("diameter", "pin_diameter", "width", "knuckles", "stand_off", "angle", "shift", "opening")
 GLUE_FIELDS = ("channels", "reservoir", "vent", "chamfer", "texture", "relief", "angle")
 
@@ -130,6 +132,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             ("HINGE", "Pin Hinge", "Add interlocking hinge barrels and a separate axle"),
             ("PRESS_FIT", "Press-fit", "Add a split pin held by radial interference"),
             ("ROD", "Rod Sockets", "Cut matching sockets for an external rod"),
+            ("SCREW", "Machine Screw", "Cut a through-hole, a recessed head seat and a captive hex nut seat"),
         ],
         default="ROUND",
     )
@@ -197,6 +200,20 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         name="Strain limit (%)", default=0, min=0, max=100, subtype="PERCENTAGE", precision=2,
         description="Allowable strain measured for this print material and layer orientation",
     )
+    screw_diameter: FloatProperty(name="Screw diameter (mm)", default=3, min=.01, precision=2)
+    screw_length: FloatProperty(
+        name="Under-head length (mm)", default=25, min=.01, precision=2,
+        description="Length measured from the underside of the screw head to its tip",
+    )
+    screw_pitch: FloatProperty(name="Thread pitch (mm)", default=.5, min=.01, precision=2)
+    screw_head_width: FloatProperty(name="Head diameter (mm)", default=5.5, min=.01, precision=2)
+    screw_head_height: FloatProperty(name="Head height (mm)", default=3, min=.01, precision=2)
+    screw_nut_width: FloatProperty(
+        name="Nut across flats (mm)", default=5.5, min=.01, precision=2,
+        description="Distance between two opposite flat faces of the hex nut",
+    )
+    screw_nut_height: FloatProperty(name="Nut thickness (mm)", default=2.4, min=.01, precision=2)
+    screw_angle: FloatProperty(name="Nut rotation", subtype="ANGLE", unit="ROTATION")
     rod_shape: EnumProperty(name="Stock shape", items=(
         ("ROUND", "Round", "Use a round rod"),
         ("SQUARE", "Square section", "Use a square rod"),
@@ -394,6 +411,12 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             self.lateral, self.axial, self.wall, self.press_angle, count, self.press_material, self.press_strain_limit,
         )
 
+    def screw_config(self, count: int) -> Screw:
+        return Screw(
+            self.screw_diameter, self.screw_length, self.screw_pitch, self.screw_head_width, self.screw_head_height,
+            self.screw_nut_width, self.screw_nut_height, self.screw_angle, self.lateral, self.axial, self.wall, count,
+        )
+
     def rod_config(self, count: int) -> Rod:
         return Rod(
             self.rod_shape, self.rod_size, self.rod_depth_minus, self.rod_depth_plus,
@@ -452,6 +475,8 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
             connector = self.press_config(len(positions) or self.connector_count)
         elif self.connector == "ROD":
             connector = self.rod_config(len(positions) or self.connector_count)
+        elif self.connector == "SCREW":
+            connector = self.screw_config(len(positions) or self.connector_count)
         elif self.connector == "HINGE":
             if self.cut_kind != "PLANAR":
                 raise MeshError("Choose a straight cut for the pin hinge.")
@@ -461,7 +486,7 @@ class TNTMESH_PG_settings(bpy.types.PropertyGroup):
         cut = PlanarCut(
             self.axis, self.offset, self.kerf, connector, tuple(self.rotation),
             positions, self.cut_kind == "PLANAR" and self.connector != "ROD" and self.pin_positive
-            and (self.connector in {"DOVETAIL", "PRESS_FIT", "SNAP_FIT"} or not self.loose_pins),
+            and (self.connector in {"DOVETAIL", "PRESS_FIT", "SCREW", "SNAP_FIT"} or not self.loose_pins),
             self.glue_config() if isinstance(connector, Connector) else None,
         )
         if self.cut_kind == "SYMMETRY":

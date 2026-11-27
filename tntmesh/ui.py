@@ -65,7 +65,7 @@ def cut_properties(
         layout.label(text="Connector")
         layout.prop(settings, "connector", text="")
         if settings.cut_kind == "PLANAR" and settings.connector in STANDARD_SHAPES | {
-            "NONE", "DOVETAIL", "PRESS_FIT", "ROD", "SNAP_FIT",
+            "NONE", "DOVETAIL", "PRESS_FIT", "ROD", "SCREW", "SNAP_FIT",
         }:
             tools = layout.row(align=True)
             if settings.connector == "DOVETAIL":
@@ -155,6 +155,10 @@ def cut_details(
         rod_details(layout, settings)
         if settings.cut_kind == "PLANAR":
             positions(layout, settings)
+    elif settings.connector == "SCREW":
+        screw_details(layout, settings)
+        if settings.cut_kind == "PLANAR":
+            positions(layout, settings)
     elif settings.connector == "HINGE":
         if settings.cut_kind != "PLANAR":
             layout.label(text="Choose a straight cut for the pin hinge.", icon="ERROR")
@@ -242,6 +246,28 @@ def press_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> 
               icon="ERROR" if row.alert else "INFO")
     if not settings.press_material.strip() or not settings.press_strain_limit:
         material.label(text="Enter a verified material limit.", icon="INFO")
+
+
+def screw_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:
+    if settings.cut_kind != "PLANAR" or not settings.connector_points:
+        layout.prop(settings, "connector_count")
+    shank = layout.column(align=True)
+    for name in ("diameter", "length", "pitch"):
+        shank.prop(settings, f"screw_{name}")
+    shank.label(text="Use a fully threaded screw.", icon="INFO")
+    head = layout.column(align=True)
+    for name in ("head_width", "head_height"):
+        head.prop(settings, f"screw_{name}")
+    nut = layout.column(align=True)
+    for name in ("nut_width", "nut_height", "angle"):
+        nut.prop(settings, f"screw_{name}")
+    fit = layout.column(align=True)
+    for name in ("lateral", "axial", "wall"):
+        fit.prop(settings, name)
+    try:
+        settings.screw_config(1).validate()
+    except MeshError:
+        layout.label(text="Check hardware and clearance.", icon="ERROR")
 
 
 def rod_details(layout: bpy.types.UILayout, settings: TNTMESH_PG_settings) -> None:

@@ -707,6 +707,171 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.parts(), previous)
         self.assertEqual(set(bpy.data.meshes.keys()), meshes)
 
+    def test_machine_screws_cut_six_bores_and_recesses_with_head_side_flipped(self):
+        from mathutils.bvhtree import BVHTree
+
+        context = bpy.context
+        source = self.cube(56)
+        source.scale.z = .43
+        context.view_layer.update()
+        settings = self.settings
+        settings.connector = "SCREW"
+        settings.screw_angle = .37
+        settings.pin_positive = True
+        settings.kerf = .4
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="GRID", count=6, spacing=13), {"FINISHED"})
+        design = settings.screw_config(6)
+        positions = tuple(tuple(item.position) for item in settings.connector_points)
+        ui = self.addon.connector_ui
+        self.assertEqual(ui.decode(ui.encode(design, positions, True)), (design, positions, True))
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        nut, head = self.parts()
+        self.assertTrue(all(self.checked(part) > 1000 for part in (nut, head)))
+        self.assertFalse(self.addon.assembly.overlaps(context, [nut, head]))
+        self.assertEqual(len(source.data.polygons), 6)
+        nut_flat_normal = Vector((cos(design.angle + pi / 6), sin(design.angle + pi / 6), 0))
+        bore_normal = Vector((cos(pi / 64), sin(pi / 64), 0))
+        for piece, sign, height, profile_normal, half in (
+            (nut, -1, design.nut_height, nut_flat_normal, design.nut_width / 2),
+            (head, 1, design.head_height, bore_normal, design.head_width / 2),
+        ):
+            mesh = piece.data
+            tree = BVHTree.FromPolygons([piece.matrix_world @ v.co for v in mesh.vertices],
+                                        [tuple(face.vertices) for face in mesh.polygons])
+            exterior = sign * 28 * source.scale.z
+            for x, y in positions:
+                bore = Vector((x, y, sign * 2))
+                self.assertAlmostEqual(tree.ray_cast(bore, bore_normal)[3],
+                                       design.diameter / 2 + design.lateral, places=4)
+                self.assertIsNone(tree.ray_cast(bore, Vector((0, 0, sign)))[0])
+                mouth = Vector((x, y, exterior - sign * .5))
+                self.assertAlmostEqual(tree.ray_cast(mouth, profile_normal)[3], half + design.lateral, places=4)
+                above_seat = Vector((x, y, exterior + sign)) + profile_normal * 2.2
+                self.assertAlmostEqual(tree.ray_cast(above_seat, Vector((0, 0, -sign)))[3],
+                                       1 + height + design.axial, places=4)
+        guide = self.addon.assembly_ui.assembly_guide
+        entry = guide.collect(context, "Hardware", [nut, head])
+        self.assertTrue(guide.stock_labels(entry)[0].startswith("6 × Fully threaded screw Ø3 × 25 mm"))
+        self.assertIn("seat each hex nut", guide.render_markdown(entry))
+        self.assertIn("hex nut 5.5 × 2.4 mm", guide.render_html(entry, "en-US"))
+
+    def test_machine_screw_rejects_insufficient_length_and_interior_access(self):
+        boolean = importlib.import_module(f"{self.addon.__name__}.geometry.boolean")
+        geometry = importlib.import_module(f"{self.addon.__name__}.geometry.connector")
+        model = self.addon.operators
+        context = bpy.context
+        with model.GeometryTransaction() as transaction:
+            frame = model.Matrix.Identity(3)
+            center = Vector((0, 0, 0))
+            engine = boolean.ExactBoolean(context, transaction)
+            outer = geometry.profile_prism(transaction, frame, center, -12, 12,
+                                           ((-18, -18), (18, -18), (18, 18), (-18, 18)))
+            internal = geometry.profile_prism(transaction, frame, center, 5, 7,
+                                              ((-2, -2), (2, -2), (2, 2), (-2, 2)))
+            source = transaction.object(context.scene.collection, "Hidden access obstruction",
+                                        engine.run(outer, internal, "DIFFERENCE"))
+            transaction.publish(source)
+        context.view_layer.update()
+        model.select_results(context, [source])
+        settings = self.settings
+        settings.connector = "SCREW"
+        location = settings.connector_points.add()
+        location.position = (0, 0)
+        state = set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        location.position = (10, 0)
+        settings.screw_length = 12
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        settings.screw_length = 25
+        settings.lateral = .65
+        self.assertEqual(bpy.ops.tntmesh.split(), {"CANCELLED"})
+        self.assertEqual((set(bpy.data.objects.keys()), set(bpy.data.meshes.keys())), state)
+        self.assertFalse(source.hide_get())
+        settings.lateral = .15
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+
+    def test_machine_screw_fits_a_sloped_mirrored_metric_model(self):
+        source = self.cube(56)
+        source.location = (200, -42, 86)
+        source.scale = (-1.2, .92, .43)
+        source.rotation_euler = (.33, .45, .20)
+        for vertex in source.data.vertices:
+            vertex.co.z += vertex.co.x * .035
+        scene = bpy.context.scene
+        scene.unit_settings.system = "METRIC"
+        scene.unit_settings.scale_length = .001
+        bpy.context.view_layer.update()
+        world = source.matrix_world.copy()
+        coordinates = tuple(tuple(vertex.co) for vertex in source.data.vertices)
+        settings = self.settings
+        settings.axis = "FREE"
+        settings.rotation = tuple(source.rotation_euler)
+        settings.connector = "SCREW"
+        settings.screw_length = 28
+        settings.screw_angle = .45
+        settings.pin_positive = True
+        settings.kerf = .3
+        self.assertEqual(bpy.ops.tntmesh.suggest_connectors(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.connector_pattern(pattern="LINE", count=2, spacing=12), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual(len(parts), 2)
+        self.assertTrue(all(self.checked(part) > 100 for part in parts))
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
+        self.assertEqual(source.matrix_world, world)
+        self.assertEqual(tuple(tuple(vertex.co) for vertex in source.data.vertices), coordinates)
+
+    def test_machine_screw_symmetric_draft_requires_access_after_assembly(self):
+        source = self.cube(80)
+        source.scale = (1, .3, .4)
+        bpy.context.view_layer.update()
+        settings = self.settings
+        settings.connector = "SCREW"
+        settings.screw_length = 60
+        settings.cut_kind = "SYMMETRY"
+        settings.symmetry_axis = "X"
+        settings.axis = "FREE"
+        settings.rotation = (0, pi / 2, .65)
+        settings.offset = -15
+        settings.kerf = .4
+        self.assertEqual(bpy.ops.tntmesh.draft_create(), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_action(action="ADD"), {"FINISHED"})
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"FINISHED"})
+        parts = self.parts()
+        self.assertEqual(len(parts), 3)
+        self.assertFalse(self.addon.assembly.overlaps(bpy.context, parts))
+        guide = self.addon.assembly_ui.assembly_guide
+        report = guide.collect(bpy.context, "Mirrored screws", parts)
+        self.assertTrue(guide.stock_labels(report)[0].startswith("2 × Fully threaded screw"))
+        cut = bpy.context.scene.tntmesh_drafts[0].cuts[0].settings
+        self.assertEqual(cut.screw_config(1), settings.screw_config(1))
+        cut.axis = "X"
+        cut.screw_length = 100
+        state = set(bpy.data.meshes.keys())
+        self.assertEqual(bpy.ops.tntmesh.draft_build(), {"CANCELLED"})
+        self.assertEqual(self.parts(), parts)
+        self.assertEqual(set(bpy.data.meshes.keys()), state)
+
+    def test_machine_screw_zero_clearance_keeps_the_bore_open(self):
+        from mathutils.bvhtree import BVHTree
+
+        source = self.cube(54)
+        source.scale.z = .43
+        bpy.context.view_layer.update()
+        settings = self.settings
+        settings.connector = "SCREW"
+        settings.kerf = settings.lateral = settings.axial = 0
+        positions = ((-13, -4), (1, 8), (15, -1))
+        for xy in positions:
+            settings.connector_points.add().position = xy
+        self.assertEqual(bpy.ops.tntmesh.split(), {"FINISHED"})
+        for piece in self.parts():
+            mesh = piece.data
+            tree = BVHTree.FromPolygons([piece.matrix_world @ v.co for v in mesh.vertices],
+                                        [tuple(face.vertices) for face in mesh.polygons])
+            for x, y in positions:
+                self.assertIsNone(tree.ray_cast(Vector((x, y, -20)), Vector((0, 0, 1)), 40)[0])
+
     def test_hinge_preserves_pivot_units_and_detects_a_blocked_opening(self):
         scene = bpy.context.scene
         scene.unit_settings.system = "METRIC"

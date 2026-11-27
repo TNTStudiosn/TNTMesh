@@ -12,6 +12,7 @@ from .geometry.magnet import Magnet
 from .geometry.planar import PlanarCut
 from .geometry.press_fit import PressFit
 from .geometry.rod import Rod
+from .geometry.screw import Screw
 from .geometry.snap_fit import SnapFit
 from .geometry.symmetry import SymmetricCut
 from .localization import tr
@@ -49,20 +50,39 @@ class StockRod:
 
 
 @dataclass(frozen=True)
+class StockScrew:
+    shape: str
+    size: tuple[float, ...]
+    count: int
+
+    def label(self) -> str:
+        diameter, length, pitch, head, head_height, nut, nut_height = (
+            f"{value:.3f}".rstrip("0").rstrip(".") for value in self.size
+        )
+        return tr(
+            "Fully threaded screw Ø{diameter} × {length} mm, pitch {pitch} mm, cylindrical head "
+            "Ø{head} × {head_height} mm, plus a hex nut {nut} × {nut_height} mm"
+        ).format(diameter=diameter, length=length, pitch=pitch, head=head, head_height=head_height,
+                 nut=nut, nut_height=nut_height)
+
+
+Stock = StockMagnet | StockRod | StockScrew
+
+
+@dataclass(frozen=True)
 class Branch:
     cut: str
     index: int
     count: int
-    magnet: StockMagnet | None = None
+    stock: Stock | None = None
     connector: str = ""
-    rod: StockRod | None = None
 
     @property
     def snap_fit(self) -> bool:
         return self.connector == "SNAP_FIT"
 
 
-def connection_details(config: object) -> tuple[StockMagnet | StockRod | None, str]:
+def connection_details(config: object) -> tuple[Stock | None, str]:
     primary = config.primary if isinstance(config, SymmetricCut) else config
     if not isinstance(primary, PlanarCut):
         return None, ""
@@ -74,6 +94,12 @@ def connection_details(config: object) -> tuple[StockMagnet | StockRod | None, s
         rod = primary.connector
         count = rod.count * (2 if isinstance(config, SymmetricCut) else 1)
         return StockRod(rod.shape, (rod.size, rod.length(primary.kerf)), count), ""
+    if isinstance(primary.connector, Screw):
+        screw = primary.connector
+        size = (screw.diameter, screw.length, screw.pitch, screw.head_width, screw.head_height,
+                screw.nut_width, screw.nut_height)
+        count = screw.count * (2 if isinstance(config, SymmetricCut) else 1)
+        return StockScrew("SCREW", size, count), ""
     if primary.glue is not None:
         return None, "GLUE"
     if not isinstance(primary.connector, Magnet):
@@ -98,18 +124,18 @@ def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
                 [], ["SNAP_FIT"], ["PRESS_FIT"], ["HINGE"], ["GLUE"],
             ):
                 return ()
-            magnet = rod = None
+            item = None
             if stock is not None:
                 shape, size, quantity = stock
-                dimensions = {"DISC": 2, "BLOCK": 3, "ROUND": 2, "SQUARE": 2}.get(shape)
-                if (dimensions is None or len(size) != dimensions or type(quantity) is not int
+                description = {
+                    "DISC": (StockMagnet, 2), "BLOCK": (StockMagnet, 3),
+                    "ROUND": (StockRod, 2), "SQUARE": (StockRod, 2), "SCREW": (StockScrew, 7),
+                }.get(shape)
+                if (description is None or len(size) != description[1] or type(quantity) is not int
                         or quantity <= 0 or not all(isfinite(value) and value > 0 for value in size)):
                     return ()
-                if shape in {"ROUND", "SQUARE"}:
-                    rod = StockRod(shape, tuple(size), quantity)
-                else:
-                    magnet = StockMagnet(shape, tuple(size), quantity)
-            entries.append(Branch(cut, index, count, magnet, connector[0] if connector else "", rod))
+                item = description[0](shape, tuple(size), quantity)
+            entries.append(Branch(cut, index, count, item, connector[0] if connector else ""))
         return tuple(entries)
     except (TypeError, ValueError, OverflowError):
         return ()
@@ -118,7 +144,7 @@ def path(obj: bpy.types.Object) -> tuple[Branch, ...]:
 def set_path(obj: bpy.types.Object, entries: tuple[Branch, ...]) -> None:
     recorded = []
     for entry in entries:
-        stock = entry.magnet or entry.rod
+        stock = entry.stock
         recorded.append((
             entry.cut, entry.index, entry.count, (stock.shape, stock.size, stock.count) if stock else None,
             *((entry.connector,) if entry.connector else ()),
@@ -134,10 +160,7 @@ def record_cut(
     stock, connector = connection_details(config)
     for index, part in enumerate(parts, 1):
         branch = index if index <= body_count else 0
-        set_path(part, inherited + (Branch(
-            cut, branch, body_count, stock if isinstance(stock, StockMagnet) else None, connector,
-            stock if isinstance(stock, StockRod) else None,
-        ),))
+        set_path(part, inherited + (Branch(cut, branch, body_count, stock, connector),))
 
 
 def legacy_paths(

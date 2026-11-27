@@ -2,6 +2,41 @@
 import bpy
 
 SPANISH = {
+    "Machine Screw": "Unión atornillada",
+    "Cut a through-hole, a recessed head seat and a captive hex nut seat":
+        "Genera un agujero pasante y dos alojamientos para la cabeza y la tuerca hexagonal",
+    "Screw diameter (mm)": "Diám. del tornillo (mm)",
+    "Under-head length (mm)": "Largo sin cabeza (mm)",
+    "Length measured from the underside of the screw head to its tip":
+        "Longitud desde la base de la cabeza del tornillo hasta su punta",
+    "Thread pitch (mm)": "Paso de rosca (mm)",
+    "Use a fully threaded screw.": "Usa un tornillo totalmente roscado.",
+    "Check hardware and clearance.": "Revisa medidas y holgura.",
+    "Head diameter (mm)": "Diám. de cabeza (mm)",
+    "Head height (mm)": "Altura de cabeza (mm)",
+    "Nut across flats (mm)": "Ancho de tuerca (mm)",
+    "Distance between two opposite flat faces of the hex nut": "Distancia entre dos caras opuestas de la tuerca",
+    "Nut thickness (mm)": "Grosor de tuerca (mm)",
+    "Nut rotation": "Giro de tuerca",
+    "Screw head on positive side": "Cabeza en lado positivo",
+    "Check the screw, head and nut dimensions.": "Revisa las medidas del tornillo, la cabeza y la tuerca.",
+    "Leave a bearing shoulder around the screw bore.": "Deja una superficie de apoyo alrededor del agujero.",
+    "Reduce side clearance so the hex nut cannot turn inside its seat.":
+        "Reduce la holgura lateral para impedir que la tuerca gire.",
+    "The screw and nut need unobstructed exterior seats with enough surrounding wall.":
+        "La cabeza y la tuerca requieren acceso desde el exterior y suficiente pared alrededor.",
+    "Use a screw at least {size:.2f} mm long at this position.": "Usa un tornillo de al menos {size:.2f} mm.",
+    "Check the screw positions.": "Revisa las posiciones de los tornillos.",
+    "The screw seats overlap. Increase their spacing.": "Los alojamientos se cruzan. Aumenta su separación.",
+    "The screw holes or bearing seats could not be cut cleanly.":
+        "No se pudieron generar los agujeros o los apoyos del tornillo.",
+    "Hardware is obstructed along the screw axis.": "Hay un obstáculo en el eje del tornillo.",
+    "Fully threaded screw Ø{diameter} × {length} mm, pitch {pitch} mm, cylindrical head "
+    "Ø{head} × {head_height} mm, plus a hex nut {nut} × {nut_height} mm":
+        "Tornillo totalmente roscado Ø{diameter} × {length} mm, paso {pitch} mm, cabeza cilíndrica "
+        "Ø{head} × {head_height} mm, con tuerca hexagonal de {nut} × {nut_height} mm",
+    "Align {groups}, seat each hex nut and insert its screw from the opposite side.":
+        "Alinea {groups}, coloca cada tuerca e introduce su tornillo por el lado opuesto.",
     "Rod Sockets": "Encastre para varillas",
     "Cut matching sockets for an external rod": "Genera alojamientos alineados para una varilla externa",
     "Stock shape": "Forma de la varilla",
