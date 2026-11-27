@@ -290,7 +290,7 @@ class TNTMESH_OT_check_insertion(bpy.types.Operator):
 
 class TNTMESH_OT_export_assembly_guide(bpy.types.Operator):
     bl_idname = "tntmesh.export_assembly_guide"
-    bl_label = "Export Assembly Guide"
+    bl_label = "Export Guide"
     bl_description = "Save numbered assembly views and a suggested assembly order"
 
     directory: StringProperty(subtype="DIR_PATH")
@@ -317,7 +317,7 @@ class TNTMESH_OT_export_assembly_guide(bpy.types.Operator):
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> set[str]:
         if bpy.data.filepath and not self.directory:
             self.directory = str(Path(bpy.data.filepath).parent)
-        if not self.is_property_set("explosion"):
+        if not self.properties.is_property_set("explosion"):
             self.explosion = context.scene.tntmesh_assembly.distance
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
@@ -394,7 +394,7 @@ class TNTMESH_PT_assembly(bpy.types.Panel):
                 layout.operator("tntmesh.assembly_action", text="Back to Assembly", icon="LOOP_BACK").action = "RESET"
             layout.operator("tntmesh.check_assembly", icon="VIEWZOOM")
             layout.operator("tntmesh.check_insertion", icon="PLAY")
-        layout.operator("tntmesh.export_assembly_guide", icon="FILE_TEXT")
+        layout.operator("tntmesh.export_assembly_guide", text="Export Assembly Guide", icon="FILE_TEXT")
 
         if obj is not None:
             header, body = layout.panel("tntmesh_assembly_details", default_closed=True)

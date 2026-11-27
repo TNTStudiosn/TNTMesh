@@ -854,6 +854,7 @@ SPANISH = {
         "Aplica los cortes activos y reemplaza las piezas generadas por este borrador",
     "Built {count} draft pieces.": "Se generaron {count} piezas del borrador.",
     "Export Assembly Guide": "Exportar guía de ensamblaje",
+    "Export Guide": "Exportar guía",
     "Save numbered assembly views and a suggested assembly order":
         "Guarda vistas numeradas y un orden de montaje sugerido",
     "Title": "Título",
